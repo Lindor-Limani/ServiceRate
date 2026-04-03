@@ -52,6 +52,7 @@ Using generated security password: xxxxxxxx
 Visible in Console after starting the Backend
 
 ### Project Structure
+```
 src/main/java/at/hcw/serviceratebackend
  ├── controller      # REST endpoints
  ├── service         # Business logic
@@ -60,6 +61,8 @@ src/main/java/at/hcw/serviceratebackend
  ├── dto             # Data Transfer Objects
  ├── config          # Configuration (Security, etc.)
  └── ServiceRateBackendApplication.java
+```
+
 
  ### Architecture
  Controller → Service → Repository → Database
