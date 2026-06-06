@@ -1,0 +1,35 @@
+### 1. Einen neuen Handwerker registrieren
+POST http://localhost:8080/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "matej@handwerker.at",
+  "password": "geheim123",
+  "firstName": "Matej",
+  "lastName": "Deronja",
+  "accountType": "PROVIDER"
+}
+
+### 2. Mit dem Handwerker einloggen (Token holen)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "matej@handwerker.at",
+  "password": "geheim123"
+}
+
+### 3. Einen neuen Service (Fensterputzen) anlegen (POST)
+POST http://localhost:8080/api/services
+Content-Type: application/json
+
+{
+  "providerId": "92a4953a-3cab-4e86-a461-66685a925b82",
+  "title": "Fensterputzen Deluxe",
+  "description": "Streifenfreie Fenster in ganz Wien",
+  "category": "CLEANING",
+  "price": 49.0
+}
+
+### 4. Alle Services abrufen (GET)
+GET http://localhost:8080/api/services
