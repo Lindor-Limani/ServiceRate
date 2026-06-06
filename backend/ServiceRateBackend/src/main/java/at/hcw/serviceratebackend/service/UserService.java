@@ -1,7 +1,5 @@
 package at.hcw.serviceratebackend.service;
 
-import at.hcw.serviceratebackend.model.common.enums.AccountType;
-import at.hcw.serviceratebackend.model.common.enums.UserStatus;
 import at.hcw.serviceratebackend.dto.CreateUserRequest;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -21,13 +19,16 @@ public class UserService {
         User user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail(request.email());
+
+        // TODO: Später mit passwordEncoder.encode() hashen!
+        user.setPasswordHash(request.password());
+
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setDisplayName(request.firstName() + " " + request.lastName());
-        user.setStatus(UserStatus.ACTIVE);
-        user.setAccountType(AccountType.valueOf(request.accountType().toUpperCase()));
-        user.setLocale("de-AT");
-        user.setTimezone("Europe/Vienna");
+
+        // Einfacher String statt komplexes Enum
+        user.setAccountType(request.accountType().toUpperCase());
+        user.setStatus("ACTIVE");
 
         User saved = userRepository.save(user);
 
@@ -36,9 +37,8 @@ public class UserService {
                 saved.getEmail(),
                 saved.getFirstName(),
                 saved.getLastName(),
-                saved.getDisplayName(),
-                saved.getStatus().name(),
-                saved.getAccountType().name()
+                saved.getAccountType(),
+                saved.getStatus()
         );
     }
 }

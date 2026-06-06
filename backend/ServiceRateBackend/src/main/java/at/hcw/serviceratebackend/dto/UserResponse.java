@@ -7,8 +7,7 @@ public record UserResponse(
         String email,
         String firstName,
         String lastName,
-        String displayName,
-        String status,
-        String accountType
+        String accountType,
+        String status
 ) {
 }

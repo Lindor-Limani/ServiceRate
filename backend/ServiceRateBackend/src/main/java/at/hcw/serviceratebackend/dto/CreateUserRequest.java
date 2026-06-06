@@ -5,8 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 
 public record CreateUserRequest(
         @Email @NotBlank String email,
+        @NotBlank String password, // Neues Feld für M9!
         @NotBlank String firstName,
         @NotBlank String lastName,
-        @NotBlank String accountType
+        @NotBlank String accountType // "CUSTOMER" oder "PROVIDER"
 ) {
 }

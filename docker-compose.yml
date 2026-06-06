@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   db:
-    image: postgres:alpine
+    image: postgres:16-alpine
     container_name: servicerate-postgres
     restart: always
     environment:

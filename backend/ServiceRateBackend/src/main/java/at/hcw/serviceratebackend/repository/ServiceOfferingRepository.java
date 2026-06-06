@@ -7,5 +7,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering, UUID> {
-    List<ServiceOffering> findByProviderTypeAndProviderId(String providerType, UUID providerId);
+
+    // Die neue, simple Methode: Finde alle Services, die einem bestimmten Handwerker (User) gehören.
+    // Das brauchen wir später für das "Provider Dashboard" (S2).
+    List<ServiceOffering> findByProviderId(UUID providerId);
 }

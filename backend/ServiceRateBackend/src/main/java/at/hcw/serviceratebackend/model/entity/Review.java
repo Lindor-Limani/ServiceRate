@@ -1,45 +1,28 @@
 package at.hcw.serviceratebackend.model.entity;
 
-import at.hcw.serviceratebackend.model.common.entity.BaseEntity;
-import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.model.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
-
-import java.time.OffsetDateTime;
-import java.util.UUID;
 
 @Getter
 @Setter
 @Entity
 @Table(name = "reviews")
-public class Review extends BaseEntity {
+public class Review extends AuditableEntity {
 
-    @Column(name = "order_id", nullable = false)
-    private UUID orderId;
+    // Jede Bewertung gehört zu einer konkreten Buchung
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "booking_id", nullable = false)
+    private Booking booking;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reviewer_user_id", nullable = false)
-    private User reviewerUser;
-
-    @Column(name = "reviewee_type", nullable = false)
-    private String revieweeType;
-
-    @Column(name = "reviewee_id", nullable = false)
-    private UUID revieweeId;
+    @JoinColumn(name = "reviewer_id", nullable = false)
+    private User reviewer;
 
     @Column(nullable = false)
-    private Integer rating;
-
-    @Column
-    private String title;
+    private Integer rating; // z.B. 1 bis 5 Sterne
 
     @Column(columnDefinition = "text")
-    private String body;
-
-    @Column(nullable = false)
-    private String status;
-
-    @Column(name = "created_at", insertable = false, updatable = false)
-    private OffsetDateTime createdAt;
+    private String comment;
 }
