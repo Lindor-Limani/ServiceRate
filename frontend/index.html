@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServiceRate - Finde Handwerker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+    <div class="logo">🏠 ServiceRate</div>
+    <button id="logoutBtn" style="display: none;">Logout</button>
+</header>
+
+<main>
+    <section id="loginSection" class="container">
+        <h2>Willkommen zurück!</h2>
+        <form id="loginForm">
+            <input type="email" id="email" placeholder="E-Mail (z.B. matej@handwerker.at)" required>
+            <input type="password" id="password" placeholder="Passwort (z.B. geheim123)" required>
+            <button type="submit" class="primary-btn">Einloggen</button>
+        </form>
+        <p id="loginError" class="error-msg"></p>
+    </section>
+
+    <section id="servicesSection" class="container" style="display: none;">
+        <h2>Verfügbare Dienstleistungen</h2>
+        <div id="servicesList" class="card-grid">
+        </div>
+    </section>
+</main>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
