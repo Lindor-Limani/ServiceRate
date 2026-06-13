@@ -8,6 +8,7 @@ import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 
 import java.util.List;
 import java.util.UUID;
@@ -50,18 +51,6 @@ public class ServiceOfferingService {
         serviceRepository.deleteById(id);
     }
 
-    // UPDATE (PUT)
-    public ServiceOfferingResponse update(UUID id, CreateServiceRequest request) {
-        ServiceOffering service = serviceRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
-
-        service.setTitle(request.title());
-        service.setDescription(request.description());
-        service.setCategory(request.category());
-        service.setPrice(request.price());
-
-        return mapToResponse(serviceRepository.save(service));
-    }
 
     // Hilfsmethode zum Umwandeln von Datenbank-Entity zu DTO
     private ServiceOfferingResponse mapToResponse(ServiceOffering service) {
@@ -74,5 +63,17 @@ public class ServiceOfferingService {
                 service.getPrice(),
                 service.getStatus()
         );
+    }
+    public ServiceOfferingResponse updateService(java.util.UUID id, UpdateServiceRequest request) {
+        ServiceOffering service = serviceRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Service nicht gefunden"));
+
+        service.setTitle(request.getTitle());
+        service.setDescription(request.getDescription());
+        service.setCategory(request.getCategory());
+        service.setPrice(request.getPrice());
+
+        ServiceOffering updatedService = serviceRepository.save(service);
+        return mapToResponse(updatedService); // Nutzt deine bestehende Hilfsmethode
     }
 }
