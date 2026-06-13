@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ServiceRate – Provider Dashboard</title>
+  <style>
+    :root {
+      --primary:      #00877C;
+      --primary-dark: #006b62;
+      --primary-tint: #e0f2f0;
+      --bg:           #f5f7f8;
+      --surface:      #ffffff;
+      --text:         #1f2a2e;
+      --muted:        #6b7a7e;
+      --border:       #e4e9ea;
+      --danger:       #dc2626;
+      --danger-tint:  #fee2e2;
+      --radius:       12px;
+      --radius-sm:    8px;
+      --shadow:       0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md:    0 4px 16px rgba(0,0,0,.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    /* ── LOGIN SCREEN ──────────────────────────────────────────────────────── */
+    #loginScreen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: linear-gradient(135deg, #00877C 0%, #004d47 100%);
+    }
+    .login-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    }
+    .login-logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: .25rem;
+    }
+    .login-logo span { color: var(--primary); }
+    .login-subtitle {
+      font-size: .875rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    /* ── HEADER ────────────────────────────────────────────────────────────── */
+    #appHeader {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-logo {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.3px;
+      text-decoration: none;
+    }
+    .header-logo span { color: var(--primary); }
+
+    .header-badge {
+      background: var(--primary-tint);
+      color: var(--primary);
+      font-size: .72rem;
+      font-weight: 700;
+      padding: .2rem .65rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-left: .6rem;
+    }
+    .header-right { display: flex; align-items: center; gap: .75rem; }
+    .header-user { font-size: .84rem; color: var(--muted); }
+
+    /* ── BUTTONS ───────────────────────────────────────────────────────────── */
+    .btn {
+      padding: .5rem 1.1rem;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-family: inherit;
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      line-height: 1;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); }
+    .btn-danger { background: var(--danger-tint); color: var(--danger); }
+    .btn-danger:hover { background: #fca5a5; }
+    .btn-sm { padding: .32rem .75rem; font-size: .78rem; }
+    .btn-full { width: 100%; justify-content: center; padding: .75rem; }
+
+    /* ── MAIN LAYOUT ───────────────────────────────────────────────────────── */
+    #appContent { display: none; }
+
+    .main-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 2rem;
+    }
+
+    /* ── PAGE HEADER ───────────────────────────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .page-header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -.3px;
+    }
+    .page-header p { font-size: .875rem; color: var(--muted); margin-top: .15rem; }
+
+    /* ── STATS ROW ─────────────────────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      box-shadow: var(--shadow);
+    }
+    .stat-label { font-size: .78rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: .2rem; }
+    .stat-value.green { color: var(--primary); }
+
+    /* ── SERVICE CARDS GRID ────────────────────────────────────────────────── */
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .svc-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.4rem;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+      transition: box-shadow .2s;
+    }
+    .svc-card:hover { box-shadow: var(--shadow-md); }
+
+    .svc-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: .5rem;
+    }
+    .cat-badge {
+      background: var(--primary-tint);
+      color: var(--primary);
+      font-size: .7rem; font-weight: 700;
+      padding: .22rem .6rem; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: .4px;
+      white-space: nowrap;
+    }
+    .svc-price { font-size: 1.1rem; font-weight: 700; }
+    .svc-price small { font-size: .78rem; font-weight: 400; color: var(--muted); }
+    .svc-title { font-size: 1rem; font-weight: 600; }
+    .svc-desc { font-size: .83rem; color: var(--muted); line-height: 1.55; }
+
+    .svc-footer {
+      display: flex;
+      gap: .5rem;
+      padding-top: .75rem;
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+    }
+
+    /* ── EMPTY / LOADING ───────────────────────────────────────────────────── */
+    .empty-state {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 3.5rem; margin-bottom: 1rem; }
+
+    /* ── FORMS (shared) ────────────────────────────────────────────────────── */
+    .form-group { margin-bottom: 1rem; }
+    .form-label { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; }
+    .form-input {
+      width: 100%;
+      padding: .65rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: inherit; font-size: .875rem;
+      color: var(--text); background: var(--bg);
+      transition: border-color .15s, box-shadow .15s;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(0,135,124,.12);
+    }
+    textarea.form-input { resize: vertical; min-height: 80px; }
+
+    .alert { padding: .6rem .9rem; border-radius: var(--radius-sm); font-size: .82rem; margin-bottom: 1rem; display: none; }
+    .alert-error   { background: var(--danger-tint); color: var(--danger); }
+    .alert-success { background: #d1fae5; color: #065f46; }
+
+    /* ── OVERLAY / MODAL ───────────────────────────────────────────────────── */
+    .overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 200;
+      align-items: center; justify-content: center;
+      padding: 1rem;
+      backdrop-filter: blur(2px);
+    }
+    .overlay.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 2rem;
+      width: 100%; max-width: 500px;
+      max-height: 92vh; overflow-y: auto;
+      animation: popIn .2s ease;
+    }
+    @keyframes popIn {
+      from { opacity:0; transform: scale(.95) translateY(8px); }
+      to   { opacity:1; transform: none; }
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    .modal-title { font-size: 1.3rem; font-weight: 700; letter-spacing: -.2px; }
+    .modal-close {
+      background: var(--bg); border: none; border-radius: 6px;
+      width: 32px; height: 32px; cursor: pointer;
+      font-size: 1rem; color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal-close:hover { background: var(--border); }
+
+    /* ── TOAST ─────────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 2rem; right: 2rem;
+      background: var(--text); color: #fff;
+      padding: .75rem 1.25rem; border-radius: var(--radius-sm);
+      font-size: .875rem; z-index: 400;
+      opacity: 0; transform: translateY(12px);
+      transition: opacity .3s, transform .3s;
+      pointer-events: none; max-width: 320px;
+    }
+    .toast.show { opacity: 1; transform: none; }
+
+    /* ── RESPONSIVE ────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      #appHeader { padding: 0 1rem; }
+      .main-wrap { padding: 1.5rem 1rem; }
+      .services-grid { grid-template-columns: 1fr; }
+      .modal { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN SCREEN ════════════════════════════════════════════════════════ -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">Service<span>Rate</span></div>
+    <p class="login-subtitle">Provider Dashboard – nur für Handwerker</p>
+
+    <div id="loginAlert" class="alert"></div>
+
+    <div class="form-group">
+      <label class="form-label">E-Mail</label>
+      <input class="form-input" type="email" id="loginEmail" placeholder="handwerker@beispiel.at" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Passwort</label>
+      <input class="form-input" type="password" id="loginPassword" placeholder="••••••••"
+             onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="btn btn-primary btn-full" onclick="doLogin()">Anmelden</button>
+
+    <p style="margin-top:1.25rem;text-align:center;font-size:.83rem;color:var(--muted)">
+      Noch kein Konto?
+      <a href="customer-app.html" style="color:var(--primary);font-weight:600;text-decoration:none">
+        Jetzt registrieren
+      </a>
+    </p>
+  </div>
+</div>
+
+<!-- ══ APP (nach Login) ════════════════════════════════════════════════════ -->
+<div id="appContent">
+
+  <!-- HEADER -->
+  <header id="appHeader">
+    <div style="display:flex;align-items:center">
+      <a class="header-logo" href="customer-app.html">Service<span>Rate</span></a>
+      <span class="header-badge">Provider</span>
+    </div>
+    <div class="header-right">
+      <span class="header-user" id="headerUser"></span>
+      <a href="customer-app.html" class="btn btn-ghost btn-sm">Zum Marktplatz</a>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Abmelden</button>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="main-wrap">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1>Meine Services</h1>
+        <p>Verwalte deine Angebote – erstelle, bearbeite und lösche Services.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Neuer Service</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Services gesamt</div>
+        <div class="stat-value green" id="statCount">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Ø Preis / Std</div>
+        <div class="stat-value" id="statAvgPrice">–</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Kategorien</div>
+        <div class="stat-value" id="statCats">–</div>
+      </div>
+    </div>
+
+    <!-- Services Grid -->
+    <div class="services-grid" id="servicesGrid">
+      <div class="empty-state">
+        <div class="empty-icon">⏳</div>
+        <p>Services werden geladen…</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ CREATE / EDIT MODAL ═════════════════════════════════════════════════ -->
+<div class="overlay" id="serviceModal" onclick="if(event.target===this)closeServiceModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modalTitle">Neuer Service</h2>
+      <button class="modal-close" onclick="closeServiceModal()">✕</button>
+    </div>
+
+    <div id="modalAlert" class="alert"></div>
+    <input type="hidden" id="editServiceId" />
+
+    <div class="form-group">
+      <label class="form-label">Titel</label>
+      <input class="form-input" type="text" id="svcTitle" placeholder="z.B. Professionelles Fensterputzen" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Beschreibung</label>
+      <textarea class="form-input" id="svcDesc" placeholder="Was bietest du genau an?"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <div class="form-group">
+        <label class="form-label">Kategorie</label>
+        <select class="form-input" id="svcCategory">
+          <option value="CLEANING">Reinigung</option>
+          <option value="PLUMBING">Installateur</option>
+          <option value="ELECTRICAL">Elektriker</option>
+          <option value="PAINTING">Maler</option>
+          <option value="GARDENING">Garten</option>
+          <option value="OTHER">Sonstiges</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preis / Std (€)</label>
+        <input class="form-input" type="number" id="svcPrice" placeholder="45.00" min="0" step="0.01" />
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="saveService()">Speichern</button>
+  </div>
+</div>
+
+<!-- ══ DELETE CONFIRM MODAL ════════════════════════════════════════════════ -->
+<div class="overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">🗑️</div>
+    <h3 style="font-size:1.2rem;font-weight:700;margin-bottom:.5rem">Service löschen?</h3>
+    <p style="color:var(--muted);font-size:.875rem;margin-bottom:1.5rem">
+      Diese Aktion kann nicht rückgängig gemacht werden.
+    </p>
+    <div style="display:flex;gap:.75rem;justify-content:center">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Abbrechen</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ═══════════════════════════════════════════════════════════════ -->
+<div class="toast" id="toast"></div>
+
+<script src="api.js"></script>
+<script src="provider-dashboard.js"></script>
+</body>
+</html>
