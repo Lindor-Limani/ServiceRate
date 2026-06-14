@@ -1,7 +1,6 @@
 package at.hcw.serviceratebackend.service;
 
-import at.hcw.serviceratebackend.dto.BookingResponse;
-import at.hcw.serviceratebackend.dto.CreateBookingRequest;
+import at.hcw.serviceratebackend.dto.*;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -35,7 +34,9 @@ public class BookingService {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(customer);
         booking.setServiceOffering(service);
-        booking.setServiceDate(OffsetDateTime.now().plusDays(3));
+        // Use provided serviceDate if present; fallback to now()+3 days for backward compatibility
+        OffsetDateTime desiredDate = request.serviceDate() != null ? request.serviceDate() : OffsetDateTime.now().plusDays(3);
+        booking.setServiceDate(desiredDate);
         booking.setStatus("PENDING");
 
         Booking saved = bookingRepository.save(booking);
@@ -44,6 +45,7 @@ public class BookingService {
                 saved.getId(),
                 customer.getFirstName() + " " + customer.getLastName(),
                 service.getTitle(),
+                desiredDate,
                 saved.getStatus()
         );
     }
@@ -55,6 +57,7 @@ public class BookingService {
                         b.getId(),
                         b.getCustomer().getFirstName() + " " + b.getCustomer().getLastName(),
                         b.getServiceOffering().getTitle(),
+                        b.getServiceDate(),
                         b.getStatus()
                 ))
                 .toList();
@@ -72,6 +75,26 @@ public class BookingService {
                 saved.getId(),
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
                 saved.getServiceOffering().getTitle(),
+                saved.getServiceDate(),
+                saved.getStatus()
+        );
+    }
+
+    public BookingResponse updateBookingDate(UUID bookingId, OffsetDateTime newDate) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+
+        if (!newDate.isBefore(OffsetDateTime.now())) {
+            throw new IllegalArgumentException("Das neue Datum muss in der Zukunft liegen");
+        }
+        booking.setServiceDate(newDate);
+        Booking saved = bookingRepository.save(booking);
+
+        return new BookingResponse(
+                saved.getId(),
+                saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
+                saved.getServiceOffering().getTitle(),
+                saved.getServiceDate(),
                 saved.getStatus()
         );
     }
@@ -89,6 +112,7 @@ public class BookingService {
                 saved.getId(),
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
                 saved.getServiceOffering().getTitle(),
+                saved.getServiceDate(),
                 saved.getStatus()
         );
     }
@@ -107,6 +131,7 @@ public class BookingService {
                 saved.getId(),
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
                 saved.getServiceOffering().getTitle(),
+                saved.getServiceDate(),
                 saved.getStatus()
         );
     }
@@ -119,6 +144,7 @@ public class BookingService {
                         // HIER GEÄNDERT: Wir holen den Namen des Anbieters (Providers)!
                         b.getServiceOffering().getProvider().getFirstName() + " " + b.getServiceOffering().getProvider().getLastName(),
                         b.getServiceOffering().getTitle(),
+                        b.getServiceDate(),
                         b.getStatus()
                 )).toList();
     }

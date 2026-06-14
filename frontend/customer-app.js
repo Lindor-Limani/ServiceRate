@@ -284,19 +284,29 @@ function updateNavUI() {
   const loginBtn  = document.getElementById('loginNavBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const navUser   = document.getElementById('navUser');
+  const tabs      = document.getElementById('customerTabs');
 
   if (token) {
-    loginBtn.style.display  = 'none';
-    logoutBtn.style.display = 'inline-flex';
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
+      const isCustomer = payload.accountType === 'CUSTOMER';
+      loginBtn.style.display  = 'none';
+      logoutBtn.style.display = 'inline-flex';
       navUser.textContent = payload.sub || '';
-    } catch { navUser.textContent = ''; }
-  } else {
-    loginBtn.style.display  = 'inline-flex';
-    logoutBtn.style.display = 'none';
-    navUser.textContent     = '';
+      if (tabs) tabs.style.display = isCustomer ? 'flex' : 'none';
+      if (!isCustomer && typeof switchCustomerTab === 'function') switchCustomerTab('market');
+      return;
+    } catch {
+      // fall through to logged-out UI on parse errors
+    }
   }
+
+  // Logged-out or invalid token
+  loginBtn.style.display  = 'inline-flex';
+  logoutBtn.style.display = 'none';
+  navUser.textContent     = '';
+  if (tabs) tabs.style.display = 'none';
+  if (typeof switchCustomerTab === 'function') switchCustomerTab('market');
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -357,7 +367,7 @@ async function loadCustomerBookings() {
         grid.innerHTML = bookings.map(b => {
             // Farben und Texte für den Status
             let statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
-            let statusText  = b.status === 'PENDING' ? 'Wartet auf Antwort' : (b.status === 'ACCEPTED' ? '✓ Akzeptiert' : '❌ Abgelehnt');
+            let statusText  = b.status === 'PENDING' ? 'PENDING' : (b.status === 'ACCEPTED' ? '✓ ACCEPTED' : '❌ REJECTED');
 
             return `
       <div class="service-card" style="cursor: default; border-top: 4px solid ${statusColor};">
@@ -365,7 +375,7 @@ async function loadCustomerBookings() {
           <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${statusText}</span>
         </div>
         <div class="card-title" style="margin-top: 10px; font-size: 1.1rem;">${esc(b.serviceTitle)}</div>
-        <div class="card-desc" style="margin-top: 5px;">Angeboten von: <strong>${esc(b.customerName)}</strong></div>
+        <div class="card-desc" style="margin-top: 5px;">Angeboten von: <strong>${esc(b.counterpartyName)}</strong></div>
       </div>
       `;
         }).join('');

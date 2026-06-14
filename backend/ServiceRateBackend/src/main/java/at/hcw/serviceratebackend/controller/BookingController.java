@@ -33,6 +33,15 @@ public class BookingController {
             @RequestBody at.hcw.serviceratebackend.dto.UpdateBookingStatusRequest request) {
         return ResponseEntity.ok(bookingService.updateBookingStatus(id, request.status()));
     }
+
+    // Ändert das Termin-Datum; setzt Status automatisch auf PENDING
+    @PutMapping("/{id}/date")
+    public ResponseEntity<BookingResponse> updateDate(
+            @PathVariable java.util.UUID id,
+            @RequestBody at.hcw.serviceratebackend.dto.UpdateBookingDateRequest request) {
+        return ResponseEntity.ok(bookingService.updateBookingDate(id, request.serviceDate()));
+    }
+
     // Endpunkt für die Kunden-App
     @GetMapping("/customer/{customerId}")
     public ResponseEntity<java.util.List<BookingResponse>> getBookingsForCustomer(@PathVariable java.util.UUID customerId) {
