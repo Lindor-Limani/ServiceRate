@@ -5,6 +5,7 @@ import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
 import at.hcw.serviceratebackend.service.ServiceOfferingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 
@@ -29,6 +30,16 @@ public class ServiceOfferingController {
     @GetMapping
     public ResponseEntity<List<ServiceOfferingResponse>> getAll() {
         return ResponseEntity.ok(service.getAll());
+    }
+
+    // Gibt nur die Services des eingeloggten Providers zurück (E-Mail kommt aus dem JWT)
+    @GetMapping("/my")
+    public ResponseEntity<List<ServiceOfferingResponse>> getMyServices(Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).build();
+        }
+        String email = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(service.getMyServices(email));
     }
 
 

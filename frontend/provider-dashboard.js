@@ -67,7 +67,8 @@ async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
   try {
-    allServices = await fetchAPI('/services', 'GET', null, 'provider_jwt');
+    // /services/my liefert nur die Services des eingeloggten Providers (per JWT)
+    allServices = await fetchAPI('/services/my', 'GET', null, 'provider_jwt');
     renderServices();
     updateStats();
   } catch {
