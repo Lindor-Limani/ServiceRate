@@ -4,6 +4,7 @@ import at.hcw.serviceratebackend.model.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Getter
@@ -22,6 +23,10 @@ public class Booking extends AuditableEntity {
 
     @Column(name = "service_date", nullable = false)
     private OffsetDateTime serviceDate;
+
+    // Vom Kunden gewählter Wunschtermin
+    @Column(name = "booking_date")
+    private LocalDate bookingDate;
 
     @Column(nullable = false)
     private String status = "PENDING"; // PENDING, ACCEPTED, REJECTED, COMPLETED

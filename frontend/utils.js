@@ -7,6 +7,22 @@ const CAT_LABELS = {
   GARDENING: 'Garten', OTHER: 'Sonstiges'
 };
 
+// Emoji + Hintergrundfarbe je Kategorie für die Karten-Platzhalterbilder
+const CAT_IMAGES = {
+  CLEANING:   { emoji: '🧹', bg: '#e0f2f1' },
+  PLUMBING:   { emoji: '🔧', bg: '#e3f2fd' },
+  ELECTRICAL: { emoji: '⚡', bg: '#fff9e6' },
+  PAINTING:   { emoji: '🎨', bg: '#fce4ec' },
+  GARDENING:  { emoji: '🌿', bg: '#e8f5e9' },
+  OTHER:      { emoji: '🛠️', bg: '#f3e5f5' }
+};
+
+// Liefert das HTML für das Kategorie-Platzhalterbild oben auf einer Karte
+function catImage(category) {
+  const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
+  return `<div class="card-image" style="background:${img.bg}">${img.emoji}</div>`;
+}
+
 // Escaped Nutzereingaben, bevor sie ins DOM geschrieben werden (XSS-Schutz)
 function esc(str) {
   return String(str || '')

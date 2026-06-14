@@ -126,13 +126,54 @@
     #appContent { display: none; }
 
     .main-wrap {
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 0 auto;
-      padding: 2rem 2rem;
+      padding: 0 2rem;
+    }
+
+    /* ── TABS (Toggle-Style wie im Kunden-Frontend) ────────────────────────── */
+    .dash-tabs {
+      display: flex;
+      gap: 3px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      max-width: 400px;
+      margin: 2rem 0;
+    }
+    .dash-tab {
+      flex: 1;
+      padding: .5rem;
+      border: none;
+      background: transparent;
+      border-radius: calc(var(--radius-sm) - 2px);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: .875rem;
+      font-weight: 500;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .dash-tab.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    }
+
+    /* Kategorie-Platzhalterbild oben auf der Service-Karte */
+    .card-image {
+      margin: -1.4rem -1.4rem 0;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3.2rem;
+      border-radius: var(--radius) var(--radius) 0 0;
     }
 
     /* ── PAGE HEADER ───────────────────────────────────────────────────────── */
     .page-header {
+      margin-top: 2rem;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -280,9 +321,14 @@
 
     /* ── RESPONSIVE ────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
-      #appHeader { padding: 0 1rem; }
-      .main-wrap { padding: 1.5rem 1rem; }
+      /* Header darf umbrechen, damit E-Mail & Buttons nicht abgeschnitten werden */
+      #appHeader { height: auto; flex-wrap: wrap; padding: .6rem 1rem; }
+      .header-right { flex-wrap: wrap; justify-content: flex-end; gap: .4rem; }
+      .header-user { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .main-wrap { padding: 0 1rem; }
+      /* Karten und Stats einspaltig, kein horizontales Scrollen */
       .services-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr; }
       .modal { padding: 1.5rem; }
     }
   </style>
@@ -332,6 +378,7 @@
   </header>
 
   <!-- MAIN -->
+  <main class="main-wrap">
     <div class="page-header">
         <div>
             <h1>Meine Services</h1>
@@ -340,9 +387,9 @@
         <button class="btn btn-primary" onclick="openCreateModal()">+ Neuer Service</button>
     </div>
 
-    <div class="auth-tabs" style="max-width: 400px; margin-bottom: 2rem;">
-        <button class="auth-tab active" id="tabMyServices" onclick="switchDashboardTab('services')">Meine Services</button>
-        <button class="auth-tab" id="tabMyBookings" onclick="switchDashboardTab('bookings')">Anfragen (Postfach)</button>
+    <div class="dash-tabs">
+        <button class="dash-tab active" id="tabMyServices" onclick="switchDashboardTab('services')">Meine Services</button>
+        <button class="dash-tab" id="tabMyBookings" onclick="switchDashboardTab('bookings')">Anfragen (Postfach)</button>
     </div>
 
     <div id="servicesView">
@@ -377,32 +424,7 @@
             </div>
         </div>
     </div>
-
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-card">
-        <div class="stat-label">Services gesamt</div>
-        <div class="stat-value green" id="statCount">–</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Ø Preis / Std</div>
-        <div class="stat-value" id="statAvgPrice">–</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Kategorien</div>
-        <div class="stat-value" id="statCats">–</div>
-      </div>
-    </div>
-
-    <!-- Services Grid -->
-    <div class="services-grid" id="servicesGrid">
-      <div class="empty-state">
-        <div class="empty-icon">⏳</div>
-        <p>Services werden geladen…</p>
-      </div>
-    </div>
-
-  </div>
+  </main>
 </div>
 
 <!-- ══ CREATE / EDIT MODAL ═════════════════════════════════════════════════ -->

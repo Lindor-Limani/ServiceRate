@@ -210,6 +210,20 @@ header {
   border-color: var(--primary);
 }
 
+/* Kategorie-Platzhalterbild oben auf der Karte (randlos bis zu den Kartenkanten) */
+.card-image {
+  margin: -1.5rem -1.5rem 0;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.2rem;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* Wetter-Hinweis unter dem Datepicker im Buchungs-Modal */
+.booking-weather { margin-top: .5rem; font-size: .85rem; color: var(--muted); min-height: 1rem; }
+
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; }
 .cat-badge {
   background: var(--primary-tint);
@@ -395,7 +409,10 @@ header {
 
 /* ── RESPONSIVE ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  header { padding: 0 1rem; }
+  /* Nav darf umbrechen, statt abgeschnitten zu werden */
+  header { height: auto; flex-wrap: wrap; padding: .6rem 1rem; }
+  .header-right { flex-wrap: wrap; justify-content: flex-end; gap: .4rem; }
+  #navUser { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .weather-widget .w-text { display: none; }
   .hero { padding: 3rem 1rem 2.5rem; }
   .search-box { flex-direction: column; }

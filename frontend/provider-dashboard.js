@@ -93,6 +93,7 @@ function renderServices() {
 
   grid.innerHTML = allServices.map(s => `
     <div class="svc-card">
+      ${catImage(s.category)}
       <div class="svc-top">
         <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
         <span class="svc-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>

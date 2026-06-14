@@ -5,6 +5,8 @@
 let allServices    = [];
 let activeCategory = '';
 
+const OWM_API_KEY = '6d06aea9543246a5433f298cb611335e';
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
   updateNavUI();
@@ -28,10 +30,9 @@ let activeCategory = '';
 
 // ── Wetter-Widget ─────────────────────────────────────────────────────────────
 async function loadWeather() {
-  const API_KEY = '6d06aea9543246a5433f298cb611335e';
   try {
     const r = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=Vienna&appid=${API_KEY}&units=metric&lang=de`
+      `https://api.openweathermap.org/data/2.5/weather?q=Vienna&appid=${OWM_API_KEY}&units=metric&lang=de`
     );
     const d = await r.json();
     if (!r.ok) throw new Error();
@@ -42,6 +43,61 @@ async function loadWeather() {
   } catch {
     document.getElementById('weatherText').textContent = 'Wetter nicht verfügbar';
   }
+}
+
+// ── Wetter-Vorhersage für den Wunschtermin ────────────────────────────────────
+// Heutiges Datum als YYYY-MM-DD (lokale Zeitzone)
+function todayISO() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split('T')[0];
+}
+
+function weatherEmoji(main) {
+  const map = {
+    Clear: '☀️', Clouds: '☁️', Rain: '🌧️', Drizzle: '🌦️',
+    Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️'
+  };
+  return map[main] || '🌡️';
+}
+
+// Reagiert auf die Datumsauswahl: zeigt nur einen Hinweis, wenn der Termin in den nächsten 5 Tagen liegt
+async function onBookingDateChange() {
+  const hint  = document.getElementById('bookingWeather');
+  const value = document.getElementById('bookingDate').value;
+  hint.textContent = '';
+  if (!value) return;
+
+  const diffDays = Math.round((new Date(value) - new Date(todayISO())) / 86400000);
+  if (diffDays < 0 || diffDays > 5) return; // Forecast reicht nur ~5 Tage
+
+  hint.textContent = 'Wetter wird geladen…';
+  try {
+    const block = await fetchForecastFor(value);
+    if (!block) { hint.textContent = ''; return; }
+    const temp = Math.round(block.main.temp);
+    hint.textContent = `${weatherEmoji(block.weather[0].main)} Voraussichtlich ${temp}°C, ${block.weather[0].description}`;
+  } catch {
+    hint.textContent = '';
+  }
+}
+
+// Holt den 3-Stunden-Block des gewählten Tages, der zeitlich am nächsten an 12:00 liegt (Mittagswert)
+async function fetchForecastFor(dateStr) {
+  const r = await fetch(
+    `https://api.openweathermap.org/data/2.5/forecast?q=Vienna&appid=${OWM_API_KEY}&units=metric&lang=de`
+  );
+  if (!r.ok) throw new Error();
+  const data = await r.json();
+
+  const sameDay = data.list.filter(b => b.dt_txt.startsWith(dateStr));
+  if (sameDay.length === 0) return null;
+
+  return sameDay.reduce((best, b) => {
+    const hour     = parseInt(b.dt_txt.substring(11, 13), 10);
+    const bestHour = parseInt(best.dt_txt.substring(11, 13), 10);
+    return Math.abs(hour - 12) < Math.abs(bestHour - 12) ? b : best;
+  });
 }
 
 // ── Services laden & rendern ──────────────────────────────────────────────────
@@ -96,6 +152,7 @@ function renderServices() {
 
   grid.innerHTML = filtered.map(s => `
     <article class="service-card" onclick="openServiceModal('${s.id}')">
+      ${catImage(s.category)}
       <div class="card-top">
         <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
         <span class="card-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
@@ -139,6 +196,11 @@ function openServiceModal(id) {
       </div>
     </div>
     <p class="modal-desc">${esc(s.description)}</p>
+    <div class="form-group">
+      <label class="form-label">Wunschtermin</label>
+      <input class="form-input" type="date" id="bookingDate" min="${todayISO()}" onchange="onBookingDateChange()" />
+      <div id="bookingWeather" class="booking-weather"></div>
+    </div>
     <div class="price-block">
       <div>
         <div class="price-note">Stundensatz</div>
@@ -165,10 +227,14 @@ async function doBook(serviceId, title, price) {
     return;
   }
 
+  const bookingDate = document.getElementById('bookingDate').value;
+  if (!bookingDate) { notify('Bitte wähle einen Wunschtermin.', 'error'); return; }
+
   try {
     await fetchAPI('/bookings', 'POST', {
       serviceOfferingId: serviceId,
-      customerId: localStorage.getItem('customer_user_id')
+      customerId: localStorage.getItem('customer_user_id'),
+      bookingDate: bookingDate
     }, 'customer_jwt');
 
     // Erfolgsmeldung wird erst nach erfolgreicher Antwort des Backends angezeigt

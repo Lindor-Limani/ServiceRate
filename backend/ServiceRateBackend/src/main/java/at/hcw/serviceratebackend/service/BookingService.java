@@ -34,6 +34,7 @@ public class BookingService {
         booking.setCustomer(customer);
         booking.setServiceOffering(service);
         booking.setServiceDate(OffsetDateTime.now().plusDays(3));
+        booking.setBookingDate(request.bookingDate()); // vom Kunden gewählter Wunschtermin
         booking.setStatus("PENDING");
 
         Booking saved = bookingRepository.save(booking);
@@ -42,7 +43,8 @@ public class BookingService {
                 saved.getId(),
                 customer.getFirstName() + " " + customer.getLastName(),
                 service.getTitle(),
-                saved.getStatus()
+                saved.getStatus(),
+                saved.getBookingDate()
         );
     }
 
@@ -53,7 +55,8 @@ public class BookingService {
                         b.getId(),
                         b.getCustomer().getFirstName() + " " + b.getCustomer().getLastName(),
                         b.getServiceOffering().getTitle(),
-                        b.getStatus()
+                        b.getStatus(),
+                        b.getBookingDate()
                 ))
                 .toList();
     }
@@ -70,7 +73,8 @@ public class BookingService {
                 saved.getId(),
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
                 saved.getServiceOffering().getTitle(),
-                saved.getStatus()
+                saved.getStatus(),
+                saved.getBookingDate()
         );
     }
 
@@ -79,10 +83,11 @@ public class BookingService {
         return bookingRepository.findByCustomer_Id(customerId).stream()
                 .map(b -> new BookingResponse(
                         b.getId(),
-                        // HIER GEÄNDERT: Wir holen den Namen des Anbieters (Providers)!
+                        // Im Kunden-Dashboard zeigen wir den Namen des Anbieters
                         b.getServiceOffering().getProvider().getFirstName() + " " + b.getServiceOffering().getProvider().getLastName(),
                         b.getServiceOffering().getTitle(),
-                        b.getStatus()
+                        b.getStatus(),
+                        b.getBookingDate()
                 )).toList();
     }
 }
