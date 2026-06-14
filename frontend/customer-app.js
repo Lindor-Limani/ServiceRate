@@ -156,34 +156,39 @@ function closeServiceModal() {
 }
 
 // ── Booking ───────────────────────────────────────────────────────────────────
+// ── Booking ───────────────────────────────────────────────────────────────────
 async function doBook(serviceId, title, price) {
-  if (!localStorage.getItem('jwt_token')) {
-    closeServiceModal();
-    openAuthModal('login');
-    showAlert('Bitte zuerst anmelden um zu buchen.', 'error');
-    return;
-  }
+    if (!localStorage.getItem('jwt_token')) {
+        closeServiceModal();
+        openAuthModal('login');
+        showAlert('Bitte zuerst anmelden um zu buchen.', 'error');
+        return;
+    }
 
-  try {
-    await fetchAPI('/bookings', 'POST', {
-      serviceId,
-      customerId: localStorage.getItem('user_id'),
-      price
-    });
-  } catch {
-    // Booking endpoint might not exist yet — show confirmation UI regardless
-  }
+    try {
+        // FEHLER 1 BEHOBEN: Wir senden serviceOfferingId (wie das Backend es erwartet)
+        await fetchAPI('/bookings', 'POST', {
+            serviceOfferingId: serviceId,
+            customerId: localStorage.getItem('user_id')
+        });
 
-  document.getElementById('serviceModalContent').innerHTML = `
-    <div class="book-success">
-      <div class="success-icon">✓</div>
-      <h3>Buchung erfolgreich!</h3>
-      <p>Du hast <strong>${title}</strong> gebucht.<br/>Der Anbieter meldet sich in Kürze bei dir.</p>
-      <br/>
-      <button class="btn btn-ghost" onclick="closeServiceModal()">Schließen</button>
-    </div>
-  `;
-  showToast('Buchung wurde gespeichert ✓');
+        // FEHLER 2 BEHOBEN: Die Erfolgsmeldung wird NUR angezeigt, wenn das Backend "OK" sagt
+        document.getElementById('serviceModalContent').innerHTML = `
+      <div class="book-success">
+        <div class="success-icon">✓</div>
+        <h3>Buchung erfolgreich!</h3>
+        <p>Du hast <strong>${esc(title)}</strong> gebucht.<br/>Der Anbieter meldet sich in Kürze bei dir.</p>
+        <br/>
+        <button class="btn btn-ghost" onclick="closeServiceModal()">Schließen</button>
+      </div>
+    `;
+        showToast('Buchung wurde gespeichert ✓');
+
+    } catch (error) {
+        // Wenn das Backend meckert, zeigen wir das jetzt ehrlich an!
+        showModalAlert('Fehler bei der Buchung: Bitte überprüfe deine Daten.', 'error');
+        console.error("Buchungsfehler:", error);
+    }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -244,6 +249,34 @@ function logout() {
   localStorage.removeItem('user_id');
   updateNavUI();
   showToast('Abgemeldet.');
+    function updateNavUI() {
+        const token     = localStorage.getItem('jwt_token');
+        const loginBtn  = document.getElementById('loginNavBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const navUser   = document.getElementById('navUser');
+        const tabs      = document.getElementById('customerTabs'); // NEU
+
+        if (token) {
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+
+                if (payload.accountType === 'CUSTOMER') {
+                    loginBtn.style.display  = 'none';
+                    logoutBtn.style.display = 'inline-flex';
+                    navUser.textContent = payload.sub || '';
+                    tabs.style.display = 'flex'; // NEU: Tabs einblenden
+                    return;
+                }
+            } catch { navUser.textContent = ''; }
+        }
+
+        // Ausgeloggter Zustand
+        loginBtn.style.display  = 'inline-flex';
+        logoutBtn.style.display = 'none';
+        navUser.textContent     = '';
+        tabs.style.display      = 'none'; // NEU: Tabs ausblenden
+        if(typeof switchCustomerTab === 'function') switchCustomerTab('market'); // Zurück zum Marktplatz
+    }
 }
 
 function updateNavUI() {
@@ -291,4 +324,52 @@ function clearAlert() {
   const el = document.getElementById('authAlert');
   el.style.display = 'none';
   el.textContent   = '';
+}
+
+// ── Tabs Umschalten (Kunde) ───────────────────────────────────────────────────
+function switchCustomerTab(tab) {
+    document.getElementById('marketView').style.display = tab === 'market' ? 'block' : 'none';
+    document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+    document.getElementById('tabMarket').classList.toggle('active', tab === 'market');
+    document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+
+    if (tab === 'bookings') {
+        loadCustomerBookings();
+    }
+}
+
+// ── Buchungen des Kunden laden ────────────────────────────────────────────────
+async function loadCustomerBookings() {
+    const grid = document.getElementById('customerBookingsGrid');
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
+
+    const customerId = localStorage.getItem('user_id');
+    if (!customerId) return;
+
+    try {
+        const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET');
+
+        if (bookings.length === 0) {
+            grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
+            return;
+        }
+
+        grid.innerHTML = bookings.map(b => {
+            // Farben und Texte für den Status
+            let statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
+            let statusText  = b.status === 'PENDING' ? 'Wartet auf Antwort' : (b.status === 'ACCEPTED' ? '✓ Akzeptiert' : '❌ Abgelehnt');
+
+            return `
+      <div class="service-card" style="cursor: default; border-top: 4px solid ${statusColor};">
+        <div class="card-top">
+          <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${statusText}</span>
+        </div>
+        <div class="card-title" style="margin-top: 10px; font-size: 1.1rem;">${esc(b.serviceTitle)}</div>
+        <div class="card-desc" style="margin-top: 5px;">Angeboten von: <strong>${esc(b.customerName)}</strong></div>
+      </div>
+      `;
+        }).join('');
+    } catch (error) {
+        grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
+    }
 }

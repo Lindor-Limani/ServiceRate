@@ -47,28 +47,42 @@
 <!-- ══ MAIN ════════════════════════════════════════════════════════════════ -->
 <main class="main">
 
-  <!-- Filter Chips -->
-  <div class="filter-chips" id="filterChips">
-    <button class="chip active" data-cat="">Alle</button>
-    <button class="chip" data-cat="CLEANING">Reinigung</button>
-    <button class="chip" data-cat="PLUMBING">Installateur</button>
-    <button class="chip" data-cat="ELECTRICAL">Elektriker</button>
-    <button class="chip" data-cat="PAINTING">Maler</button>
-    <button class="chip" data-cat="GARDENING">Garten</button>
-    <button class="chip" data-cat="OTHER">Sonstiges</button>
-  </div>
-
-  <div class="section-header">
-    <h2 class="section-title">Verfügbare Services</h2>
-    <span class="count-pill" id="countPill">–</span>
-  </div>
-
-  <div class="cards-grid" id="servicesGrid">
-    <div class="empty-state">
-      <div class="empty-icon">⏳</div>
-      <p>Services werden geladen…</p>
+    <div class="auth-tabs" id="customerTabs" style="display: none; max-width: 400px; margin-bottom: 2rem;">
+        <button class="auth-tab active" id="tabMarket" onclick="switchCustomerTab('market')">Marktplatz</button>
+        <button class="auth-tab" id="tabMyBookings" onclick="switchCustomerTab('bookings')">Meine Buchungen</button>
     </div>
-  </div>
+
+    <div id="marketView">
+        <div class="filter-chips" id="filterChips">
+            <button class="chip active" data-cat="">Alle</button>
+            <button class="chip" data-cat="CLEANING">Reinigung</button>
+            <button class="chip" data-cat="PLUMBING">Installateur</button>
+            <button class="chip" data-cat="ELECTRICAL">Elektriker</button>
+            <button class="chip" data-cat="PAINTING">Maler</button>
+            <button class="chip" data-cat="GARDENING">Garten</button>
+            <button class="chip" data-cat="OTHER">Sonstiges</button>
+        </div>
+
+        <div class="section-header">
+            <h2 class="section-title">Verfügbare Services</h2>
+            <span class="count-pill" id="countPill">–</span>
+        </div>
+
+        <div class="cards-grid" id="servicesGrid">
+            <div class="empty-state">
+                <div class="empty-icon">⏳</div>
+                <p>Services werden geladen…</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="bookingsView" style="display: none;">
+        <div class="section-header">
+            <h2 class="section-title">Meine Anfragen & Buchungen</h2>
+        </div>
+        <div class="cards-grid" id="customerBookingsGrid">
+        </div>
+    </div>
 
 </main>
 

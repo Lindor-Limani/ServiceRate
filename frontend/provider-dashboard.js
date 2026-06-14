@@ -11,11 +11,18 @@ const CAT_LABELS = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
-  const token = localStorage.getItem('jwt_token');
-  if (token) {
-    showApp();
-  }
-  // If no token, the login screen is already visible by default
+    const token = localStorage.getItem('jwt_token');
+    if (token) {
+        try {
+            // Wir lesen den JWT Token aus, OHNE das Backend fragen zu müssen!
+            const payload = JSON.parse(atob(token.split('.')[1]));
+
+            // Nur wenn der Token einem Provider gehört, loggen wir ihn automatisch ein
+            if (payload.accountType === 'PROVIDER') {
+                showApp();
+            }
+        } catch { /* ignore */ }
+    }
 })();
 
 function showApp() {
@@ -32,21 +39,29 @@ function showApp() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function doLogin() {
-  const email    = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
+    const email    = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
 
-  if (!email || !password) {
-    showLoginAlert('Bitte E-Mail und Passwort eingeben.', 'error'); return;
-  }
+    if (!email || !password) {
+        showLoginAlert('Bitte E-Mail und Passwort eingeben.', 'error'); return;
+    }
 
-  try {
-    const data = await fetchAPI('/auth/login', 'POST', { email, password });
-    localStorage.setItem('jwt_token', data.token);
-    localStorage.setItem('user_id',   data.userId);
-    showApp();
-  } catch {
-    showLoginAlert('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
-  }
+    try {
+        const data = await fetchAPI('/auth/login', 'POST', { email, password });
+
+        // NEU: Türsteher-Prüfung!
+        const payload = JSON.parse(atob(data.token.split('.')[1]));
+        if (payload.accountType !== 'PROVIDER') {
+            showLoginAlert('Dieser Account gehört einem Kunden. Bitte nutze den Marktplatz.', 'error');
+            return;
+        }
+
+        localStorage.setItem('jwt_token', data.token);
+        localStorage.setItem('user_id',   data.userId);
+        showApp();
+    } catch {
+        showLoginAlert('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
+    }
 }
 
 function doLogout() {
@@ -238,4 +253,68 @@ function showModalAlert(msg, type) {
 }
 function hideModalAlert() {
   document.getElementById('modalAlert').style.display = 'none';
+}
+
+// ── Tabs Umschalten ───────────────────────────────────────────────────────────
+function switchDashboardTab(tab) {
+    document.getElementById('servicesView').style.display = tab === 'services' ? 'block' : 'none';
+    document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+    document.getElementById('tabMyServices').classList.toggle('active', tab === 'services');
+    document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+
+    if (tab === 'bookings') {
+        loadBookings();
+    } else {
+        loadServices();
+    }
+}
+
+// ── Buchungen laden & anzeigen ────────────────────────────────────────────────
+async function loadBookings() {
+    const grid = document.getElementById('bookingsGrid');
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
+
+    const providerId = localStorage.getItem('user_id');
+    try {
+        const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET');
+
+        if (bookings.length === 0) {
+            grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
+            return;
+        }
+
+        grid.innerHTML = bookings.map(b => {
+            // Bestimme die Farbe des Status-Badges
+            let statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
+
+            return `
+      <div class="svc-card">
+        <div class="svc-top">
+          <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${b.status}</span>
+        </div>
+        <div class="svc-title">${esc(b.serviceTitle)}</div>
+        <div class="svc-desc" style="margin-bottom: 10px;">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
+        
+        ${b.status === 'PENDING' ? `
+        <div style="display: flex; gap: 10px; margin-top: auto;">
+          <button class="btn btn-primary" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
+          <button class="btn btn-danger" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
+        </div>
+        ` : `<div style="margin-top: auto; font-size: 0.85rem; color: var(--muted);">Buchung ist abgeschlossen/abgelehnt.</div>`}
+      </div>
+    `}).join('');
+    } catch (error) {
+        grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
+    }
+}
+
+// ── Buchungs-Status ändern (PUT) ──────────────────────────────────────────────
+async function updateBookingStatus(bookingId, newStatus) {
+    try {
+        await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus });
+        showToast(`Buchung wurde ${newStatus === 'ACCEPTED' ? 'akzeptiert' : 'abgelehnt'}!`);
+        loadBookings(); // Liste neu laden, damit die Buttons verschwinden
+    } catch (error) {
+        showToast('Fehler beim Ändern des Status.');
+    }
 }
