@@ -3,14 +3,15 @@
 const BASE_URL = 'http://localhost:8080/api';
 
 // Diese Funktion führt die AJAX-Anfragen (Fetch) aus (Requirement M4)
-async function fetchAPI(endpoint, method = 'GET', body = null) {
+async function fetchAPI(endpoint, method = 'GET', body = null, tokenKey = 'jwt_token') {
     const headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json' // Wir wollen JSON zurück (Requirement M5)
     };
 
-    // Wenn wir einen JWT-Token haben, hängen wir ihn wie einen Ausweis an
-    const token = localStorage.getItem('jwt_token');
+    // Wenn wir einen JWT-Token haben, hängen wir ihn wie einen Ausweis an.
+    // tokenKey trennt die Sessions: Kunde ('customer_jwt') und Anbieter ('provider_jwt')
+    const token = localStorage.getItem(tokenKey);
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }

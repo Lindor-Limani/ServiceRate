@@ -2,16 +2,25 @@ package at.hcw.serviceratebackend.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.List;
 
 @Configuration
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -29,11 +38,22 @@ public class SecurityConfig {
                     config.setAllowedHeaders(List.of("*"));
                     return config;
                 }))
+                // Wir nutzen JWTs statt Sessions -> Server bleibt zustandslos
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll() // Login und Registrierung ist für alle offen
-                        .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll() // Doku & DB-Konsole
-                        .anyRequest().permitAll() // VORERST für den Development-Speed lassen wir noch alles offen. Ändern wir auf .authenticated() wenn das Frontend steht!
-                );
+                        // CORS-Preflight muss immer durch (sonst scheitert das Frontend)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Login und Registrierung ist für alle offen
+                        .requestMatchers("/api/auth/**").permitAll()
+                        // Kunden dürfen den Marktplatz ohne Login durchstöbern
+                        .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
+                        // Doku & DB-Konsole
+                        .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Alles andere (Services anlegen/ändern/löschen, Buchungen, ...) braucht ein gültiges Token
+                        .anyRequest().authenticated()
+                )
+                // Unseren JWT-Filter vor den Standard-Login-Filter hängen
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

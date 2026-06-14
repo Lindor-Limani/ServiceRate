@@ -52,7 +52,7 @@ async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
   try {
-    allServices = await fetchAPI('/services', 'GET');
+    allServices = await fetchAPI('/services', 'GET', null, 'customer_jwt');
     renderServices();
   } catch {
     grid.innerHTML = `
@@ -158,7 +158,7 @@ function closeServiceModal() {
 // ── Booking ───────────────────────────────────────────────────────────────────
 // ── Booking ───────────────────────────────────────────────────────────────────
 async function doBook(serviceId, title, price) {
-    if (!localStorage.getItem('jwt_token')) {
+    if (!localStorage.getItem('customer_jwt')) {
         closeServiceModal();
         openAuthModal('login');
         showAlert('Bitte zuerst anmelden um zu buchen.', 'error');
@@ -169,8 +169,8 @@ async function doBook(serviceId, title, price) {
         // FEHLER 1 BEHOBEN: Wir senden serviceOfferingId (wie das Backend es erwartet)
         await fetchAPI('/bookings', 'POST', {
             serviceOfferingId: serviceId,
-            customerId: localStorage.getItem('user_id')
-        });
+            customerId: localStorage.getItem('customer_user_id')
+        }, 'customer_jwt');
 
         // FEHLER 2 BEHOBEN: Die Erfolgsmeldung wird NUR angezeigt, wenn das Backend "OK" sagt
         document.getElementById('serviceModalContent').innerHTML = `
@@ -214,9 +214,9 @@ async function doLogin() {
   const password = document.getElementById('loginPassword').value;
   if (!email || !password) { showAlert('Bitte E-Mail und Passwort eingeben.', 'error'); return; }
   try {
-    const data = await fetchAPI('/auth/login', 'POST', { email, password });
-    localStorage.setItem('jwt_token', data.token);
-    localStorage.setItem('user_id',   data.userId);
+    const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'customer_jwt');
+    localStorage.setItem('customer_jwt', data.token);
+    localStorage.setItem('customer_user_id',   data.userId);
     updateNavUI();
     closeAuthModal();
     showToast('Erfolgreich angemeldet ✓');
@@ -235,7 +235,7 @@ async function doRegister() {
     showAlert('Bitte alle Felder ausfüllen.', 'error'); return;
   }
   try {
-    await fetchAPI('/auth/register', 'POST', { firstName, lastName, email, password, accountType });
+    await fetchAPI('/auth/register', 'POST', { firstName, lastName, email, password, accountType }, 'customer_jwt');
     showAlert('Konto erstellt! Du kannst dich jetzt anmelden.', 'success');
     switchAuthTab('login');
     document.getElementById('loginEmail').value = email;
@@ -245,12 +245,12 @@ async function doRegister() {
 }
 
 function logout() {
-  localStorage.removeItem('jwt_token');
-  localStorage.removeItem('user_id');
+  localStorage.removeItem('customer_jwt');
+  localStorage.removeItem('customer_user_id');
   updateNavUI();
   showToast('Abgemeldet.');
     function updateNavUI() {
-        const token     = localStorage.getItem('jwt_token');
+        const token     = localStorage.getItem('customer_jwt');
         const loginBtn  = document.getElementById('loginNavBtn');
         const logoutBtn = document.getElementById('logoutBtn');
         const navUser   = document.getElementById('navUser');
@@ -280,7 +280,7 @@ function logout() {
 }
 
 function updateNavUI() {
-  const token     = localStorage.getItem('jwt_token');
+  const token     = localStorage.getItem('customer_jwt');
   const loginBtn  = document.getElementById('loginNavBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const navUser   = document.getElementById('navUser');
@@ -343,11 +343,11 @@ async function loadCustomerBookings() {
     const grid = document.getElementById('customerBookingsGrid');
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
 
-    const customerId = localStorage.getItem('user_id');
+    const customerId = localStorage.getItem('customer_user_id');
     if (!customerId) return;
 
     try {
-        const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET');
+        const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
 
         if (bookings.length === 0) {
             grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;

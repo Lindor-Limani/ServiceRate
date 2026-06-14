@@ -3,162 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ServiceRate – Finde lokale Dienstleister</title>
-    <link rel="stylesheet" href="style.css">
+    <title>ServiceRate – Handwerker finden & anbieten</title>
+    <style>
+        :root {
+            --primary: #00877C;
+            --primary-dark: #006f66;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f0faf8 0%, #e3f3f1 100%);
+            color: #1a2b29;
+            padding: 24px;
+        }
+
+        .landing {
+            width: 100%;
+            max-width: 540px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1a2b29;
+            margin-bottom: 28px;
+        }
+        .logo span { color: var(--primary); }
+
+        h1 {
+            font-size: 2.4rem;
+            line-height: 1.15;
+            margin-bottom: 16px;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: #4a5b59;
+            margin-bottom: 40px;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .btn {
+            display: block;
+            padding: 18px 24px;
+            border-radius: 14px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+        }
+        .btn:hover { transform: translateY(-2px); }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(0, 135, 124, .25);
+        }
+        .btn-primary:hover { background: var(--primary-dark); }
+
+        .btn-secondary {
+            background: #fff;
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+        .btn-secondary:hover { background: #f0faf8; }
+
+        .footer {
+            margin-top: 40px;
+            font-size: .85rem;
+            color: #8a9a98;
+        }
+    </style>
 </head>
 <body>
+    <main class="landing">
+        <div class="logo">Service<span>Rate</span></div>
+        <h1>Der einfache Weg zum&nbsp;Handwerker</h1>
+        <p class="subtitle">
+            Geprüfte Dienstleister in deiner Nähe – mit echten Bewertungen.
+            Wähle, wie du starten möchtest.
+        </p>
 
-<!-- =====================================================================
-     HEADER  (modernisierte Navigation mit aktivem Menüpunkt)
-     ===================================================================== -->
-<header>
-    <div class="logo">Service<span>Rate</span></div>
-
-    <div id="weatherWidget" class="weather-widget" style="margin-left: 20px; font-size: 0.9rem;">
-        <span id="weatherIcon">⏳</span>
-        <span id="weatherTemp">Lade Wetter...</span>
-    </div>
-
-    <nav id="mainNav" style="display: none;">
-        <button id="navMarketplace"   class="nav-link active">Marktplatz</button>
-        <button id="navCreateService" class="nav-link">Service erstellen</button>
-        <button id="logoutBtn"        class="nav-link logout">Logout</button>
-    </nav>
-</header>
-
-<main>
-
-    <!-- =================================================================
-         BEREICH 1: LOGIN
-         ================================================================= -->
-    <section id="loginSection" class="container">
-        <h2>Willkommen zurück!</h2>
-        <form id="loginForm">
-            <label for="email">E-Mail</label>
-            <input type="email" id="email" placeholder="z.B. matej@handwerker.at" required>
-
-            <label for="password">Passwort</label>
-            <input type="password" id="password" placeholder="Dein Passwort" required>
-
-            <button type="submit" class="primary-btn">Einloggen</button>
-        </form>
-        <p id="loginError" class="error-msg"></p>
-    </section>
-
-    <!-- =================================================================
-         BEREICH 2: MARKTPLATZ  (Dashboard-Gefühl nach dem Login)
-         Begrüßung -> Suche -> Kategorie-Chips -> Sortierung -> Karten
-         ================================================================= -->
-    <section id="servicesSection" class="container-wide" style="display: none;">
-
-        <!-- Begrüßungsbereich -->
-        <div class="welcome">
-            <h2 id="welcomeTitle">Hallo! 👋</h2>
-            <p>Finde geprüfte Dienstleister in deiner Nähe – mit echten Bewertungen.</p>
+        <div class="actions">
+            <a class="btn btn-primary" href="customer-app.html">
+                Ich suche einen Handwerker
+            </a>
+            <a class="btn btn-secondary" href="provider-dashboard.html">
+                Ich biete Dienstleistungen an
+            </a>
         </div>
 
-        <!-- Suchleiste -->
-        <div class="search-bar">
-            <input type="text" id="searchInput" placeholder="Was suchst du? z.B. Fenster putzen, Maler, Umzug ...">
-            <button id="searchBtn" class="primary-btn">Suchen</button>
-        </div>
-
-        <!-- Kategorien als Chips (über JS gefiltert) -->
-        <div class="chips" id="categoryChips">
-            <button class="chip active" data-cat="ALL">Alle</button>
-            <button class="chip" data-cat="CLEANING">Reinigung</button>
-            <button class="chip" data-cat="REPAIR">Reparatur / Handwerk</button>
-            <button class="chip" data-cat="GARDENING">Gartenarbeit</button>
-            <button class="chip" data-cat="MOVING">Umzugshilfe</button>
-        </div>
-
-        <!-- Ergebnis-Kopfzeile: Anzahl + Mindestbewertung + Sortierung -->
-        <div class="results-bar">
-            <div class="results-count" id="resultsCount">0 Services gefunden</div>
-            <div class="results-controls">
-                <!-- Einfacher Filter: Mindestbewertung -->
-                <select id="ratingFilter" title="Mindestbewertung">
-                    <option value="0">Alle Bewertungen</option>
-                    <option value="4">ab 4,0 ★</option>
-                    <option value="4.5">ab 4,5 ★</option>
-                </select>
-                <!-- Sortierung -->
-                <select id="sortSelect" title="Sortieren">
-                    <option value="rating">Beste Bewertung</option>
-                    <option value="price-asc">Preis aufsteigend</option>
-                    <option value="price-desc">Preis absteigend</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Service-Karten (per JavaScript befüllt) -->
-        <div id="servicesList" class="card-grid"></div>
-    </section>
-
-    <!-- =================================================================
-         BEREICH 3: NEUEN SERVICE ERSTELLEN
-         ================================================================= -->
-    <section id="createServiceSection" class="container" style="display: none;">
-        <h2>Neuen Service anbieten</h2>
-        <form id="createServiceForm">
-            <label for="serviceTitle">Titel der Dienstleistung</label>
-            <input type="text" id="serviceTitle" placeholder="z.B. Malerarbeiten, Sofa-Reinigung" required>
-
-            <label for="serviceProvider">Anbietername</label>
-            <input type="text" id="serviceProvider" placeholder="z.B. Glanz & Sauber GmbH" required>
-
-            <label for="serviceDescription">Beschreibung</label>
-            <input type="text" id="serviceDescription" placeholder="Beschreibe kurz deine Arbeit ..." required>
-
-            <label for="serviceLocation">Standort</label>
-            <input type="text" id="serviceLocation" placeholder="z.B. 1020 Wien" required>
-
-            <label for="serviceCategory">Kategorie</label>
-            <select id="serviceCategory" required>
-                <option value="CLEANING">Reinigung</option>
-                <option value="REPAIR">Reparatur / Handwerk</option>
-                <option value="GARDENING">Gartenarbeit</option>
-                <option value="MOVING">Umzugshilfe</option>
-            </select>
-
-            <label for="servicePrice">Preis (€ / Stunde oder Festpreis)</label>
-            <input type="number" id="servicePrice" placeholder="z.B. 45" required>
-
-            <button type="submit" class="primary-btn">Service veröffentlichen</button>
-        </form>
-        <p id="createServiceMessage" style="color: green; margin-top: 1rem;"></p>
-    </section>
-
-    <section id="editServiceSection" class="container" style="display: none;">
-        <h2>Service bearbeiten</h2>
-        <form id="editServiceForm">
-            <input type="hidden" id="editServiceId">
-
-            <label for="editServiceTitle">Titel der Dienstleistung</label>
-            <input type="text" id="editServiceTitle" required>
-
-            <label for="editServiceDescription">Beschreibung</label>
-            <input type="text" id="editServiceDescription" required>
-
-            <label for="editServiceCategory">Kategorie</label>
-            <select id="editServiceCategory" required>
-                <option value="CLEANING">Reinigung</option>
-                <option value="REPAIR">Reparatur / Handwerk</option>
-                <option value="GARDENING">Gartenarbeit</option>
-                <option value="MOVING">Umzugshilfe</option>
-            </select>
-
-            <label for="editServicePrice">Preis</label>
-            <input type="number" id="editServicePrice" required>
-
-            <button type="submit" class="primary-btn">Änderungen speichern</button>
-            <button type="button" id="cancelEditBtn" class="nav-link" style="margin-top: 10px; width: 100%; text-align: center;">Abbrechen</button>
-        </form>
-        <p id="editServiceMessage" style="margin-top: 1rem;"></p>
-    </section>
-
-</main>
-
-<script src="api.js"></script> <script src="app.js"></script>
+        <p class="footer">© ServiceRate</p>
+    </main>
 </body>
 </html>

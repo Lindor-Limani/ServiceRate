@@ -1,5 +1,6 @@
 package at.hcw.serviceratebackend.config;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
@@ -23,5 +24,34 @@ public class JwtUtil {
                 .expiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
                 .signWith(key)
                 .compact();
+    }
+
+    // Liest alle Claims aus dem Token (wirft eine Exception, wenn die Signatur ungültig oder das Token abgelaufen ist)
+    private Claims parseClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+    }
+
+    // Prüft, ob das Token gültig ist (korrekte Signatur & nicht abgelaufen)
+    public boolean isTokenValid(String token) {
+        try {
+            parseClaims(token);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Holt den Subject (= E-Mail) aus dem Token
+    public String extractSubject(String token) {
+        return parseClaims(token).getSubject();
+    }
+
+    // Holt den Claim "accountType" (CUSTOMER oder PROVIDER) aus dem Token
+    public String extractAccountType(String token) {
+        return parseClaims(token).get("accountType", String.class);
     }
 }

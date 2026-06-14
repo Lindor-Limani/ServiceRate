@@ -11,7 +11,7 @@ const CAT_LABELS = {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
-    const token = localStorage.getItem('jwt_token');
+    const token = localStorage.getItem('provider_jwt');
     if (token) {
         try {
             // Wir lesen den JWT Token aus, OHNE das Backend fragen zu müssen!
@@ -30,7 +30,7 @@ function showApp() {
   document.getElementById('appContent').style.display  = 'block';
 
   try {
-    const payload = JSON.parse(atob(localStorage.getItem('jwt_token').split('.')[1]));
+    const payload = JSON.parse(atob(localStorage.getItem('provider_jwt').split('.')[1]));
     document.getElementById('headerUser').textContent = payload.sub || '';
   } catch { /* ignore */ }
 
@@ -47,7 +47,7 @@ async function doLogin() {
     }
 
     try {
-        const data = await fetchAPI('/auth/login', 'POST', { email, password });
+        const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'provider_jwt');
 
         // NEU: Türsteher-Prüfung!
         const payload = JSON.parse(atob(data.token.split('.')[1]));
@@ -56,8 +56,8 @@ async function doLogin() {
             return;
         }
 
-        localStorage.setItem('jwt_token', data.token);
-        localStorage.setItem('user_id',   data.userId);
+        localStorage.setItem('provider_jwt', data.token);
+        localStorage.setItem('provider_user_id',   data.userId);
         showApp();
     } catch {
         showLoginAlert('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
@@ -65,8 +65,8 @@ async function doLogin() {
 }
 
 function doLogout() {
-  localStorage.removeItem('jwt_token');
-  localStorage.removeItem('user_id');
+  localStorage.removeItem('provider_jwt');
+  localStorage.removeItem('provider_user_id');
   document.getElementById('appContent').style.display  = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
@@ -88,7 +88,7 @@ async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
   try {
-    allServices = await fetchAPI('/services', 'GET');
+    allServices = await fetchAPI('/services', 'GET', null, 'provider_jwt');
     renderServices();
     updateStats();
   } catch {
@@ -190,7 +190,7 @@ async function saveService() {
   if (editMode) {
     const id = document.getElementById('editServiceId').value;
     try {
-      await fetchAPI(`/services/${id}`, 'PUT', { title, description: desc, category, price });
+      await fetchAPI(`/services/${id}`, 'PUT', { title, description: desc, category, price }, 'provider_jwt');
       showToast('Service aktualisiert ✓');
       closeServiceModal();
       loadServices();
@@ -198,10 +198,10 @@ async function saveService() {
       showModalAlert('Fehler beim Aktualisieren.', 'error');
     }
   } else {
-    const providerId = localStorage.getItem('user_id');
+    const providerId = localStorage.getItem('provider_user_id');
     if (!providerId) { showModalAlert('Provider-ID fehlt. Bitte neu anmelden.', 'error'); return; }
     try {
-      await fetchAPI('/services', 'POST', { providerId, title, description: desc, category, price });
+      await fetchAPI('/services', 'POST', { providerId, title, description: desc, category, price }, 'provider_jwt');
       showToast('Service erstellt ✓');
       closeServiceModal();
       loadServices();
@@ -223,7 +223,7 @@ function closeDeleteModal() {
 async function confirmDelete() {
   if (!pendingDelete) return;
   try {
-    await fetchAPI(`/services/${pendingDelete}`, 'DELETE');
+    await fetchAPI(`/services/${pendingDelete}`, 'DELETE', null, 'provider_jwt');
     showToast('Service gelöscht.');
     closeDeleteModal();
     loadServices();
@@ -274,9 +274,9 @@ async function loadBookings() {
     const grid = document.getElementById('bookingsGrid');
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
 
-    const providerId = localStorage.getItem('user_id');
+    const providerId = localStorage.getItem('provider_user_id');
     try {
-        const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET');
+        const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
 
         if (bookings.length === 0) {
             grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
@@ -311,7 +311,7 @@ async function loadBookings() {
 // ── Buchungs-Status ändern (PUT) ──────────────────────────────────────────────
 async function updateBookingStatus(bookingId, newStatus) {
     try {
-        await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus });
+        await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus }, 'provider_jwt');
         showToast(`Buchung wurde ${newStatus === 'ACCEPTED' ? 'akzeptiert' : 'abgelehnt'}!`);
         loadBookings(); // Liste neu laden, damit die Buttons verschwinden
     } catch (error) {

@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/ServiceRate.iml" filepath="$PROJECT_DIR$/.idea/ServiceRate.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/ServiceRateBackend.main.iml" filepath="$PROJECT_DIR$/.idea/modules/ServiceRateBackend.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/ServiceRateBackend.test.iml" filepath="$PROJECT_DIR$/.idea/modules/ServiceRateBackend.test.iml" />
     </modules>
   </component>
 </project>
