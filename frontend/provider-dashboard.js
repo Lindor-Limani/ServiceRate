@@ -268,29 +268,46 @@ async function loadBookings() {
 function renderBookings() {
     const grid = document.getElementById('bookingsGrid');
 
-    if (providerBookings.length === 0) {
-        grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
-        return;
-    }
-
     const pendingCount = providerBookings.filter(b => b.status === 'PENDING').length;
     const acceptedCount = providerBookings.filter(b => b.status === 'ACCEPTED').length;
+    const activeBookings = providerBookings.filter(b => b.status !== 'REJECTED');
+    const upcomingBookings = activeBookings
+        .filter(b => new Date(b.serviceDate) >= new Date())
+        .sort((a, b) => new Date(a.serviceDate) - new Date(b.serviceDate));
+    const nextBooking = upcomingBookings[0];
 
     grid.innerHTML = `
     <section class="appointment-calendar-shell">
       <div class="notification-card ${pendingCount ? 'has-pending' : ''}">
-        <div>
-          <strong>${pendingCount} offene Termin${pendingCount === 1 ? '' : 'e'}</strong>
-          <p>${pendingCount ? 'Neue oder geänderte Termine sind wieder PENDING und müssen bestätigt werden.' : 'Keine offenen Terminänderungen.'}</p>
+        <div class="notification-left">
+          <span class="notification-icon">${pendingCount ? '🔔' : '✓'}</span>
+          <div>
+            <span class="notification-kicker">Terminstatus</span>
+            <strong>${pendingCount ? `${pendingCount} offene Termin${pendingCount === 1 ? '' : 'e'}` : 'Alle Termine sind bearbeitet'}</strong>
+            <p>${pendingCount ? 'Neue oder geänderte Termine sind wieder PENDING und müssen bestätigt werden.' : 'Keine offenen Terminänderungen im Moment.'}</p>
+          </div>
         </div>
-        <span>${acceptedCount} akzeptiert</span>
+        <div class="notification-metrics">
+          <div class="notification-metric"><b>${acceptedCount}</b><span>Akzeptiert</span></div>
+          <div class="notification-metric"><b>${nextBooking ? formatDateShort(nextBooking.serviceDate) : '–'}</b><span>Nächster Termin</span></div>
+        </div>
       </div>
       ${renderProviderCalendar()}
     </section>
 
     <section class="appointments-list">
-      <div class="section-row-title">Alle Anfragen & Termine</div>
-      ${providerBookings.map(b => renderProviderBookingCard(b)).join('')}
+      <div class="section-row-title">
+        <div>
+          <span>Alle Anfragen & Termine</span>
+          <small>Akzeptiere oder lehne offene Buchungen direkt im Postfach ab.</small>
+        </div>
+      </div>
+      ${providerBookings.length ? providerBookings.map(b => renderProviderBookingCard(b)).join('') : `
+        <div class="appointment-empty-card">
+          <div class="empty-icon">📭</div>
+          <p>Du hast aktuell keine Anfragen. Der Kalender bleibt bereit, sobald neue Buchungen eintreffen.</p>
+        </div>
+      `}
     </section>
   `;
 }
@@ -303,6 +320,13 @@ function renderProviderCalendar() {
     const firstDay = new Date(year, month, 1);
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const startOffset = (firstDay.getDay() + 6) % 7; // Monday first
+    const visibleBookings = providerBookings.filter(b => b.status !== 'REJECTED');
+    const monthBookings = visibleBookings.filter(b => {
+        const d = new Date(b.serviceDate);
+        return !Number.isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month;
+    });
+    const monthPending = monthBookings.filter(b => b.status === 'PENDING').length;
+    const monthAccepted = monthBookings.filter(b => b.status === 'ACCEPTED').length;
     const cells = [];
 
     for (let i = 0; i < startOffset; i++) {
@@ -311,39 +335,66 @@ function renderProviderCalendar() {
 
     for (let day = 1; day <= daysInMonth; day++) {
         const key = `${year}-${pad2(month + 1)}-${pad2(day)}`;
-        const dayBookings = providerBookings.filter(b => dateKey(b.serviceDate) === key && b.status !== 'REJECTED');
+        const dayBookings = visibleBookings
+            .filter(b => dateKey(b.serviceDate) === key)
+            .sort((a, b) => new Date(a.serviceDate) - new Date(b.serviceDate));
         const isToday = dateKey(new Date().toISOString()) === key;
 
         cells.push(`
-      <div class="calendar-day ${isToday ? 'today' : ''}">
-        <div class="calendar-day-number">${day}</div>
+      <div class="calendar-day ${isToday ? 'today' : ''} ${dayBookings.length ? 'has-events' : ''}">
+        <div class="calendar-day-header">
+          <span class="calendar-day-number">${day}</span>
+          ${dayBookings.length ? `<span class="calendar-count">${dayBookings.length}</span>` : ''}
+        </div>
         <div class="calendar-bookings">
           ${dayBookings.slice(0, 3).map(b => `
-            <div class="calendar-pill ${statusToClass(b.status)}" title="${esc(b.serviceTitle)} · ${formatTime(b.serviceDate)}">
-              ${formatTime(b.serviceDate)} ${esc(shorten(b.serviceTitle, 18))}
+            <div class="calendar-pill ${statusToClass(b.status)}" title="${esc(b.serviceTitle)} · ${formatTime(b.serviceDate)} · ${esc(b.customerName || '')}">
+              <span class="calendar-pill-time">${formatTime(b.serviceDate)}</span>
+              <span class="calendar-pill-title">${esc(shorten(b.serviceTitle, 20))}</span>
             </div>
           `).join('')}
-          ${dayBookings.length > 3 ? `<div class="calendar-more">+${dayBookings.length - 3} mehr</div>` : ''}
+          ${dayBookings.length > 3 ? `<div class="calendar-more">+${dayBookings.length - 3} weitere</div>` : ''}
         </div>
       </div>
     `);
     }
 
     return `
-    <div class="calendar-toolbar">
-      <button class="btn btn-ghost btn-sm" onclick="moveProviderCalendar(-1)">←</button>
-      <h2>${monthLabel}</h2>
-      <button class="btn btn-ghost btn-sm" onclick="moveProviderCalendar(1)">→</button>
+    <div class="calendar-surface">
+      <div class="calendar-toolbar">
+        <div class="calendar-title-block">
+          <span class="calendar-kicker">Terminkalender</span>
+          <h2>${monthLabel}</h2>
+          <p>Alle akzeptierten und offenen Termine auf einen Blick.</p>
+        </div>
+        <div class="calendar-actions">
+          <button class="calendar-nav-btn" onclick="moveProviderCalendar(-1)" aria-label="Vorheriger Monat">‹</button>
+          <button class="calendar-today-btn" onclick="goToCurrentProviderMonth()">Heute</button>
+          <button class="calendar-nav-btn" onclick="moveProviderCalendar(1)" aria-label="Nächster Monat">›</button>
+        </div>
+      </div>
+
+      <div class="calendar-month-meta">
+        <span><b>${monthBookings.length}</b> Termine im Monat</span>
+        <span><b>${monthPending}</b> offen</span>
+        <span><b>${monthAccepted}</b> akzeptiert</span>
+      </div>
+
+      <div class="calendar-legend">
+        <span><i class="dot status-pending"></i>PENDING</span>
+        <span><i class="dot status-accepted"></i>ACCEPTED</span>
+        <span><i class="dot status-rejected"></i>REJECTED</span>
+      </div>
+
+      <div class="calendar-scroll">
+        <div class="calendar-board">
+          <div class="calendar-weekdays">
+            <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+          </div>
+          <div class="calendar-grid-big">${cells.join('')}</div>
+        </div>
+      </div>
     </div>
-    <div class="calendar-legend">
-      <span><i class="dot status-pending"></i>PENDING</span>
-      <span><i class="dot status-accepted"></i>ACCEPTED</span>
-      <span><i class="dot status-rejected"></i>REJECTED</span>
-    </div>
-    <div class="calendar-weekdays">
-      <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
-    </div>
-    <div class="calendar-grid-big">${cells.join('')}</div>
   `;
 }
 
@@ -353,6 +404,11 @@ function moveProviderCalendar(delta) {
         providerCalendarCursor.getMonth() + delta,
         1
     );
+    renderBookings();
+}
+
+function goToCurrentProviderMonth() {
+    providerCalendarCursor = new Date();
     renderBookings();
 }
 
@@ -463,6 +519,12 @@ function dateKey(value) {
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function formatDateShort(value) {
+    if (!value) return '–';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '–';
+    return d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit' });
 }
 function formatDateTime(value) {
     if (!value) return 'Kein Termin';
