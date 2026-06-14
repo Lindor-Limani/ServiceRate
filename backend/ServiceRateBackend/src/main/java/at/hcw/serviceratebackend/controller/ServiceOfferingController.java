@@ -31,7 +31,12 @@ public class ServiceOfferingController {
         return ResponseEntity.ok(service.getAll());
     }
 
-
+    // NEU: Gibt nur die Services des eingeloggten Users (Providers) zurück
+    @GetMapping("/my")
+    public ResponseEntity<List<ServiceOfferingResponse>> getMyServices(org.springframework.security.core.Authentication authentication) {
+        String email = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(service.getMyServices(email));
+    }
 
     // M6: DELETE Endpunkt (Delete)
     @DeleteMapping("/{id}")

@@ -46,6 +46,15 @@ public class ServiceOfferingService {
                 .collect(Collectors.toList());
     }
 
+    // NEW: services of the currently logged-in provider (identified via email from JWT)
+    public List<ServiceOfferingResponse> getMyServices(String providerEmail) {
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new IllegalArgumentException("User (Provider) nicht gefunden"));
+        return serviceRepository.findByProviderId(provider.getId()).stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
     // DELETE (DELETE)
     public void delete(UUID id) {
         serviceRepository.deleteById(id);
