@@ -34,6 +34,9 @@ public class ServiceOfferingController {
     // NEU: Gibt nur die Services des eingeloggten Users (Providers) zurück
     @GetMapping("/my")
     public ResponseEntity<List<ServiceOfferingResponse>> getMyServices(org.springframework.security.core.Authentication authentication) {
+        if (authentication == null) {
+            return ResponseEntity.status(401).build();
+        }
         String email = (String) authentication.getPrincipal();
         return ResponseEntity.ok(service.getMyServices(email));
     }
