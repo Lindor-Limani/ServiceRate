@@ -39,7 +39,7 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem;
-      background: linear-gradient(135deg, #00877C 0%, #004d47 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, #004d47 100%);
     }
     .login-card {
       background: var(--surface);
@@ -241,10 +241,6 @@
     }
     textarea.form-input { resize: vertical; min-height: 80px; }
 
-    .alert { padding: .6rem .9rem; border-radius: var(--radius-sm); font-size: .82rem; margin-bottom: 1rem; display: none; }
-    .alert-error   { background: var(--danger-tint); color: var(--danger); }
-    .alert-success { background: #d1fae5; color: #065f46; }
-
     /* ── OVERLAY / MODAL ───────────────────────────────────────────────────── */
     .overlay {
       display: none;
@@ -282,18 +278,6 @@
     }
     .modal-close:hover { background: var(--border); }
 
-    /* ── TOAST ─────────────────────────────────────────────────────────────── */
-    .toast {
-      position: fixed; bottom: 2rem; right: 2rem;
-      background: var(--text); color: #fff;
-      padding: .75rem 1.25rem; border-radius: var(--radius-sm);
-      font-size: .875rem; z-index: 400;
-      opacity: 0; transform: translateY(12px);
-      transition: opacity .3s, transform .3s;
-      pointer-events: none; max-width: 320px;
-    }
-    .toast.show { opacity: 1; transform: none; }
-
     /* ── RESPONSIVE ────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
       #appHeader { padding: 0 1rem; }
@@ -310,8 +294,6 @@
   <div class="login-card">
     <div class="login-logo">Service<span>Rate</span></div>
     <p class="login-subtitle">Provider Dashboard – nur für Handwerker</p>
-
-    <div id="loginAlert" class="alert"></div>
 
     <div class="form-group">
       <label class="form-label">E-Mail</label>
@@ -431,7 +413,6 @@
       <button class="modal-close" onclick="closeServiceModal()">✕</button>
     </div>
 
-    <div id="modalAlert" class="alert"></div>
     <input type="hidden" id="editServiceId" />
 
     <div class="form-group">
@@ -460,6 +441,11 @@
       </div>
     </div>
 
+    <div class="form-group" id="svcZipGroup">
+      <label class="form-label">Postleitzahl (AT)</label>
+      <input class="form-input" type="text" id="svcZip" placeholder="z.B. 1010" maxlength="4" />
+    </div>
+
     <button class="btn btn-primary btn-full" onclick="saveService()">Speichern</button>
   </div>
 </div>
@@ -479,9 +465,7 @@
   </div>
 </div>
 
-<!-- ══ TOAST ═══════════════════════════════════════════════════════════════ -->
-<div class="toast" id="toast"></div>
-
+<script src="utils.js"></script>
 <script src="api.js"></script>
 <script src="provider-dashboard.js"></script>
 </body>

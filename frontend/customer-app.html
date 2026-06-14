@@ -104,8 +104,6 @@
       <button class="auth-tab"        id="tabReg"    onclick="switchAuthTab('register')">Registrieren</button>
     </div>
 
-    <div id="authAlert" class="alert"></div>
-
     <!-- Login Form -->
     <div id="loginForm">
       <div class="form-group">
@@ -152,9 +150,37 @@
   </div>
 </div>
 
-<!-- ══ TOAST ═══════════════════════════════════════════════════════════════ -->
-<div class="toast" id="toast"></div>
+<!-- ══ REVIEW MODAL ════════════════════════════════════════════════════════ -->
+<div class="overlay" id="reviewModal" onclick="if(event.target===this)closeReviewModal()">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-header">
+      <h2 class="modal-title">Service bewerten</h2>
+      <button class="modal-close" onclick="closeReviewModal()">✕</button>
+    </div>
 
+    <p id="reviewServiceTitle" style="color:var(--muted);margin-bottom:1rem"></p>
+
+    <div class="form-group">
+      <label class="form-label">Deine Bewertung</label>
+      <div class="star-input" id="starInput">
+        <span class="star" data-val="1">★</span>
+        <span class="star" data-val="2">★</span>
+        <span class="star" data-val="3">★</span>
+        <span class="star" data-val="4">★</span>
+        <span class="star" data-val="5">★</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Kommentar (optional)</label>
+      <textarea class="form-input" id="reviewComment" rows="3" placeholder="Wie war deine Erfahrung?"></textarea>
+    </div>
+
+    <button class="btn btn-primary btn-full" onclick="submitReview()">Bewertung absenden</button>
+  </div>
+</div>
+
+<script src="utils.js"></script>
 <script src="api.js"></script>
 <script src="customer-app.js"></script>
 </body>

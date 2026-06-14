@@ -10,8 +10,6 @@ import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import at.hcw.serviceratebackend.dto.BookingResponse;
-import at.hcw.serviceratebackend.dto.CreateBookingRequest;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;

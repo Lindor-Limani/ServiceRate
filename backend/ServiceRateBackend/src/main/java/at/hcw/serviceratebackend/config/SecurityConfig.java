@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(request -> {
                     var config = new CorsConfiguration();
                     config.setAllowedOrigins(List.of("*")); // Erlaubt eurem Frontend den Zugriff (WICHTIG für M3/M4)
-                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+                    config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                     config.setAllowedHeaders(List.of("*"));
                     return config;
                 }))
@@ -47,6 +47,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // Kunden dürfen den Marktplatz ohne Login durchstöbern
                         .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
+                        // Bewertungen sind öffentlich lesbar; das Abgeben einer Bewertung erfordert Login
+                        .requestMatchers(HttpMethod.GET, "/api/reviews/**").permitAll()
                         // Doku & DB-Konsole
                         .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Alles andere (Services anlegen/ändern/löschen, Buchungen, ...) braucht ein gültiges Token

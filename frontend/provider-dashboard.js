@@ -1,28 +1,21 @@
+// provider-dashboard.js – Service- und Buchungsverwaltung des Handwerkers
+// CAT_LABELS, esc() und notify() kommen aus utils.js
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allServices   = [];
 let pendingDelete = null;
 let editMode      = false;
 
-const CAT_LABELS = {
-  CLEANING: 'Reinigung', PLUMBING: 'Installateur',
-  ELECTRICAL: 'Elektriker', PAINTING: 'Maler',
-  GARDENING: 'Garten', OTHER: 'Sonstiges'
-};
-
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
 (function init() {
-    const token = localStorage.getItem('provider_jwt');
-    if (token) {
-        try {
-            // Wir lesen den JWT Token aus, OHNE das Backend fragen zu müssen!
-            const payload = JSON.parse(atob(token.split('.')[1]));
-
-            // Nur wenn der Token einem Provider gehört, loggen wir ihn automatisch ein
-            if (payload.accountType === 'PROVIDER') {
-                showApp();
-            }
-        } catch { /* ignore */ }
-    }
+  const token = localStorage.getItem('provider_jwt');
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.accountType === 'PROVIDER') showApp();
+    } catch { /* ungültiges Token -> Login-Screen bleibt */ }
+  }
 })();
 
 function showApp() {
@@ -39,29 +32,26 @@ function showApp() {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 async function doLogin() {
-    const email    = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPassword').value;
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  if (!email || !password) { notify('Bitte E-Mail und Passwort eingeben.', 'error'); return; }
 
-    if (!email || !password) {
-        showLoginAlert('Bitte E-Mail und Passwort eingeben.', 'error'); return;
+  try {
+    const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'provider_jwt');
+
+    // Nur Handwerker dürfen ins Dashboard
+    const payload = JSON.parse(atob(data.token.split('.')[1]));
+    if (payload.accountType !== 'PROVIDER') {
+      notify('Dieser Account gehört einem Kunden. Bitte nutze den Marktplatz.', 'error');
+      return;
     }
 
-    try {
-        const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'provider_jwt');
-
-        // NEU: Türsteher-Prüfung!
-        const payload = JSON.parse(atob(data.token.split('.')[1]));
-        if (payload.accountType !== 'PROVIDER') {
-            showLoginAlert('Dieser Account gehört einem Kunden. Bitte nutze den Marktplatz.', 'error');
-            return;
-        }
-
-        localStorage.setItem('provider_jwt', data.token);
-        localStorage.setItem('provider_user_id',   data.userId);
-        showApp();
-    } catch {
-        showLoginAlert('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
-    }
+    localStorage.setItem('provider_jwt', data.token);
+    localStorage.setItem('provider_user_id', data.userId);
+    showApp();
+  } catch {
+    notify('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
+  }
 }
 
 function doLogout() {
@@ -70,20 +60,9 @@ function doLogout() {
   document.getElementById('appContent').style.display  = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
-  hideLoginAlert();
 }
 
-function showLoginAlert(msg, type) {
-  const el = document.getElementById('loginAlert');
-  el.textContent   = msg;
-  el.className     = `alert alert-${type}`;
-  el.style.display = 'block';
-}
-function hideLoginAlert() {
-  document.getElementById('loginAlert').style.display = 'none';
-}
-
-// ── Load Services ─────────────────────────────────────────────────────────────
+// ── Services laden & rendern ──────────────────────────────────────────────────
 async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
@@ -134,9 +113,7 @@ function renderServices() {
 
 function updateStats() {
   const count = allServices.length;
-  const avg   = count > 0
-    ? (allServices.reduce((sum, s) => sum + s.price, 0) / count)
-    : 0;
+  const avg   = count > 0 ? (allServices.reduce((sum, s) => sum + s.price, 0) / count) : 0;
   const cats  = new Set(allServices.map(s => s.category)).size;
 
   document.getElementById('statCount').textContent    = count;
@@ -144,20 +121,20 @@ function updateStats() {
   document.getElementById('statCats').textContent     = cats || '–';
 }
 
-// ── Create Modal ──────────────────────────────────────────────────────────────
+// ── Service-Modal (Erstellen / Bearbeiten) ────────────────────────────────────
 function openCreateModal() {
   editMode = false;
-  document.getElementById('modalTitle').textContent = 'Neuer Service';
-  document.getElementById('editServiceId').value    = '';
-  document.getElementById('svcTitle').value         = '';
-  document.getElementById('svcDesc').value          = '';
-  document.getElementById('svcCategory').value      = 'CLEANING';
-  document.getElementById('svcPrice').value         = '';
-  hideModalAlert();
+  document.getElementById('modalTitle').textContent    = 'Neuer Service';
+  document.getElementById('editServiceId').value       = '';
+  document.getElementById('svcTitle').value            = '';
+  document.getElementById('svcDesc').value             = '';
+  document.getElementById('svcCategory').value         = 'CLEANING';
+  document.getElementById('svcPrice').value            = '';
+  document.getElementById('svcZip').value              = '';
+  document.getElementById('svcZipGroup').style.display = 'block'; // PLZ nur beim Erstellen
   document.getElementById('serviceModal').classList.add('open');
 }
 
-// ── Edit Modal ────────────────────────────────────────────────────────────────
 function openEditModal(id) {
   const s = allServices.find(x => x.id === id);
   if (!s) return;
@@ -168,7 +145,8 @@ function openEditModal(id) {
   document.getElementById('svcDesc').value           = s.description;
   document.getElementById('svcCategory').value       = s.category;
   document.getElementById('svcPrice').value          = s.price;
-  hideModalAlert();
+  // Der Ort lässt sich beim Bearbeiten nicht ändern (Backend-PUT kennt keine PLZ) -> Feld ausblenden
+  document.getElementById('svcZipGroup').style.display = 'none';
   document.getElementById('serviceModal').classList.add('open');
 }
 
@@ -176,7 +154,6 @@ function closeServiceModal() {
   document.getElementById('serviceModal').classList.remove('open');
 }
 
-// ── Save (Create or Update) ───────────────────────────────────────────────────
 async function saveService() {
   const title    = document.getElementById('svcTitle').value.trim();
   const desc     = document.getElementById('svcDesc').value.trim();
@@ -184,34 +161,37 @@ async function saveService() {
   const price    = parseFloat(document.getElementById('svcPrice').value);
 
   if (!title || !desc || isNaN(price) || price <= 0) {
-    showModalAlert('Bitte alle Felder korrekt ausfüllen.', 'error'); return;
+    notify('Bitte alle Felder korrekt ausfüllen.', 'error'); return;
   }
 
   if (editMode) {
     const id = document.getElementById('editServiceId').value;
     try {
       await fetchAPI(`/services/${id}`, 'PUT', { title, description: desc, category, price }, 'provider_jwt');
-      showToast('Service aktualisiert ✓');
+      notify('Service aktualisiert ✓', 'success');
       closeServiceModal();
       loadServices();
     } catch {
-      showModalAlert('Fehler beim Aktualisieren.', 'error');
+      notify('Fehler beim Aktualisieren.', 'error');
     }
   } else {
     const providerId = localStorage.getItem('provider_user_id');
-    if (!providerId) { showModalAlert('Provider-ID fehlt. Bitte neu anmelden.', 'error'); return; }
+    if (!providerId) { notify('Provider-ID fehlt. Bitte neu anmelden.', 'error'); return; }
+    const zipCode = document.getElementById('svcZip').value.trim();
+    if (!zipCode) { notify('Bitte eine Postleitzahl angeben.', 'error'); return; }
     try {
-      await fetchAPI('/services', 'POST', { providerId, title, description: desc, category, price }, 'provider_jwt');
-      showToast('Service erstellt ✓');
+      await fetchAPI('/services', 'POST', { providerId, title, description: desc, category, price, zipCode }, 'provider_jwt');
+      notify('Service erstellt ✓', 'success');
       closeServiceModal();
       loadServices();
-    } catch {
-      showModalAlert('Fehler beim Erstellen.', 'error');
+    } catch (e) {
+      // Backend liefert z.B. "Ungültige Postleitzahl" als 400 -> ehrlich anzeigen
+      notify(e.message || 'Fehler beim Erstellen.', 'error');
     }
   }
 }
 
-// ── Delete ────────────────────────────────────────────────────────────────────
+// ── Löschen ───────────────────────────────────────────────────────────────────
 function openDeleteModal(id) {
   pendingDelete = id;
   document.getElementById('deleteModal').classList.add('open');
@@ -224,97 +204,70 @@ async function confirmDelete() {
   if (!pendingDelete) return;
   try {
     await fetchAPI(`/services/${pendingDelete}`, 'DELETE', null, 'provider_jwt');
-    showToast('Service gelöscht.');
+    notify('Service gelöscht.', 'success');
     closeDeleteModal();
     loadServices();
   } catch {
-    showToast('Fehler beim Löschen.');
+    notify('Fehler beim Löschen.', 'error');
     closeDeleteModal();
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function esc(str) {
-  return String(str || '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
-}
-function showModalAlert(msg, type) {
-  const el = document.getElementById('modalAlert');
-  el.textContent   = msg;
-  el.className     = `alert alert-${type}`;
-  el.style.display = 'block';
-}
-function hideModalAlert() {
-  document.getElementById('modalAlert').style.display = 'none';
-}
-
-// ── Tabs Umschalten ───────────────────────────────────────────────────────────
+// ── Tabs umschalten ───────────────────────────────────────────────────────────
 function switchDashboardTab(tab) {
-    document.getElementById('servicesView').style.display = tab === 'services' ? 'block' : 'none';
-    document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
-    document.getElementById('tabMyServices').classList.toggle('active', tab === 'services');
-    document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+  document.getElementById('servicesView').style.display = tab === 'services' ? 'block' : 'none';
+  document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+  document.getElementById('tabMyServices').classList.toggle('active', tab === 'services');
+  document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
 
-    if (tab === 'bookings') {
-        loadBookings();
-    } else {
-        loadServices();
-    }
+  if (tab === 'bookings') loadBookings();
+  else loadServices();
 }
 
 // ── Buchungen laden & anzeigen ────────────────────────────────────────────────
 async function loadBookings() {
-    const grid = document.getElementById('bookingsGrid');
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
+  const grid = document.getElementById('bookingsGrid');
+  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
 
-    const providerId = localStorage.getItem('provider_user_id');
-    try {
-        const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
+  const providerId = localStorage.getItem('provider_user_id');
+  try {
+    const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
 
-        if (bookings.length === 0) {
-            grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
-            return;
-        }
+    if (bookings.length === 0) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
+      return;
+    }
 
-        grid.innerHTML = bookings.map(b => {
-            // Bestimme die Farbe des Status-Badges
-            let statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
+    grid.innerHTML = bookings.map(b => {
+      const statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
 
-            return `
+      return `
       <div class="svc-card">
         <div class="svc-top">
           <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${b.status}</span>
         </div>
         <div class="svc-title">${esc(b.serviceTitle)}</div>
         <div class="svc-desc" style="margin-bottom: 10px;">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
-        
         ${b.status === 'PENDING' ? `
         <div style="display: flex; gap: 10px; margin-top: auto;">
           <button class="btn btn-primary" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
           <button class="btn btn-danger" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
         </div>
         ` : `<div style="margin-top: auto; font-size: 0.85rem; color: var(--muted);">Buchung ist abgeschlossen/abgelehnt.</div>`}
-      </div>
-    `}).join('');
-    } catch (error) {
-        grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
-    }
+      </div>`;
+    }).join('');
+  } catch {
+    grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
+  }
 }
 
 // ── Buchungs-Status ändern (PUT) ──────────────────────────────────────────────
 async function updateBookingStatus(bookingId, newStatus) {
-    try {
-        await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus }, 'provider_jwt');
-        showToast(`Buchung wurde ${newStatus === 'ACCEPTED' ? 'akzeptiert' : 'abgelehnt'}!`);
-        loadBookings(); // Liste neu laden, damit die Buttons verschwinden
-    } catch (error) {
-        showToast('Fehler beim Ändern des Status.');
-    }
+  try {
+    await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus }, 'provider_jwt');
+    notify(`Buchung wurde ${newStatus === 'ACCEPTED' ? 'akzeptiert' : 'abgelehnt'}!`, 'success');
+    loadBookings();
+  } catch {
+    notify('Fehler beim Ändern des Status.', 'error');
+  }
 }

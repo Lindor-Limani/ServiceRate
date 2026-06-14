@@ -9,5 +9,8 @@ public record ServiceOfferingResponse(
         String description,
         String category,
         Double price,
-        String status
+        String status,
+        String location,        // Ortsname, ermittelt aus der PLZ (Zippopotam.us)
+        Double averageRating,   // Durchschnitt der Sterne (0.0 wenn noch keine Reviews)
+        Long reviewCount        // Anzahl der Bewertungen
 ) {}

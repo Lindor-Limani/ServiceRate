@@ -31,6 +31,10 @@ public class ServiceOffering extends AuditableEntity {
     @Column(name = "currency_code", nullable = false)
     private String currencyCode = "EUR";
 
+    // Ortsname, ermittelt aus der PLZ über die Zippopotam.us-API
+    @Column
+    private String location;
+
     @Column(nullable = false)
     private String status = "ACTIVE";
 }

@@ -7,5 +7,6 @@ public record CreateServiceRequest(
         String title,
         String description,
         String category,
-        Double price
+        Double price,
+        String zipCode   // Österreichische PLZ; wird über Zippopotam.us in einen Ortsnamen aufgelöst
 ) {}

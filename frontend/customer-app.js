@@ -1,12 +1,9 @@
+// customer-app.js – Marktplatz & Buchungen aus Kundensicht
+// CAT_LABELS, esc() und notify() kommen aus utils.js
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let allServices    = [];
 let activeCategory = '';
-
-const CAT_LABELS = {
-  CLEANING: 'Reinigung', PLUMBING: 'Installateur',
-  ELECTRICAL: 'Elektriker', PAINTING: 'Maler',
-  GARDENING: 'Garten', OTHER: 'Sonstiges'
-};
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
@@ -29,7 +26,7 @@ const CAT_LABELS = {
   });
 })();
 
-// ── Weather Widget ────────────────────────────────────────────────────────────
+// ── Wetter-Widget ─────────────────────────────────────────────────────────────
 async function loadWeather() {
   const API_KEY = '6d06aea9543246a5433f298cb611335e';
   try {
@@ -47,7 +44,7 @@ async function loadWeather() {
   }
 }
 
-// ── Services ──────────────────────────────────────────────────────────────────
+// ── Services laden & rendern ──────────────────────────────────────────────────
 async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
@@ -105,6 +102,7 @@ function renderServices() {
       </div>
       <div class="card-title">${esc(s.title)}</div>
       <div class="card-desc">${esc(s.description)}</div>
+      <div class="card-rating">${ratingHtml(s)}</div>
       <div class="card-footer">
         <div class="provider-row">
           <div class="avatar">${initials(s.providerName)}</div>
@@ -116,7 +114,7 @@ function renderServices() {
   `).join('');
 }
 
-// ── Service Detail Modal ──────────────────────────────────────────────────────
+// ── Service-Detail-Modal ──────────────────────────────────────────────────────
 function openServiceModal(id) {
   const s = allServices.find(x => x.id === id);
   if (!s) return;
@@ -134,7 +132,10 @@ function openServiceModal(id) {
         <span class="meta-label">Anbieter</span>${esc(s.providerName || '–')}
       </div>
       <div class="meta-item">
-        <span class="meta-label">Status</span>${esc(s.status || 'Aktiv')}
+        <span class="meta-label">Ort</span>${esc(s.location || '–')}
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Bewertung</span>${ratingHtml(s)}
       </div>
     </div>
     <p class="modal-desc">${esc(s.description)}</p>
@@ -155,46 +156,39 @@ function closeServiceModal() {
   document.getElementById('serviceModal').classList.remove('open');
 }
 
-// ── Booking ───────────────────────────────────────────────────────────────────
-// ── Booking ───────────────────────────────────────────────────────────────────
+// ── Buchung ───────────────────────────────────────────────────────────────────
 async function doBook(serviceId, title, price) {
-    if (!localStorage.getItem('customer_jwt')) {
-        closeServiceModal();
-        openAuthModal('login');
-        showAlert('Bitte zuerst anmelden um zu buchen.', 'error');
-        return;
-    }
+  if (!localStorage.getItem('customer_jwt')) {
+    closeServiceModal();
+    openAuthModal('login');
+    notify('Bitte zuerst anmelden um zu buchen.', 'error');
+    return;
+  }
 
-    try {
-        // FEHLER 1 BEHOBEN: Wir senden serviceOfferingId (wie das Backend es erwartet)
-        await fetchAPI('/bookings', 'POST', {
-            serviceOfferingId: serviceId,
-            customerId: localStorage.getItem('customer_user_id')
-        }, 'customer_jwt');
+  try {
+    await fetchAPI('/bookings', 'POST', {
+      serviceOfferingId: serviceId,
+      customerId: localStorage.getItem('customer_user_id')
+    }, 'customer_jwt');
 
-        // FEHLER 2 BEHOBEN: Die Erfolgsmeldung wird NUR angezeigt, wenn das Backend "OK" sagt
-        document.getElementById('serviceModalContent').innerHTML = `
+    // Erfolgsmeldung wird erst nach erfolgreicher Antwort des Backends angezeigt
+    document.getElementById('serviceModalContent').innerHTML = `
       <div class="book-success">
         <div class="success-icon">✓</div>
         <h3>Buchung erfolgreich!</h3>
         <p>Du hast <strong>${esc(title)}</strong> gebucht.<br/>Der Anbieter meldet sich in Kürze bei dir.</p>
         <br/>
         <button class="btn btn-ghost" onclick="closeServiceModal()">Schließen</button>
-      </div>
-    `;
-        showToast('Buchung wurde gespeichert ✓');
-
-    } catch (error) {
-        // Wenn das Backend meckert, zeigen wir das jetzt ehrlich an!
-        showModalAlert('Fehler bei der Buchung: Bitte überprüfe deine Daten.', 'error');
-        console.error("Buchungsfehler:", error);
-    }
+      </div>`;
+    notify('Buchung wurde gespeichert ✓', 'success');
+  } catch {
+    notify('Fehler bei der Buchung: Bitte überprüfe deine Daten.', 'error');
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function openAuthModal(tab) {
   switchAuthTab(tab || 'login');
-  clearAlert();
   document.getElementById('authModal').classList.add('open');
 }
 function closeAuthModal() {
@@ -206,22 +200,21 @@ function switchAuthTab(tab) {
   document.getElementById('regForm').style.display   = tab === 'register' ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
   document.getElementById('tabReg').classList.toggle('active',   tab === 'register');
-  clearAlert();
 }
 
 async function doLogin() {
   const email    = document.getElementById('loginEmail').value.trim();
   const password = document.getElementById('loginPassword').value;
-  if (!email || !password) { showAlert('Bitte E-Mail und Passwort eingeben.', 'error'); return; }
+  if (!email || !password) { notify('Bitte E-Mail und Passwort eingeben.', 'error'); return; }
   try {
     const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'customer_jwt');
     localStorage.setItem('customer_jwt', data.token);
-    localStorage.setItem('customer_user_id',   data.userId);
+    localStorage.setItem('customer_user_id', data.userId);
     updateNavUI();
     closeAuthModal();
-    showToast('Erfolgreich angemeldet ✓');
+    notify('Erfolgreich angemeldet ✓', 'success');
   } catch {
-    showAlert('Login fehlgeschlagen. E-Mail oder Passwort falsch?', 'error');
+    notify('Login fehlgeschlagen. E-Mail oder Passwort falsch?', 'error');
   }
 }
 
@@ -232,15 +225,15 @@ async function doRegister() {
   const password    = document.getElementById('regPassword').value;
   const accountType = document.getElementById('regType').value;
   if (!firstName || !lastName || !email || !password) {
-    showAlert('Bitte alle Felder ausfüllen.', 'error'); return;
+    notify('Bitte alle Felder ausfüllen.', 'error'); return;
   }
   try {
     await fetchAPI('/auth/register', 'POST', { firstName, lastName, email, password, accountType }, 'customer_jwt');
-    showAlert('Konto erstellt! Du kannst dich jetzt anmelden.', 'success');
+    notify('Konto erstellt! Du kannst dich jetzt anmelden.', 'success');
     switchAuthTab('login');
     document.getElementById('loginEmail').value = email;
   } catch (e) {
-    showAlert(e.message || 'Registrierung fehlgeschlagen.', 'error');
+    notify(e.message || 'Registrierung fehlgeschlagen.', 'error');
   }
 }
 
@@ -248,128 +241,159 @@ function logout() {
   localStorage.removeItem('customer_jwt');
   localStorage.removeItem('customer_user_id');
   updateNavUI();
-  showToast('Abgemeldet.');
-    function updateNavUI() {
-        const token     = localStorage.getItem('customer_jwt');
-        const loginBtn  = document.getElementById('loginNavBtn');
-        const logoutBtn = document.getElementById('logoutBtn');
-        const navUser   = document.getElementById('navUser');
-        const tabs      = document.getElementById('customerTabs'); // NEU
-
-        if (token) {
-            try {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-
-                if (payload.accountType === 'CUSTOMER') {
-                    loginBtn.style.display  = 'none';
-                    logoutBtn.style.display = 'inline-flex';
-                    navUser.textContent = payload.sub || '';
-                    tabs.style.display = 'flex'; // NEU: Tabs einblenden
-                    return;
-                }
-            } catch { navUser.textContent = ''; }
-        }
-
-        // Ausgeloggter Zustand
-        loginBtn.style.display  = 'inline-flex';
-        logoutBtn.style.display = 'none';
-        navUser.textContent     = '';
-        tabs.style.display      = 'none'; // NEU: Tabs ausblenden
-        if(typeof switchCustomerTab === 'function') switchCustomerTab('market'); // Zurück zum Marktplatz
-    }
+  notify('Abgemeldet.', 'info');
 }
 
+// Schaltet die Navigation zwischen ein-/ausgeloggtem Zustand um (nur für CUSTOMER-Tokens)
 function updateNavUI() {
   const token     = localStorage.getItem('customer_jwt');
   const loginBtn  = document.getElementById('loginNavBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const navUser   = document.getElementById('navUser');
+  const tabs      = document.getElementById('customerTabs');
 
   if (token) {
-    loginBtn.style.display  = 'none';
-    logoutBtn.style.display = 'inline-flex';
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      navUser.textContent = payload.sub || '';
+      if (payload.accountType === 'CUSTOMER') {
+        loginBtn.style.display  = 'none';
+        logoutBtn.style.display = 'inline-flex';
+        navUser.textContent     = payload.sub || '';
+        if (tabs) tabs.style.display = 'flex';
+        return;
+      }
     } catch { navUser.textContent = ''; }
-  } else {
-    loginBtn.style.display  = 'inline-flex';
-    logoutBtn.style.display = 'none';
-    navUser.textContent     = '';
   }
+
+  // Ausgeloggter Zustand
+  loginBtn.style.display  = 'inline-flex';
+  logoutBtn.style.display = 'none';
+  navUser.textContent     = '';
+  if (tabs) tabs.style.display = 'none';
+  if (typeof switchCustomerTab === 'function') switchCustomerTab('market');
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function esc(str) {
-  return String(str || '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// ── Helfer ────────────────────────────────────────────────────────────────────
 function initials(name) {
   return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 }
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 3000);
-}
-function showAlert(msg, type) {
-  const el = document.getElementById('authAlert');
-  el.textContent = msg;
-  el.className   = `alert alert-${type}`;
-  el.style.display = 'block';
-}
-function clearAlert() {
-  const el = document.getElementById('authAlert');
-  el.style.display = 'none';
-  el.textContent   = '';
-}
 
-// ── Tabs Umschalten (Kunde) ───────────────────────────────────────────────────
+// ── Tabs umschalten (Kunde) ───────────────────────────────────────────────────
 function switchCustomerTab(tab) {
-    document.getElementById('marketView').style.display = tab === 'market' ? 'block' : 'none';
-    document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
-    document.getElementById('tabMarket').classList.toggle('active', tab === 'market');
-    document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+  document.getElementById('marketView').style.display   = tab === 'market'   ? 'block' : 'none';
+  document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+  document.getElementById('tabMarket').classList.toggle('active', tab === 'market');
+  document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
 
-    if (tab === 'bookings') {
-        loadCustomerBookings();
-    }
+  if (tab === 'bookings') loadCustomerBookings();
 }
 
 // ── Buchungen des Kunden laden ────────────────────────────────────────────────
 async function loadCustomerBookings() {
-    const grid = document.getElementById('customerBookingsGrid');
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
+  const grid = document.getElementById('customerBookingsGrid');
+  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
 
-    const customerId = localStorage.getItem('customer_user_id');
-    if (!customerId) return;
+  const customerId = localStorage.getItem('customer_user_id');
+  if (!customerId) {
+    grid.innerHTML = `<div class="empty-state"><p>Bitte logge dich ein.</p></div>`;
+    return;
+  }
 
-    try {
-        const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
+  try {
+    const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
 
-        if (bookings.length === 0) {
-            grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
-            return;
-        }
-
-        grid.innerHTML = bookings.map(b => {
-            // Farben und Texte für den Status
-            let statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
-            let statusText  = b.status === 'PENDING' ? 'Wartet auf Antwort' : (b.status === 'ACCEPTED' ? '✓ Akzeptiert' : '❌ Abgelehnt');
-
-            return `
-      <div class="service-card" style="cursor: default; border-top: 4px solid ${statusColor};">
-        <div class="card-top">
-          <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${statusText}</span>
-        </div>
-        <div class="card-title" style="margin-top: 10px; font-size: 1.1rem;">${esc(b.serviceTitle)}</div>
-        <div class="card-desc" style="margin-top: 5px;">Angeboten von: <strong>${esc(b.customerName)}</strong></div>
-      </div>
-      `;
-        }).join('');
-    } catch (error) {
-        grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
+    if (bookings.length === 0) {
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
+      return;
     }
+
+    grid.innerHTML = bookings.map(b => {
+      const statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
+      const statusText  = b.status === 'PENDING' ? 'Wartet auf Antwort' : (b.status === 'ACCEPTED' ? '✓ Akzeptiert' : '❌ Abgelehnt');
+
+      return `
+      <article class="card" style="cursor: default; border-top: 4px solid ${statusColor};">
+        <div class="card-header">
+          <h3 style="margin-bottom: 0;">${esc(b.serviceTitle)}</h3>
+          <span class="category-badge" style="background: ${statusColor}; color: white; border: none;">${statusText}</span>
+        </div>
+        <div class="card-provider" style="margin-top: 10px;">Angeboten von: <strong>${esc(b.customerName)}</strong></div>
+        ${b.status === 'ACCEPTED' ? `
+        <button class="btn btn-primary btn-sm" style="margin-top:14px;"
+                onclick="openReviewModal('${b.id}', '${esc(b.serviceTitle)}')">⭐ Bewerten</button>
+        ` : ''}
+      </article>`;
+    }).join('');
+  } catch {
+    grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
+    notify('Fehler beim Laden der Buchungen.', 'error');
+  }
+}
+
+// ── Bewertungs-Anzeige (Sterne aus den Backend-Werten) ────────────────────────
+function starString(rating) {
+  const full = Math.max(0, Math.min(5, Math.round(rating)));
+  return '★★★★★'.slice(0, full) + '☆☆☆☆☆'.slice(0, 5 - full);
+}
+
+function ratingHtml(s) {
+  const count = s.reviewCount || 0;
+  if (!count) {
+    return `<span class="stars">☆☆☆☆☆</span> <span>Noch keine Bewertungen</span>`;
+  }
+  const avg = s.averageRating || 0;
+  return `<span class="stars">${starString(avg)}</span> ` +
+         `<span class="rating-num">${avg.toFixed(1)}</span> <span>(${count})</span>`;
+}
+
+// ── Bewertungs-Modal ──────────────────────────────────────────────────────────
+let reviewBookingId = null;
+let selectedRating  = 0;
+
+function openReviewModal(bookingId, serviceTitle) {
+  reviewBookingId = bookingId;
+  selectedRating  = 0;
+  document.getElementById('reviewServiceTitle').textContent = serviceTitle;
+  document.getElementById('reviewComment').value = '';
+  renderStarInput();
+
+  document.querySelectorAll('#starInput .star').forEach(star => {
+    star.onclick = () => { selectedRating = parseInt(star.dataset.val, 10); renderStarInput(); };
+  });
+
+  document.getElementById('reviewModal').classList.add('open');
+}
+
+function closeReviewModal() {
+  document.getElementById('reviewModal').classList.remove('open');
+}
+
+// Färbt die Sterne bis zur aktuellen Auswahl ein
+function renderStarInput() {
+  document.querySelectorAll('#starInput .star').forEach(star => {
+    star.classList.toggle('filled', parseInt(star.dataset.val, 10) <= selectedRating);
+  });
+}
+
+async function submitReview() {
+  if (selectedRating < 1) {
+    notify('Bitte wähle 1 bis 5 Sterne aus.', 'error');
+    return;
+  }
+  const comment = document.getElementById('reviewComment').value.trim();
+
+  try {
+    await fetchAPI('/reviews', 'POST', {
+      bookingId: reviewBookingId,
+      rating:    selectedRating,
+      comment:   comment
+    }, 'customer_jwt');
+
+    closeReviewModal();
+    notify('Danke für deine Bewertung ⭐', 'success');
+    loadServices();          // Marktplatz-Sterne aktualisieren
+    loadCustomerBookings();  // Buchungsliste neu laden
+  } catch (e) {
+    notify(e.message || 'Bewertung konnte nicht gespeichert werden.', 'error');
+  }
 }

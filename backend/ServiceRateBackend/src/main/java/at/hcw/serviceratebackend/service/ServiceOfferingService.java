@@ -2,17 +2,17 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
+import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -20,11 +20,15 @@ public class ServiceOfferingService {
 
     private final ServiceOfferingRepository serviceRepository;
     private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
+    private final LocationValidationService locationValidationService;
 
-    // CREATE (POST)
     public ServiceOfferingResponse create(CreateServiceRequest request) {
         User provider = userRepository.findById(request.providerId())
                 .orElseThrow(() -> new IllegalArgumentException("Handwerker nicht gefunden"));
+
+        // PLZ über die externe Zippopotam.us-API in einen Ortsnamen auflösen (400, falls ungültig)
+        String location = locationValidationService.resolveCityName(request.zipCode());
 
         ServiceOffering service = new ServiceOffering();
         service.setId(UUID.randomUUID());
@@ -33,27 +37,41 @@ public class ServiceOfferingService {
         service.setDescription(request.description());
         service.setCategory(request.category());
         service.setPrice(request.price());
+        service.setLocation(location);
         service.setStatus("ACTIVE");
 
-        ServiceOffering saved = serviceRepository.save(service);
-        return mapToResponse(saved);
+        return mapToResponse(serviceRepository.save(service));
     }
 
-    // READ (GET)
     public List<ServiceOfferingResponse> getAll() {
         return serviceRepository.findAll().stream()
                 .map(this::mapToResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
-    // DELETE (DELETE)
     public void delete(UUID id) {
         serviceRepository.deleteById(id);
     }
 
+    public ServiceOfferingResponse updateService(UUID id, UpdateServiceRequest request) {
+        ServiceOffering service = serviceRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
 
-    // Hilfsmethode zum Umwandeln von Datenbank-Entity zu DTO
+        service.setTitle(request.title());
+        service.setDescription(request.description());
+        service.setCategory(request.category());
+        service.setPrice(request.price());
+
+        return mapToResponse(serviceRepository.save(service));
+    }
+
+    // Wandelt eine Entity ins Antwort-DTO um und reichert sie mit den Live-Bewertungen an
     private ServiceOfferingResponse mapToResponse(ServiceOffering service) {
+        // findAverageRatingByServiceId kann null sein, wenn es noch keine Reviews gibt -> sauber auf 0.0 mappen
+        Double avg = reviewRepository.findAverageRatingByServiceId(service.getId());
+        double averageRating = (avg != null) ? avg : 0.0;
+        Long reviewCount = reviewRepository.findReviewCountByServiceId(service.getId());
+
         return new ServiceOfferingResponse(
                 service.getId(),
                 service.getProvider().getFirstName() + " " + service.getProvider().getLastName(),
@@ -61,19 +79,10 @@ public class ServiceOfferingService {
                 service.getDescription(),
                 service.getCategory(),
                 service.getPrice(),
-                service.getStatus()
+                service.getStatus(),
+                service.getLocation(),
+                averageRating,
+                reviewCount
         );
-    }
-    public ServiceOfferingResponse updateService(java.util.UUID id, UpdateServiceRequest request) {
-        ServiceOffering service = serviceRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Service nicht gefunden"));
-
-        service.setTitle(request.getTitle());
-        service.setDescription(request.getDescription());
-        service.setCategory(request.getCategory());
-        service.setPrice(request.getPrice());
-
-        ServiceOffering updatedService = serviceRepository.save(service);
-        return mapToResponse(updatedService); // Nutzt deine bestehende Hilfsmethode
     }
 }
