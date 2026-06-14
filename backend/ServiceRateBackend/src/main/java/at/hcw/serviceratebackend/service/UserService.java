@@ -36,7 +36,7 @@ public class UserService {
         if (userRepository.findByEmail(request.email()).isPresent()) {
             throw new IllegalArgumentException("E-Mail existiert bereits");
         }
-        String normalizedType = normalizeAndValidateAccountType(request.accountType());
+       // String normalizedType = normalizeAndValidateAccountType(request.accountType());
 
         User user = new User();
         user.setId(UUID.randomUUID());
@@ -44,7 +44,7 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setAccountType(normalizedType);
+        user.setAccountType(request.accountType());
         user.setStatus(UserStatus.ACTIVE.name());
 
         User saved = userRepository.save(user);
@@ -80,7 +80,7 @@ public class UserService {
         if (request.firstName() != null) user.setFirstName(request.firstName());
         if (request.lastName() != null) user.setLastName(request.lastName());
         if (request.accountType() != null && !request.accountType().isBlank()) {
-            user.setAccountType(normalizeAndValidateAccountType(request.accountType()));
+            user.setAccountType(request.accountType());
         }
         if (request.status() != null && !request.status().isBlank()) {
             // validate against enum values if possible
@@ -120,7 +120,7 @@ public class UserService {
     }
 
     // --- helpers ---
-    private String normalizeAndValidateAccountType(String input) {
+    /* private String normalizeAndValidateAccountType(String input) {
         if (input == null || input.isBlank()) {
             throw new IllegalArgumentException("accountType ist erforderlich");
         }
@@ -133,7 +133,7 @@ public class UserService {
             throw new IllegalArgumentException("Ungültiger accountType. Erlaubt: " + java.util.Arrays.toString(AccountType.values()));
         }
         return normalized;
-    }
+    }*/
 
     private UserResponse toResponse(User user) {
         return new UserResponse(
