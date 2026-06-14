@@ -34,6 +34,25 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.updateBookingStatus(id, request.status()));
     }
 
+    // Spezifische Status-Endpunkte (vom Anbieter auszuführen)
+    @PostMapping("/{id}/status/accept")
+    public ResponseEntity<BookingResponse> accept(@PathVariable java.util.UUID id,
+                                                  @RequestParam("providerId") java.util.UUID providerId) {
+        return ResponseEntity.ok(bookingService.updateBookingStatusForProvider(id, providerId, "ACCEPTED"));
+    }
+
+    @PostMapping("/{id}/status/reject")
+    public ResponseEntity<BookingResponse> reject(@PathVariable java.util.UUID id,
+                                                  @RequestParam("providerId") java.util.UUID providerId) {
+        return ResponseEntity.ok(bookingService.updateBookingStatusForProvider(id, providerId, "REJECTED"));
+    }
+
+    @PostMapping("/{id}/status/complete")
+    public ResponseEntity<BookingResponse> complete(@PathVariable java.util.UUID id,
+                                                    @RequestParam("providerId") java.util.UUID providerId) {
+        return ResponseEntity.ok(bookingService.updateBookingStatusForProvider(id, providerId, "COMPLETED"));
+    }
+
     // Endpunkt für die Kunden-App
     @GetMapping("/customer/{customerId}")
     public ResponseEntity<java.util.List<BookingResponse>> getBookingsForCustomer(@PathVariable java.util.UUID customerId) {

@@ -60,7 +60,7 @@ public class BookingService {
                 .toList();
     }
 
-    // Ändert den Status einer Buchung
+    // Ändert den Status einer Buchung (ohne Identitätsprüfung)
     public BookingResponse updateBookingStatus(UUID bookingId, String newStatus) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
@@ -68,6 +68,41 @@ public class BookingService {
         booking.setStatus(newStatus);
         Booking saved = bookingRepository.save(booking);
 
+        return new BookingResponse(
+                saved.getId(),
+                saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
+                saved.getServiceOffering().getTitle(),
+                saved.getStatus()
+        );
+    }
+
+    // Ändert den Status einer Buchung – Identifikation via customerId
+    public BookingResponse updateBookingStatusForCustomer(UUID bookingId, UUID customerId, String newStatus) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        if (booking.getCustomer() == null || booking.getCustomer().getId() == null || !booking.getCustomer().getId().equals(customerId)) {
+            throw new IllegalArgumentException("Ungültiger Kunde für diese Buchung");
+        }
+        booking.setStatus(newStatus);
+        Booking saved = bookingRepository.save(booking);
+        return new BookingResponse(
+                saved.getId(),
+                saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
+                saved.getServiceOffering().getTitle(),
+                saved.getStatus()
+        );
+    }
+
+    // Ändert den Status einer Buchung – Identifikation via providerId (Anbieter)
+    public BookingResponse updateBookingStatusForProvider(UUID bookingId, UUID providerId, String newStatus) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
+        if (provider == null || provider.getId() == null || !provider.getId().equals(providerId)) {
+            throw new IllegalArgumentException("Ungültiger Anbieter für diese Buchung");
+        }
+        booking.setStatus(newStatus);
+        Booking saved = bookingRepository.save(booking);
         return new BookingResponse(
                 saved.getId(),
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
