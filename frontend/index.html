@@ -1,111 +1,111 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ServiceRate – Handwerker finden & anbieten</title>
-    <style>
-        :root {
-            --primary: #00877C;
-            --primary-dark: #006f66;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ServiceRate – Handwerker finden & anbieten</title>
+  <style>
+    :root {
+      --primary: #00877C;
+      --primary-dark: #006f66;
+    }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #f0faf8 0%, #e3f3f1 100%);
-            color: #1a2b29;
-            padding: 24px;
-        }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #f0faf8 0%, #e3f3f1 100%);
+      color: #1a2b29;
+      padding: 24px;
+    }
 
-        .landing {
-            width: 100%;
-            max-width: 540px;
-            text-align: center;
-        }
+    .landing {
+      width: 100%;
+      max-width: 540px;
+      text-align: center;
+    }
 
-        .logo {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1a2b29;
-            margin-bottom: 28px;
-        }
-        .logo span { color: var(--primary); }
+    .logo {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a2b29;
+      margin-bottom: 28px;
+    }
+    .logo span { color: var(--primary); }
 
-        h1 {
-            font-size: 2.4rem;
-            line-height: 1.15;
-            margin-bottom: 16px;
-        }
+    h1 {
+      font-size: 2.4rem;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
 
-        .subtitle {
-            font-size: 1.1rem;
-            color: #4a5b59;
-            margin-bottom: 40px;
-        }
+    .subtitle {
+      font-size: 1.1rem;
+      color: #4a5b59;
+      margin-bottom: 40px;
+    }
 
-        .actions {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
 
-        .btn {
-            display: block;
-            padding: 18px 24px;
-            border-radius: 14px;
-            font-size: 1.05rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
-        }
-        .btn:hover { transform: translateY(-2px); }
+    .btn {
+      display: block;
+      padding: 18px 24px;
+      border-radius: 14px;
+      font-size: 1.05rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+    }
+    .btn:hover { transform: translateY(-2px); }
 
-        .btn-primary {
-            background: var(--primary);
-            color: #fff;
-            box-shadow: 0 8px 20px rgba(0, 135, 124, .25);
-        }
-        .btn-primary:hover { background: var(--primary-dark); }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 8px 20px rgba(0, 135, 124, .25);
+    }
+    .btn-primary:hover { background: var(--primary-dark); }
 
-        .btn-secondary {
-            background: #fff;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-        }
-        .btn-secondary:hover { background: #f0faf8; }
+    .btn-secondary {
+      background: #fff;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+    }
+    .btn-secondary:hover { background: #f0faf8; }
 
-        .footer {
-            margin-top: 40px;
-            font-size: .85rem;
-            color: #8a9a98;
-        }
-    </style>
+    .footer {
+      margin-top: 40px;
+      font-size: .85rem;
+      color: #8a9a98;
+    }
+  </style>
 </head>
 <body>
-    <main class="landing">
-        <div class="logo">Service<span>Rate</span></div>
-        <h1>Der einfache Weg zum&nbsp;Handwerker</h1>
-        <p class="subtitle">
-            Geprüfte Dienstleister in deiner Nähe – mit echten Bewertungen.
-            Wähle, wie du starten möchtest.
-        </p>
+  <main class="landing">
+    <div class="logo">Service<span>Rate</span></div>
+    <h1>Der einfache Weg zum&nbsp;Handwerker</h1>
+    <p class="subtitle">
+      Geprüfte Dienstleister in deiner Nähe – mit echten Bewertungen.
+      Wähle, wie du starten möchtest.
+    </p>
 
-        <div class="actions">
-            <a class="btn btn-primary" href="customer-app.html">
-                Ich suche einen Handwerker
-            </a>
-            <a class="btn btn-secondary" href="provider-dashboard.html">
-                Ich biete Dienstleistungen an
-            </a>
-        </div>
+    <div class="actions">
+      <a class="btn btn-primary" href="customer-app.html">
+        Ich suche einen Handwerker
+      </a>
+      <a class="btn btn-secondary" href="provider-dashboard.html">
+        Ich biete Dienstleistungen an
+      </a>
+    </div>
 
-        <p class="footer">© ServiceRate</p>
-    </main>
+    <p class="footer">© ServiceRate</p>
+  </main>
 </body>
 </html>

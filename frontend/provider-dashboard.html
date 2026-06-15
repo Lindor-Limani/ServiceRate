@@ -573,49 +573,49 @@
   <!-- MAIN -->
   <main class="main-wrap">
     <div class="page-header">
-        <div>
-            <h1>Meine Services</h1>
-            <p>Verwalte deine Angebote – erstelle, bearbeite und lösche Services.</p>
-        </div>
-        <button class="btn btn-primary" onclick="openCreateModal()">+ Neuer Service</button>
+      <div>
+        <h1>Meine Services</h1>
+        <p>Verwalte deine Angebote – erstelle, bearbeite und lösche Services.</p>
+      </div>
+      <button class="btn btn-primary" onclick="openCreateModal()">+ Neuer Service</button>
     </div>
 
     <div class="dash-tabs">
-        <button class="dash-tab active" id="tabMyServices" onclick="switchDashboardTab('services')">Meine Services</button>
-        <button class="dash-tab" id="tabMyBookings" onclick="switchDashboardTab('bookings')">Anfragen (Postfach)</button>
+      <button class="dash-tab active" id="tabMyServices" onclick="switchDashboardTab('services')">Meine Services</button>
+      <button class="dash-tab" id="tabMyBookings" onclick="switchDashboardTab('bookings')">Anfragen (Postfach)</button>
     </div>
 
     <div id="servicesView">
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="stat-label">Services gesamt</div>
-                <div class="stat-value green" id="statCount">–</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Ø Preis / Std</div>
-                <div class="stat-value" id="statAvgPrice">–</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Kategorien</div>
-                <div class="stat-value" id="statCats">–</div>
-            </div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Services gesamt</div>
+          <div class="stat-value green" id="statCount">–</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">Ø Preis / Std</div>
+          <div class="stat-value" id="statAvgPrice">–</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Kategorien</div>
+          <div class="stat-value" id="statCats">–</div>
+        </div>
+      </div>
 
-        <div class="services-grid" id="servicesGrid">
-            <div class="empty-state">
-                <div class="empty-icon">⏳</div>
-                <p>Services werden geladen…</p>
-            </div>
+      <div class="services-grid" id="servicesGrid">
+        <div class="empty-state">
+          <div class="empty-icon">⏳</div>
+          <p>Services werden geladen…</p>
         </div>
+      </div>
     </div>
 
     <div id="bookingsView" style="display: none;">
-        <div class="services-grid" id="bookingsGrid">
-            <div class="empty-state">
-                <div class="empty-icon">⏳</div>
-                <p>Lade Anfragen...</p>
-            </div>
+      <div class="services-grid" id="bookingsGrid">
+        <div class="empty-state">
+          <div class="empty-icon">⏳</div>
+          <p>Lade Anfragen...</p>
         </div>
+      </div>
     </div>
   </main>
 </div>
