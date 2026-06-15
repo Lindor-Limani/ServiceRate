@@ -232,6 +232,10 @@ async function loadBookings() {
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
 
   const providerId = localStorage.getItem('provider_user_id');
+  if (!providerId) {
+    grid.innerHTML = `<div class="empty-state"><p>Bitte neu anmelden.</p></div>`;
+    return;
+  }
   try {
     const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
 
@@ -258,7 +262,8 @@ async function loadBookings() {
         ` : `<div style="margin-top: auto; font-size: 0.85rem; color: var(--muted);">Buchung ist abgeschlossen/abgelehnt.</div>`}
       </div>`;
     }).join('');
-  } catch {
+  } catch (e) {
+    console.error('Fehler beim Laden der Provider-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
   }
 }

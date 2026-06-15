@@ -376,21 +376,24 @@ async function loadCustomerBookings() {
     grid.innerHTML = bookings.map(b => {
       const statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
       const statusText  = b.status === 'PENDING' ? 'Wartet auf Antwort' : (b.status === 'ACCEPTED' ? '✓ Akzeptiert' : '❌ Abgelehnt');
+      const dateLabel   = b.bookingDate ? `Wunschtermin: ${b.bookingDate}` : 'Kein Termin angegeben';
 
       return `
       <article class="card" style="cursor: default; border-top: 4px solid ${statusColor};">
         <div class="card-header">
-          <h3 style="margin-bottom: 0;">${esc(b.serviceTitle)}</h3>
+          <h3 style="margin-bottom: 0;">${esc(b.serviceTitle || '–')}</h3>
           <span class="category-badge" style="background: ${statusColor}; color: white; border: none;">${statusText}</span>
         </div>
-        <div class="card-provider" style="margin-top: 10px;">Angeboten von: <strong>${esc(b.customerName)}</strong></div>
+        <div class="card-provider" style="margin-top: 10px;">Angeboten von: <strong>${esc(b.customerName || '–')}</strong></div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:6px;">${dateLabel}</div>
         ${b.status === 'ACCEPTED' ? `
         <button class="btn btn-primary btn-sm" style="margin-top:14px;"
-                onclick="openReviewModal('${b.id}', '${esc(b.serviceTitle)}')">⭐ Bewerten</button>
+                onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">⭐ Bewerten</button>
         ` : ''}
       </article>`;
     }).join('');
-  } catch {
+  } catch (e) {
+    console.error('Fehler beim Laden der Kunden-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
     notify('Fehler beim Laden der Buchungen.', 'error');
   }
