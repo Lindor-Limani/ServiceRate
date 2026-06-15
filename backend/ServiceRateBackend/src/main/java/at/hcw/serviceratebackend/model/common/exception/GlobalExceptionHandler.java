@@ -1,5 +1,7 @@
 package at.hcw.serviceratebackend.model.common.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -9,6 +11,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 // Liefert für alle Fehler eine einheitliche JSON-Antwort: { "error": "..." }
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     public record ErrorResponse(String error) {}
 
@@ -31,9 +35,12 @@ public class GlobalExceptionHandler {
     }
 
     // Übrige fachliche Laufzeitfehler (z.B. "nicht gefunden") -> 400
+    // Achtung: NullPointerException ist auch eine RuntimeException und landet hier!
     @ExceptionHandler(RuntimeException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleRuntime(RuntimeException ex) {
+        // Stacktrace in die Server-Konsole, damit wir bei NPEs & Co. nicht mehr blind sind
+        log.error("RuntimeException im Request abgefangen", ex);
         return new ErrorResponse(ex.getMessage());
     }
 
@@ -41,6 +48,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleGeneric(Exception ex) {
+        // Vollständigen Stacktrace loggen, BEVOR wir antworten -> wir sehen was wirklich abstürzt
+        log.error("Unerwarteter Serverfehler", ex);
         return new ErrorResponse("Interner Serverfehler");
     }
 }
