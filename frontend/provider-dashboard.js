@@ -5,6 +5,8 @@
 let allServices   = [];
 let pendingDelete = null;
 let editMode      = false;
+let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalender-Navigation)
+let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
@@ -227,6 +229,8 @@ function switchDashboardTab(tab) {
 }
 
 // ── Buchungen laden & anzeigen ────────────────────────────────────────────────
+// Logik unverändert: lädt per fetchAPI über /bookings/provider/${providerId} (GET).
+// Neu ist nur die optische Kalender-Darstellung beim Rendern (renderBookings()).
 async function loadBookings() {
   const grid = document.getElementById('bookingsGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
@@ -238,34 +242,208 @@ async function loadBookings() {
   }
   try {
     const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
-
-    if (bookings.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast aktuell keine Anfragen.</p></div>`;
-      return;
-    }
-
-    grid.innerHTML = bookings.map(b => {
-      const statusColor = b.status === 'PENDING' ? '#f59e0b' : (b.status === 'ACCEPTED' ? '#10b981' : '#ef4444');
-
-      return `
-      <div class="svc-card">
-        <div class="svc-top">
-          <span class="cat-badge" style="background: ${statusColor}; color: white; border: none;">${b.status}</span>
-        </div>
-        <div class="svc-title">${esc(b.serviceTitle)}</div>
-        <div class="svc-desc" style="margin-bottom: 10px;">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
-        ${b.status === 'PENDING' ? `
-        <div style="display: flex; gap: 10px; margin-top: auto;">
-          <button class="btn btn-primary" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
-          <button class="btn btn-danger" style="flex:1;" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
-        </div>
-        ` : `<div style="margin-top: auto; font-size: 0.85rem; color: var(--muted);">Buchung ist abgeschlossen/abgelehnt.</div>`}
-      </div>`;
-    }).join('');
+    providerBookings = Array.isArray(bookings) ? bookings : [];
+    renderBookings();
   } catch (e) {
     console.error('Fehler beim Laden der Provider-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
   }
+}
+
+// Zeichnet Übersichtskarte + Kalender + Anfragenliste aus dem State providerBookings
+function renderBookings() {
+  const grid = document.getElementById('bookingsGrid');
+
+  const pendingCount  = providerBookings.filter(b => b.status === 'PENDING').length;
+  const acceptedCount = providerBookings.filter(b => b.status === 'ACCEPTED').length;
+  const upcoming = providerBookings
+    .filter(b => b.status !== 'REJECTED' && b.bookingDate && new Date(b.bookingDate) >= stripTime(new Date()))
+    .sort((a, b) => new Date(a.bookingDate) - new Date(b.bookingDate));
+  const nextBooking = upcoming[0];
+
+  grid.innerHTML = `
+    <section class="appointment-calendar-shell">
+      <div class="notification-card ${pendingCount ? 'has-pending' : ''}">
+        <div class="notification-left">
+          <span class="notification-icon">${pendingCount ? '🔔' : '✓'}</span>
+          <div>
+            <span class="notification-kicker">Terminstatus</span>
+            <strong>${pendingCount ? `${pendingCount} offene Anfrage${pendingCount === 1 ? '' : 'n'}` : 'Alle Anfragen sind bearbeitet'}</strong>
+            <p>${pendingCount ? 'Offene Anfragen warten auf deine Bestätigung.' : 'Aktuell keine offenen Anfragen.'}</p>
+          </div>
+        </div>
+        <div class="notification-metrics">
+          <div class="notification-metric"><b>${acceptedCount}</b><span>Akzeptiert</span></div>
+          <div class="notification-metric"><b>${nextBooking ? formatDateShort(nextBooking.bookingDate) : '–'}</b><span>Nächster Termin</span></div>
+        </div>
+      </div>
+      ${renderProviderCalendar()}
+    </section>
+
+    <section class="appointments-list">
+      <div class="section-row-title">
+        <div>
+          <span>Alle Anfragen & Termine</span>
+          <small>Akzeptiere oder lehne offene Buchungen direkt im Postfach ab.</small>
+        </div>
+      </div>
+      ${providerBookings.length ? providerBookings.map(b => renderProviderBookingCard(b)).join('') : `
+        <div class="appointment-empty-card">
+          <div class="empty-icon">📭</div>
+          <p>Du hast aktuell keine Anfragen. Der Kalender bleibt bereit, sobald neue Buchungen eintreffen.</p>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+// Reine Optik: Monatskalender mit Status-Pillen je Wunschtermin (bookingDate)
+function renderProviderCalendar() {
+  const year  = providerCalendarCursor.getFullYear();
+  const month = providerCalendarCursor.getMonth();
+  const monthLabel = providerCalendarCursor.toLocaleString('de-AT', { month: 'long', year: 'numeric' });
+
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startOffset = (firstDay.getDay() + 6) % 7; // Montag zuerst
+
+  const visibleBookings = providerBookings.filter(b => b.status !== 'REJECTED' && b.bookingDate);
+  const monthBookings = visibleBookings.filter(b => {
+    const d = new Date(b.bookingDate);
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month;
+  });
+  const monthPending  = monthBookings.filter(b => b.status === 'PENDING').length;
+  const monthAccepted = monthBookings.filter(b => b.status === 'ACCEPTED').length;
+  const cells = [];
+
+  for (let i = 0; i < startOffset; i++) {
+    cells.push(`<div class="calendar-day muted"></div>`);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const key = `${year}-${pad2(month + 1)}-${pad2(day)}`;
+    const dayBookings = visibleBookings.filter(b => dateKey(b.bookingDate) === key);
+    const isToday = dateKey(new Date()) === key;
+
+    cells.push(`
+      <div class="calendar-day ${isToday ? 'today' : ''} ${dayBookings.length ? 'has-events' : ''}">
+        <div class="calendar-day-header">
+          <span class="calendar-day-number">${day}</span>
+          ${dayBookings.length ? `<span class="calendar-count">${dayBookings.length}</span>` : ''}
+        </div>
+        <div class="calendar-bookings">
+          ${dayBookings.slice(0, 3).map(b => `
+            <div class="calendar-pill ${statusToClass(b.status)}" title="${esc(b.serviceTitle)} · ${esc(b.customerName || '')}">
+              <span class="calendar-pill-title">${esc(shorten(b.serviceTitle, 22))}</span>
+            </div>
+          `).join('')}
+          ${dayBookings.length > 3 ? `<div class="calendar-more">+${dayBookings.length - 3} weitere</div>` : ''}
+        </div>
+      </div>
+    `);
+  }
+
+  return `
+    <div class="calendar-surface">
+      <div class="calendar-toolbar">
+        <div class="calendar-title-block">
+          <span class="calendar-kicker">Terminkalender</span>
+          <h2>${monthLabel}</h2>
+          <p>Alle akzeptierten und offenen Termine auf einen Blick.</p>
+        </div>
+        <div class="calendar-actions">
+          <button class="calendar-nav-btn" onclick="moveProviderCalendar(-1)" aria-label="Vorheriger Monat">‹</button>
+          <button class="calendar-today-btn" onclick="goToCurrentProviderMonth()">Heute</button>
+          <button class="calendar-nav-btn" onclick="moveProviderCalendar(1)" aria-label="Nächster Monat">›</button>
+        </div>
+      </div>
+
+      <div class="calendar-month-meta">
+        <span><b>${monthBookings.length}</b> Termine im Monat</span>
+        <span><b>${monthPending}</b> offen</span>
+        <span><b>${monthAccepted}</b> akzeptiert</span>
+      </div>
+
+      <div class="calendar-legend">
+        <span><i class="dot status-pending"></i>PENDING</span>
+        <span><i class="dot status-accepted"></i>ACCEPTED</span>
+        <span><i class="dot status-rejected"></i>REJECTED</span>
+      </div>
+
+      <div class="calendar-scroll">
+        <div class="calendar-board">
+          <div class="calendar-weekdays">
+            <span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>
+          </div>
+          <div class="calendar-grid-big">${cells.join('')}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function moveProviderCalendar(delta) {
+  providerCalendarCursor = new Date(
+    providerCalendarCursor.getFullYear(),
+    providerCalendarCursor.getMonth() + delta,
+    1
+  );
+  renderBookings();
+}
+
+function goToCurrentProviderMonth() {
+  providerCalendarCursor = new Date();
+  renderBookings();
+}
+
+// Einzelne Anfrage-Karte (Akzeptieren/Ablehnen-Logik unverändert)
+function renderProviderBookingCard(b) {
+  const statusClass = statusToClass(b.status);
+
+  return `
+    <div class="svc-card appointment-card ${statusClass}">
+      <div class="svc-top">
+        <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
+        <span class="appointment-date">${formatDateShort(b.bookingDate)}</span>
+      </div>
+      <div class="svc-title">${esc(b.serviceTitle)}</div>
+      <div class="svc-desc">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
+
+      ${b.status === 'PENDING' ? `
+        <div class="svc-footer">
+          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
+          <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
+        </div>
+      ` : `
+        <div class="svc-footer muted-text">Buchung ist abgeschlossen/abgelehnt.</div>
+      `}
+    </div>
+  `;
+}
+
+// ── Kalender-Helfer (rein optisch/Datum) ──────────────────────────────────────
+function pad2(n) { return String(n).padStart(2, '0'); }
+function stripTime(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function statusToClass(status) {
+  if (status === 'ACCEPTED')  return 'status-accepted';
+  if (status === 'REJECTED')  return 'status-rejected';
+  if (status === 'COMPLETED') return 'status-completed';
+  return 'status-pending';
+}
+function dateKey(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function formatDateShort(value) {
+  if (!value) return '–';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '–';
+  return d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function shorten(value, max) {
+  const str = String(value || '');
+  return str.length > max ? `${str.slice(0, max - 1)}…` : str;
 }
 
 // ── Buchungs-Status ändern (PUT) ──────────────────────────────────────────────

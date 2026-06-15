@@ -22,21 +22,21 @@ public class BookingController {
 
     // Holt die Buchungen für das Handwerker-Dashboard
     @GetMapping("/provider/{providerId}")
-    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForProvider(@PathVariable java.util.UUID providerId) {
+    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForProvider(@PathVariable("providerId") java.util.UUID providerId) {
         return ResponseEntity.ok(bookingService.getBookingsForProvider(providerId));
     }
 
     // Ändert den Status einer Buchung (PUT)
     @PutMapping("/{id}/status")
     public ResponseEntity<BookingResponse> updateStatus(
-            @PathVariable java.util.UUID id,
+            @PathVariable("id") java.util.UUID id,
             @RequestBody at.hcw.serviceratebackend.dto.UpdateBookingStatusRequest request) {
         return ResponseEntity.ok(bookingService.updateBookingStatus(id, request.status()));
     }
 
     // Endpunkt für die Kunden-App
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForCustomer(@PathVariable java.util.UUID customerId) {
+    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForCustomer(@PathVariable("customerId") java.util.UUID customerId) {
         return ResponseEntity.ok(bookingService.getBookingsForCustomer(customerId));
     }
 }

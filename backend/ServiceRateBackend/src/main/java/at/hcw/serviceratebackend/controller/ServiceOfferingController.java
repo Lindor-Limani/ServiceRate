@@ -46,14 +46,14 @@ public class ServiceOfferingController {
 
     // M6: DELETE Endpunkt (Delete)
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id) {
         service.delete(id);
         return ResponseEntity.ok().build();
     }
     // M6: PUT-Request
     @PutMapping("/{id}")
     public ResponseEntity<ServiceOfferingResponse> updateService(
-            @PathVariable java.util.UUID id,
+            @PathVariable("id") java.util.UUID id,
             @RequestBody UpdateServiceRequest request) {
         return ResponseEntity.ok(service.updateService(id, request));
     }

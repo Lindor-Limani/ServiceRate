@@ -30,13 +30,13 @@ public class UserController {
     // Geprüft wird über das JWT-Subject (E-Mail) -> zugehörige User-ID muss der Pfad-ID entsprechen.
 
     @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getById(@PathVariable UUID id, Authentication auth) {
+    public ResponseEntity<UserResponse> getById(@PathVariable("id") UUID id, Authentication auth) {
         if (!isSelf(id, auth)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         return ResponseEntity.ok(userService.getById(id));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserResponse> update(@PathVariable UUID id,
+    public ResponseEntity<UserResponse> update(@PathVariable("id") UUID id,
                                                @Valid @RequestBody UpdateUserRequest request,
                                                Authentication auth) {
         if (!isSelf(id, auth)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
@@ -44,7 +44,7 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable UUID id, Authentication auth) {
+    public ResponseEntity<Void> delete(@PathVariable("id") UUID id, Authentication auth) {
         if (!isSelf(id, auth)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         userService.delete(id);
         return ResponseEntity.noContent().build();
