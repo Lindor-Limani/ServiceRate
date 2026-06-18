@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.dto;
 
 import java.util.UUID;
+import java.util.List;
 
 public record ServiceOfferingResponse(
         UUID id,
@@ -12,5 +13,6 @@ public record ServiceOfferingResponse(
         String status,
         String location,        // Ortsname, ermittelt aus der PLZ (Zippopotam.us)
         Double averageRating,   // Durchschnitt der Sterne (0.0 wenn noch keine Reviews)
-        Long reviewCount        // Anzahl der Bewertungen
+        Long reviewCount,       // Anzahl der Bewertungen
+        List<ReviewResponse> reviews
 ) {}

@@ -2,10 +2,12 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.BookingResponse;
 import at.hcw.serviceratebackend.dto.CreateBookingRequest;
+import at.hcw.serviceratebackend.dto.ReviewResponse;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.BookingRepository;
+import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +29,8 @@ public class BookingService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final ServiceOfferingRepository serviceRepository;
+    private final ReviewRepository reviewRepository;
+    private final ReviewService reviewService;
 
     public BookingResponse createBooking(CreateBookingRequest request) {
         User customer = userRepository.findById(request.customerId())
@@ -46,21 +54,18 @@ public class BookingService {
                 customer.getFirstName() + " " + customer.getLastName(),
                 service.getTitle(),
                 saved.getStatus(),
-                saved.getBookingDate()
+                saved.getBookingDate(),
+                null
         );
     }
 
     // Holt alle Buchungen für einen bestimmten Handwerker
     public java.util.List<BookingResponse> getBookingsForProvider(UUID providerId) {
-        return bookingRepository.findByServiceOffering_Provider_Id(providerId).stream()
-                .map(b -> new BookingResponse(
-                        b.getId(),
-                        // Name des Kunden – NPE-sicher, falls Kunde/Felder bei Altdaten fehlen
-                        fullName(b.getCustomer()),
-                        serviceTitle(b.getServiceOffering()),
-                        b.getStatus(),
-                        b.getBookingDate()
-                ))
+        List<Booking> bookings = bookingRepository.findByServiceOffering_Provider_Id(providerId);
+        Map<UUID, ReviewResponse> reviews = loadReviewsByBookingId(bookings);
+
+        return bookings.stream()
+                .map(b -> toResponse(b, fullName(b.getCustomer()), reviews.get(b.getId())))
                 .toList();
     }
 
@@ -77,21 +82,55 @@ public class BookingService {
                 saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
                 saved.getServiceOffering().getTitle(),
                 saved.getStatus(),
-                saved.getBookingDate()
+                saved.getBookingDate(),
+                findReviewResponse(saved)
         );
     }
 
     // Holt alle Buchungen für das Kunden-Dashboard
     public java.util.List<BookingResponse> getBookingsForCustomer(UUID customerId) {
-        return bookingRepository.findByCustomer_Id(customerId).stream()
-                .map(b -> new BookingResponse(
-                        b.getId(),
-                        // Im Kunden-Dashboard zeigen wir den Namen des Anbieters – NPE-sicher
-                        providerName(b.getServiceOffering()),
-                        serviceTitle(b.getServiceOffering()),
-                        b.getStatus(),
-                        b.getBookingDate()
-                )).toList();
+        List<Booking> bookings = bookingRepository.findByCustomer_Id(customerId);
+        Map<UUID, ReviewResponse> reviews = loadReviewsByBookingId(bookings);
+
+        return bookings.stream()
+                .map(b -> toResponse(b, providerName(b.getServiceOffering()), reviews.get(b.getId())))
+                .toList();
+    }
+
+    private BookingResponse toResponse(Booking booking, String displayName, ReviewResponse review) {
+        return new BookingResponse(
+                booking.getId(),
+                displayName,
+                serviceTitle(booking.getServiceOffering()),
+                booking.getStatus(),
+                booking.getBookingDate(),
+                review
+        );
+    }
+
+    private ReviewResponse findReviewResponse(Booking booking) {
+        return reviewRepository.findByBookingId(booking.getId()).stream()
+                .findFirst()
+                .map(reviewService::toResponse)
+                .orElse(null);
+    }
+
+    private Map<UUID, ReviewResponse> loadReviewsByBookingId(List<Booking> bookings) {
+        List<UUID> bookingIds = bookings.stream()
+                .map(Booking::getId)
+                .toList();
+
+        if (bookingIds.isEmpty()) {
+            return Map.of();
+        }
+
+        return reviewRepository.findByBookingIdIn(bookingIds).stream()
+                .map(reviewService::toResponse)
+                .collect(Collectors.toMap(
+                        ReviewResponse::bookingId,
+                        Function.identity(),
+                        (first, ignored) -> first
+                ));
     }
 
     // ── Null-sichere Helfer ────────────────────────────────────────────────────

@@ -8,5 +8,6 @@ public record BookingResponse(
         String customerName,
         String serviceTitle,
         String status,
-        LocalDate bookingDate
+        LocalDate bookingDate,
+        ReviewResponse review
 ) {}

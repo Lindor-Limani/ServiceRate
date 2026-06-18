@@ -56,3 +56,10 @@ docker compose up -d
 Das Backend verbindet sich standardmäßig mit `jdbc:postgresql://localhost:5433/servicerate` und den Zugangsdaten `postgres/postgres`. Bei Bedarf können die Werte über `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` und `SPRING_DATASOURCE_PASSWORD` überschrieben werden.
 
 Das Backend startet standardmäßig auf `http://localhost:8081`, damit es nicht mit lokalen Webservern auf Port `8080` kollidiert. Der Port kann über `SERVER_PORT` überschrieben werden.
+
+Für Wetterdaten nutzt das Backend OpenWeatherMap als Proxy. Der API-Key wird nicht im Frontend gespeichert, sondern vor dem Backend-Start als Umgebungsvariable gesetzt:
+
+```powershell
+$env:OPENWEATHER_API_KEY="dein_api_key"
+.\gradlew.bat bootRun
+```

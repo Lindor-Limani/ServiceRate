@@ -5,8 +5,6 @@
 let allServices    = [];
 let activeCategory = '';
 
-const OWM_API_KEY = '6d06aea9543246a5433f298cb611335e';
-
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
   updateNavUI();
@@ -31,15 +29,10 @@ const OWM_API_KEY = '6d06aea9543246a5433f298cb611335e';
 // ── Wetter-Widget ─────────────────────────────────────────────────────────────
 async function loadWeather() {
   try {
-    const r = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?q=Vienna&appid=${OWM_API_KEY}&units=metric&lang=de`
-    );
-    const d = await r.json();
-    if (!r.ok) throw new Error();
-    document.getElementById('weatherIcon').innerHTML =
-      `<img src="https://openweathermap.org/img/wn/${d.weather[0].icon}.png" width="26" height="26" alt="" />`;
+    const d = await fetchAPI('/weather/current?city=Vienna', 'GET', null, 'customer_jwt');
+    document.getElementById('weatherIcon').textContent = weatherEmoji(d.main);
     document.getElementById('weatherText').textContent =
-      `${Math.round(d.main.temp)}°C · ${d.weather[0].description} · Wien`;
+      `${d.temperature}°C · ${d.description} · ${d.city || 'Wien'}`;
   } catch {
     document.getElementById('weatherText').textContent = 'Wetter nicht verfügbar';
   }
@@ -75,29 +68,14 @@ async function onBookingDateChange() {
   try {
     const block = await fetchForecastFor(value);
     if (!block) { hint.textContent = ''; return; }
-    const temp = Math.round(block.main.temp);
-    hint.textContent = `${weatherEmoji(block.weather[0].main)} Voraussichtlich ${temp}°C, ${block.weather[0].description}`;
+    hint.textContent = `${weatherEmoji(block.main)} Voraussichtlich ${block.temperature}°C, ${block.description}`;
   } catch {
     hint.textContent = '';
   }
 }
 
-// Holt den 3-Stunden-Block des gewählten Tages, der zeitlich am nächsten an 12:00 liegt (Mittagswert)
 async function fetchForecastFor(dateStr) {
-  const r = await fetch(
-    `https://api.openweathermap.org/data/2.5/forecast?q=Vienna&appid=${OWM_API_KEY}&units=metric&lang=de`
-  );
-  if (!r.ok) throw new Error();
-  const data = await r.json();
-
-  const sameDay = data.list.filter(b => b.dt_txt.startsWith(dateStr));
-  if (sameDay.length === 0) return null;
-
-  return sameDay.reduce((best, b) => {
-    const hour     = parseInt(b.dt_txt.substring(11, 13), 10);
-    const bestHour = parseInt(best.dt_txt.substring(11, 13), 10);
-    return Math.abs(hour - 12) < Math.abs(bestHour - 12) ? b : best;
-  });
+  return fetchAPI(`/weather/forecast?city=Vienna&date=${encodeURIComponent(dateStr)}`, 'GET', null, 'customer_jwt');
 }
 
 // ── Services laden & rendern ──────────────────────────────────────────────────
@@ -224,7 +202,7 @@ async function openServiceModal(id) {
     </div>
   `;
   document.getElementById('serviceModal').classList.add('open');
-  loadServiceReviews(s.id);
+  renderServiceReviews(s.reviews || []);
 }
 
 function closeServiceModal() {
@@ -380,7 +358,6 @@ async function loadCustomerBookings() {
 
   try {
     const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
-    const reviewsByBooking = await loadReviewsForBookings(bookings, 'customer_jwt');
 
     if (bookings.length === 0) {
       grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
@@ -391,7 +368,7 @@ async function loadCustomerBookings() {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
       const dateLabel   = b.bookingDate ? `📅 Wunschtermin: ${b.bookingDate}` : '📅 Kein Termin angegeben';
-      const review      = reviewsByBooking.get(b.id)?.[0];
+      const review      = b.review;
 
       return `
       <div class="service-card booking-card ${statusClass}" style="cursor: default;">
@@ -417,32 +394,10 @@ async function loadCustomerBookings() {
   }
 }
 
-async function loadReviewsForBookings(bookings, tokenKey) {
-  const entries = await Promise.all((bookings || []).map(async b => {
-    if (!b.id) return [b.id, []];
-    try {
-      const reviews = await fetchAPI(`/reviews/booking/${b.id}`, 'GET', null, tokenKey);
-      return [b.id, Array.isArray(reviews) ? reviews : []];
-    } catch (e) {
-      console.warn('Review konnte nicht geladen werden:', b.id, e);
-      return [b.id, []];
-    }
-  }));
-
-  return new Map(entries);
-}
-
-async function loadServiceReviews(serviceId) {
+function renderServiceReviews(reviews) {
   const host = document.querySelector('#serviceReviews .service-reviews-list');
   if (!host) return;
-
-  try {
-    const reviews = await fetchAPI(`/reviews/service/${serviceId}`, 'GET', null, 'customer_jwt');
-    host.innerHTML = renderPublicReviews(reviews);
-  } catch (e) {
-    console.error('Fehler beim Laden der Service-Bewertungen:', e);
-    host.innerHTML = `<div class="review-empty">Bewertungen konnten gerade nicht geladen werden.</div>`;
-  }
+  host.innerHTML = renderPublicReviews(reviews);
 }
 
 // Mappt den Status auf die CSS-Klasse / das Anzeige-Label der Buchungs-Kachel

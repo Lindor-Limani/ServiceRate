@@ -49,6 +49,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
                         // Bewertungen sind öffentlich lesbar; das Abgeben einer Bewertung erfordert Login
                         .requestMatchers(HttpMethod.GET, "/api/reviews/booking/**", "/api/reviews/service/**").permitAll()
+                        // Wetterdaten werden vom Backend als Proxy geliefert, damit API-Keys nicht im Frontend liegen
+                        .requestMatchers(HttpMethod.GET, "/api/weather/**").permitAll()
                         // Doku & DB-Konsole
                         .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Alles andere (Services anlegen/ändern/löschen, Buchungen, ...) braucht ein gültiges Token

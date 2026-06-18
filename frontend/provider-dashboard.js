@@ -7,7 +7,6 @@ let pendingDelete = null;
 let editMode      = false;
 let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalender-Navigation)
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
-let reviewsByBooking        = new Map();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
@@ -245,27 +244,11 @@ async function loadBookings() {
   try {
     const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
     providerBookings = Array.isArray(bookings) ? bookings : [];
-    reviewsByBooking = await loadReviewsForBookings(providerBookings, 'provider_jwt');
     renderBookings();
   } catch (e) {
     console.error('Fehler beim Laden der Provider-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
   }
-}
-
-async function loadReviewsForBookings(bookings, tokenKey) {
-  const entries = await Promise.all((bookings || []).map(async b => {
-    if (!b.id) return [b.id, []];
-    try {
-      const reviews = await fetchAPI(`/reviews/booking/${b.id}`, 'GET', null, tokenKey);
-      return [b.id, Array.isArray(reviews) ? reviews : []];
-    } catch (e) {
-      console.warn('Review konnte nicht geladen werden:', b.id, e);
-      return [b.id, []];
-    }
-  }));
-
-  return new Map(entries);
 }
 
 // Zeichnet Übersichtskarte + Kalender + Anfragenliste aus dem State providerBookings
@@ -417,7 +400,7 @@ function goToCurrentProviderMonth() {
 // Einzelne Anfrage-Karte (Akzeptieren/Ablehnen-Logik unverändert)
 function renderProviderBookingCard(b) {
   const statusClass = statusToClass(b.status);
-  const review = reviewsByBooking.get(b.id)?.[0];
+  const review = b.review;
 
   return `
     <div class="svc-card appointment-card ${statusClass}">

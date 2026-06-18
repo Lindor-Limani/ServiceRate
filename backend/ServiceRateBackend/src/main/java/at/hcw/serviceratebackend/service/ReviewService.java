@@ -70,7 +70,7 @@ public class ReviewService {
                 .toList();
     }
 
-    private ReviewResponse toResponse(Review review) {
+    public ReviewResponse toResponse(Review review) {
         Booking booking = review.getBooking();
         User reviewer = review.getReviewer();
 

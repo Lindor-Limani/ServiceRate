@@ -21,6 +21,7 @@ public class ServiceOfferingService {
     private final ServiceOfferingRepository serviceRepository;
     private final UserRepository userRepository;
     private final ReviewRepository reviewRepository;
+    private final ReviewService reviewService;
     private final LocationValidationService locationValidationService;
 
     public ServiceOfferingResponse create(CreateServiceRequest request) {
@@ -80,6 +81,9 @@ public class ServiceOfferingService {
         Double avg = reviewRepository.findAverageRatingByServiceId(service.getId());
         double averageRating = (avg != null) ? avg : 0.0;
         Long reviewCount = reviewRepository.findReviewCountByServiceId(service.getId());
+        var reviews = reviewRepository.findByBookingServiceOfferingId(service.getId()).stream()
+                .map(reviewService::toResponse)
+                .toList();
 
         return new ServiceOfferingResponse(
                 service.getId(),
@@ -91,7 +95,8 @@ public class ServiceOfferingService {
                 service.getStatus(),
                 service.getLocation(),
                 averageRating,
-                reviewCount
+                reviewCount,
+                reviews
         );
     }
 }
