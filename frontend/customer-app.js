@@ -111,7 +111,7 @@ async function loadServices() {
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">⚠️</div>
-        <p>Services konnten nicht geladen werden.<br/>Läuft das Backend auf Port 8080?</p>
+        <p>Services konnten nicht geladen werden.<br/>Läuft das Backend auf Port 8081?</p>
       </div>`;
     document.getElementById('countPill').textContent = '0';
   }

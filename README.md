@@ -44,3 +44,15 @@ ServiceRate/
     ├── api.js                # Zentraler AJAX-Wrapper mit automatischer JWT-Injektion
     ├── utils.js              # UI-Hilfsfunktionen und Toast-Benachrichtigungen
     └── customer-style.css    # Zentrales, responsives Design-System
+
+## Lokale Datenbank
+
+Die PostgreSQL-Datenbank läuft über Docker Compose und ist bewusst auf `localhost:5433` veröffentlicht, damit sie nicht mit einer lokal installierten PostgreSQL-Instanz auf Port `5432` kollidiert.
+
+```bash
+docker compose up -d
+```
+
+Das Backend verbindet sich standardmäßig mit `jdbc:postgresql://localhost:5433/servicerate` und den Zugangsdaten `postgres/postgres`. Bei Bedarf können die Werte über `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` und `SPRING_DATASOURCE_PASSWORD` überschrieben werden.
+
+Das Backend startet standardmäßig auf `http://localhost:8081`, damit es nicht mit lokalen Webservern auf Port `8080` kollidiert. Der Port kann über `SERVER_PORT` überschrieben werden.

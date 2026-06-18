@@ -1,6 +1,6 @@
 // api.js - Unsere Brücke zum Spring Boot Backend
 
-const BASE_URL = 'http://localhost:8080/api';
+const BASE_URL = 'http://localhost:8081/api';
 
 // Diese Funktion führt die AJAX-Anfragen (Fetch) aus (Requirement M4)
 async function fetchAPI(endpoint, method = 'GET', body = null, tokenKey = 'jwt_token') {
