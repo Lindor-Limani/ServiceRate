@@ -5,6 +5,7 @@ import java.util.List;
 
 public record ServiceOfferingResponse(
         UUID id,
+        UUID providerId,
         String providerName, // Z.B. "Matej Deronja"
         String title,
         String description,
@@ -14,5 +15,6 @@ public record ServiceOfferingResponse(
         String location,        // Ortsname, ermittelt aus der PLZ (Zippopotam.us)
         Double averageRating,   // Durchschnitt der Sterne (0.0 wenn noch keine Reviews)
         Long reviewCount,       // Anzahl der Bewertungen
+        Integer trustScore,
         List<ReviewResponse> reviews
 ) {}

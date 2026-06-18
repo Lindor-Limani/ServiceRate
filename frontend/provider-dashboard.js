@@ -103,6 +103,7 @@ function renderServices() {
       </div>
       <div class="svc-title">${esc(s.title)}</div>
       <div class="svc-desc">${esc(s.description)}</div>
+      <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
       ${serviceRatingPanel(s)}
       <div style="font-size:.78rem;color:var(--muted)">
         Anbieter: <strong>${esc(s.providerName || '–')}</strong>
@@ -180,12 +181,10 @@ async function saveService() {
       notify('Fehler beim Aktualisieren.', 'error');
     }
   } else {
-    const providerId = localStorage.getItem('provider_user_id');
-    if (!providerId) { notify('Provider-ID fehlt. Bitte neu anmelden.', 'error'); return; }
     const zipCode = document.getElementById('svcZip').value.trim();
     if (!zipCode) { notify('Bitte eine Postleitzahl angeben.', 'error'); return; }
     try {
-      await fetchAPI('/services', 'POST', { providerId, title, description: desc, category, price, zipCode }, 'provider_jwt');
+      await fetchAPI('/services', 'POST', { title, description: desc, category, price, zipCode }, 'provider_jwt');
       notify('Service erstellt ✓', 'success');
       closeServiceModal();
       loadServices();
@@ -230,19 +229,16 @@ function switchDashboardTab(tab) {
 }
 
 // ── Buchungen laden & anzeigen ────────────────────────────────────────────────
-// Logik unverändert: lädt per fetchAPI über /bookings/provider/${providerId} (GET).
-// Neu ist nur die optische Kalender-Darstellung beim Rendern (renderBookings()).
 async function loadBookings() {
   const grid = document.getElementById('bookingsGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
 
-  const providerId = localStorage.getItem('provider_user_id');
-  if (!providerId) {
+  if (!localStorage.getItem('provider_jwt')) {
     grid.innerHTML = `<div class="empty-state"><p>Bitte neu anmelden.</p></div>`;
     return;
   }
   try {
-    const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
+    const bookings = await fetchAPI('/bookings/provider/me', 'GET', null, 'provider_jwt');
     providerBookings = Array.isArray(bookings) ? bookings : [];
     renderBookings();
   } catch (e) {
@@ -416,9 +412,18 @@ function renderProviderBookingCard(b) {
         <div class="svc-footer">
           <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
           <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
+          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
+        </div>
+      ` : b.status === 'ACCEPTED' ? `
+        <div class="svc-footer">
+          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'COMPLETED')">✓ Abschließen</button>
+          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
         </div>
       ` : `
-        <div class="svc-footer muted-text">Buchung ist abgeschlossen/abgelehnt.</div>
+        <div class="svc-footer">
+          <span class="muted-text">Buchung ist abgeschlossen/abgelehnt.</span>
+          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
+        </div>
       `}
     </div>
   `;
@@ -458,7 +463,7 @@ function renderProviderReview(review) {
 }
 
 function renderProviderReviewEmpty(status) {
-  const waiting = status === 'ACCEPTED' || status === 'COMPLETED';
+  const waiting = status === 'COMPLETED';
 
   return `
     <div class="booking-review is-empty">
@@ -467,7 +472,7 @@ function renderProviderReviewEmpty(status) {
         <span class="booking-review-stars">☆☆☆☆☆</span>
       </div>
       <p class="booking-review-comment muted">
-        ${waiting ? 'Der Kunde hat diese Buchung noch nicht bewertet.' : 'Bewertungen erscheinen hier nach akzeptierten Buchungen.'}
+        ${waiting ? 'Der Kunde hat diese Buchung noch nicht bewertet.' : 'Bewertungen erscheinen hier nach abgeschlossenen Buchungen.'}
       </p>
     </div>
   `;
@@ -506,9 +511,56 @@ function starString(rating) {
 async function updateBookingStatus(bookingId, newStatus) {
   try {
     await fetchAPI(`/bookings/${bookingId}/status`, 'PUT', { status: newStatus }, 'provider_jwt');
-    notify(`Buchung wurde ${newStatus === 'ACCEPTED' ? 'akzeptiert' : 'abgelehnt'}!`, 'success');
+    const label = newStatus === 'ACCEPTED' ? 'akzeptiert' : newStatus === 'COMPLETED' ? 'abgeschlossen' : 'abgelehnt';
+    notify(`Buchung wurde ${label}!`, 'success');
     loadBookings();
   } catch {
     notify('Fehler beim Ändern des Status.', 'error');
+  }
+}
+
+let activeChatBookingId = null;
+
+async function openChatModal(bookingId, tokenKey) {
+  activeChatBookingId = bookingId;
+  document.getElementById('chatModal').classList.add('open');
+  await loadChatMessages(tokenKey);
+}
+
+function closeChatModal() {
+  document.getElementById('chatModal').classList.remove('open');
+  activeChatBookingId = null;
+}
+
+async function loadChatMessages(tokenKey) {
+  const thread = document.getElementById('chatThread');
+  thread.innerHTML = `<div class="muted-text">Nachrichten werden geladen...</div>`;
+  try {
+    const messages = await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'GET', null, tokenKey);
+    thread.innerHTML = messages.length ? messages.map(renderChatMessage).join('') : `<div class="muted-text">Noch keine Nachrichten.</div>`;
+  } catch {
+    thread.innerHTML = `<div class="muted-text">Nachrichten konnten nicht geladen werden.</div>`;
+  }
+}
+
+function renderChatMessage(message) {
+  return `
+    <div class="chat-message">
+      <strong>${esc(message.senderName || 'User')}</strong>
+      <p>${esc(message.content || '')}</p>
+    </div>
+  `;
+}
+
+async function sendChatMessage(tokenKey) {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content || !activeChatBookingId) return;
+  try {
+    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', { content }, tokenKey);
+    input.value = '';
+    await loadChatMessages(tokenKey);
+  } catch (e) {
+    notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
   }
 }

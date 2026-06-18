@@ -4,6 +4,7 @@ import at.hcw.serviceratebackend.dto.WeatherCurrentResponse;
 import at.hcw.serviceratebackend.dto.WeatherForecastResponse;
 import at.hcw.serviceratebackend.service.WeatherService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,15 +21,21 @@ public class WeatherController {
     private final WeatherService weatherService;
 
     @GetMapping("/current")
-    public WeatherCurrentResponse current(@RequestParam(defaultValue = "Vienna") String city) {
-        return weatherService.current(city);
+    public ResponseEntity<WeatherCurrentResponse> current(@RequestParam(defaultValue = "Vienna") String city) {
+        if (!weatherService.isConfigured()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(weatherService.current(city));
     }
 
     @GetMapping("/forecast")
-    public WeatherForecastResponse forecast(
+    public ResponseEntity<WeatherForecastResponse> forecast(
             @RequestParam(defaultValue = "Vienna") String city,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
-        return weatherService.forecast(city, date);
+        if (!weatherService.isConfigured()) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(weatherService.forecast(city, date));
     }
 }

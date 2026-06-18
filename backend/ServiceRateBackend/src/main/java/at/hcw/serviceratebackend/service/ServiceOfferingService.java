@@ -27,6 +27,19 @@ public class ServiceOfferingService {
     public ServiceOfferingResponse create(CreateServiceRequest request) {
         User provider = userRepository.findById(request.providerId())
                 .orElseThrow(() -> new IllegalArgumentException("Handwerker nicht gefunden"));
+        return createForProvider(request, provider);
+    }
+
+    public ServiceOfferingResponse createForProviderEmail(CreateServiceRequest request, String providerEmail) {
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Handwerker nicht gefunden"));
+        return createForProvider(request, provider);
+    }
+
+    private ServiceOfferingResponse createForProvider(CreateServiceRequest request, User provider) {
+        if (!"PROVIDER".equals(provider.getAccountType())) {
+            throw new IllegalArgumentException("Nur Anbieter dürfen Services erstellen.");
+        }
 
         // PLZ über die externe Zippopotam.us-API in einen Ortsnamen auflösen (400, falls ungültig)
         String location = locationValidationService.resolveCityName(request.zipCode());
@@ -48,6 +61,12 @@ public class ServiceOfferingService {
         return serviceRepository.findAll().stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    public ServiceOfferingResponse getById(UUID id) {
+        return serviceRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
     }
 
     // Nur die Services des eingeloggten Providers (anhand der E-Mail aus dem JWT-Subject)
@@ -84,9 +103,11 @@ public class ServiceOfferingService {
         var reviews = reviewRepository.findByBookingServiceOfferingId(service.getId()).stream()
                 .map(reviewService::toResponse)
                 .toList();
+        int trustScore = calculateTrustScore(averageRating, reviewCount, service.getStatus());
 
         return new ServiceOfferingResponse(
                 service.getId(),
+                service.getProvider().getId(),
                 service.getProvider().getFirstName() + " " + service.getProvider().getLastName(),
                 service.getTitle(),
                 service.getDescription(),
@@ -96,7 +117,15 @@ public class ServiceOfferingService {
                 service.getLocation(),
                 averageRating,
                 reviewCount,
+                trustScore,
                 reviews
         );
+    }
+
+    private int calculateTrustScore(double averageRating, long reviewCount, String status) {
+        double ratingPoints = (averageRating / 5.0) * 70.0;
+        double volumePoints = (Math.min(reviewCount, 20) / 20.0) * 20.0;
+        double statusPoints = "ACTIVE".equals(status) ? 10.0 : 0.0;
+        return (int) Math.round(Math.min(100.0, ratingPoints + volumePoints + statusPoints));
     }
 }

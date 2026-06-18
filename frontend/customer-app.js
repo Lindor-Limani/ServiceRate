@@ -109,11 +109,23 @@ function applyFilters() {
 function renderServices() {
   const q   = document.getElementById('searchInput').value.toLowerCase().trim();
   const cat = activeCategory;
+  const location = (document.getElementById('locationFilter')?.value || '').toLowerCase().trim();
+  const maxPrice = parseFloat(document.getElementById('maxPriceFilter')?.value || '');
+  const minRating = parseFloat(document.getElementById('minRatingFilter')?.value || '0');
+  const sort = document.getElementById('sortFilter')?.value || 'recommended';
 
   const filtered = allServices.filter(s => {
-    const matchText = !q || (s.title + ' ' + s.description).toLowerCase().includes(q);
+    const matchText = !q || (s.title + ' ' + s.description + ' ' + (s.providerName || '')).toLowerCase().includes(q);
     const matchCat  = !cat || s.category === cat;
-    return matchText && matchCat;
+    const matchLocation = !location || String(s.location || '').toLowerCase().includes(location);
+    const matchPrice = Number.isNaN(maxPrice) || Number(s.price || 0) <= maxPrice;
+    const matchRating = !minRating || Number(s.averageRating || 0) >= minRating;
+    return matchText && matchCat && matchLocation && matchPrice && matchRating;
+  }).sort((a, b) => {
+    if (sort === 'rating') return Number(b.averageRating || 0) - Number(a.averageRating || 0);
+    if (sort === 'priceAsc') return Number(a.price || 0) - Number(b.price || 0);
+    if (sort === 'priceDesc') return Number(b.price || 0) - Number(a.price || 0);
+    return Number(b.trustScore || 0) - Number(a.trustScore || 0);
   });
 
   document.getElementById('countPill').textContent = filtered.length + ' gefunden';
@@ -129,12 +141,13 @@ function renderServices() {
   }
 
   grid.innerHTML = filtered.map(s => `
-    <article class="service-card" onclick="openServiceModal('${s.id}')">
+    <article class="service-card" onclick="openServicePage('${s.id}')">
       ${catImage(s.category)}
       <div class="card-top">
         <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
         <span class="card-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
       </div>
+      ${trustBadge(s.trustScore)}
       <div class="card-title">${esc(s.title)}</div>
       <div class="card-desc">${esc(s.description)}</div>
       ${serviceRatingPanel(s)}
@@ -147,6 +160,10 @@ function renderServices() {
       </div>
     </article>
   `).join('');
+}
+
+function openServicePage(id) {
+  window.location.href = `service-detail.html?id=${encodeURIComponent(id)}`;
 }
 
 // ── Service-Detail-Modal ──────────────────────────────────────────────────────
@@ -224,7 +241,6 @@ async function doBook(serviceId, title, price) {
   try {
     await fetchAPI('/bookings', 'POST', {
       serviceOfferingId: serviceId,
-      customerId: localStorage.getItem('customer_user_id'),
       bookingDate: bookingDate
     }, 'customer_jwt');
 
@@ -350,14 +366,13 @@ async function loadCustomerBookings() {
   const grid = document.getElementById('customerBookingsGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
 
-  const customerId = localStorage.getItem('customer_user_id');
-  if (!customerId) {
+  if (!localStorage.getItem('customer_jwt')) {
     grid.innerHTML = `<div class="empty-state"><p>Bitte logge dich ein.</p></div>`;
     return;
   }
 
   try {
-    const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
+    const bookings = await fetchAPI('/bookings/customer/me', 'GET', null, 'customer_jwt');
 
     if (bookings.length === 0) {
       grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
@@ -379,7 +394,10 @@ async function loadCustomerBookings() {
       <div class="booking-date-line">Angeboten von: <strong>${esc(b.customerName || '–')}</strong></div>
         <div class="booking-date-line">${dateLabel}</div>
         ${review ? renderBookingReview(review) : renderBookingReviewEmpty(b.status)}
-        ${b.status === 'ACCEPTED' && !review ? `
+        <div class="booking-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
+        </div>
+        ${b.status === 'COMPLETED' && !review ? `
         <div class="booking-actions">
           <button class="btn btn-primary btn-sm"
                   onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">⭐ Bewerten</button>
@@ -411,6 +429,7 @@ function bookingStatusText(status) {
   if (status === 'ACCEPTED')  return '✓ Akzeptiert';
   if (status === 'REJECTED')  return '❌ Abgelehnt';
   if (status === 'COMPLETED') return 'Abgeschlossen';
+  if (status === 'CANCELLED') return 'Storniert';
   return 'Wartet auf Antwort';
 }
 
@@ -463,7 +482,7 @@ function renderBookingReview(review) {
 }
 
 function renderBookingReviewEmpty(status) {
-  const canReview = status === 'ACCEPTED';
+  const canReview = status === 'COMPLETED';
 
   return `
     <div class="booking-review is-empty">
@@ -472,7 +491,7 @@ function renderBookingReviewEmpty(status) {
         <span class="booking-review-stars">☆☆☆☆☆</span>
       </div>
       <p class="booking-review-comment muted">
-        ${canReview ? 'Du kannst diese Buchung jetzt bewerten.' : 'Eine Bewertung ist möglich, sobald die Buchung akzeptiert wurde.'}
+        ${canReview ? 'Du kannst diese Buchung jetzt bewerten.' : 'Eine Bewertung ist möglich, sobald die Buchung abgeschlossen wurde.'}
       </p>
     </div>
   `;
@@ -550,5 +569,56 @@ async function submitReview() {
     loadCustomerBookings();  // Buchungsliste neu laden
   } catch (e) {
     notify(e.message || 'Bewertung konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+function trustBadge(score) {
+  const value = Number(score || 0);
+  return `<div class="trust-badge"><span>Trust Score</span><strong>${value}</strong></div>`;
+}
+
+let activeChatBookingId = null;
+
+async function openChatModal(bookingId, tokenKey) {
+  activeChatBookingId = bookingId;
+  document.getElementById('chatModal').classList.add('open');
+  await loadChatMessages(tokenKey);
+}
+
+function closeChatModal() {
+  document.getElementById('chatModal').classList.remove('open');
+  activeChatBookingId = null;
+}
+
+async function loadChatMessages(tokenKey) {
+  const thread = document.getElementById('chatThread');
+  thread.innerHTML = `<div class="review-loading">Nachrichten werden geladen...</div>`;
+  try {
+    const messages = await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'GET', null, tokenKey);
+    thread.innerHTML = messages.length ? messages.map(renderChatMessage).join('') : `<div class="review-empty">Noch keine Nachrichten.</div>`;
+  } catch {
+    thread.innerHTML = `<div class="review-empty">Nachrichten konnten nicht geladen werden.</div>`;
+  }
+}
+
+function renderChatMessage(message) {
+  return `
+    <div class="chat-message">
+      <strong>${esc(message.senderName || 'User')}</strong>
+      <p>${esc(message.content || '')}</p>
+    </div>
+  `;
+}
+
+async function sendChatMessage(tokenKey) {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content || !activeChatBookingId) return;
+  try {
+    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', { content }, tokenKey);
+    input.value = '';
+    await loadChatMessages(tokenKey);
+  } catch (e) {
+    notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
   }
 }

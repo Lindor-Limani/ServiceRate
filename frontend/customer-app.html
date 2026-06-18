@@ -63,6 +63,23 @@
       <button class="chip" data-cat="OTHER">Sonstiges</button>
     </div>
 
+    <div class="advanced-filters">
+      <input class="form-input" type="text" id="locationFilter" placeholder="Ort, z.B. Wien" oninput="renderServices()" />
+      <input class="form-input" type="number" id="maxPriceFilter" placeholder="Max. Preis / Std" min="0" oninput="renderServices()" />
+      <select class="form-input" id="minRatingFilter" onchange="renderServices()">
+        <option value="0">Alle Bewertungen</option>
+        <option value="3">Ab 3 Sternen</option>
+        <option value="4">Ab 4 Sternen</option>
+        <option value="5">5 Sterne</option>
+      </select>
+      <select class="form-input" id="sortFilter" onchange="renderServices()">
+        <option value="recommended">Empfohlen</option>
+        <option value="rating">Beste Bewertung</option>
+        <option value="priceAsc">Preis aufsteigend</option>
+        <option value="priceDesc">Preis absteigend</option>
+      </select>
+    </div>
+
     <div class="section-header">
       <h2 class="section-title">Verfügbare Services</h2>
       <span class="count-pill" id="countPill">–</span>
@@ -176,6 +193,21 @@
     </div>
 
     <button class="btn btn-primary btn-full" onclick="submitReview()">Bewertung absenden</button>
+  </div>
+</div>
+
+<!-- ══ CHAT MODAL ══════════════════════════════════════════════════════════ -->
+<div class="overlay" id="chatModal" onclick="if(event.target===this)closeChatModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 class="modal-title">Nachrichten</h2>
+      <button class="modal-close" onclick="closeChatModal()">✕</button>
+    </div>
+    <div class="chat-thread" id="chatThread"></div>
+    <div class="chat-compose">
+      <textarea class="form-input" id="chatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+      <button class="btn btn-primary" onclick="sendChatMessage('customer_jwt')">Senden</button>
+    </div>
   </div>
 </div>
 

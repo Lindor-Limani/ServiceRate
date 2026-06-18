@@ -22,14 +22,20 @@ public class ServiceOfferingController {
 
     // M6: POST Endpunkt (Create)
     @PostMapping
-    public ResponseEntity<ServiceOfferingResponse> create(@RequestBody CreateServiceRequest request) {
-        return ResponseEntity.ok(service.create(request));
+    public ResponseEntity<ServiceOfferingResponse> create(@RequestBody CreateServiceRequest request, Authentication authentication) {
+        String email = (String) authentication.getPrincipal();
+        return ResponseEntity.ok(service.createForProviderEmail(request, email));
     }
 
     // M6: GET Endpunkt (Read)
     @GetMapping
     public ResponseEntity<List<ServiceOfferingResponse>> getAll() {
         return ResponseEntity.ok(service.getAll());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ServiceOfferingResponse> getById(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(service.getById(id));
     }
 
     // Gibt nur die Services des eingeloggten Providers zurück (E-Mail kommt aus dem JWT)

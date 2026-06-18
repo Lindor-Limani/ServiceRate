@@ -24,6 +24,8 @@ public class AuthController {
     private final JwtUtil jwtUtil;
 
     public record LoginRequest(String email, String password) {}
+    public record ForgotPasswordRequest(String email) {}
+    public record ResetPasswordRequest(String token, String newPassword) {}
 
     // --- REGISTRIERUNG ---
     @PostMapping("/register")
@@ -31,7 +33,33 @@ public class AuthController {
         if (userRepository.findByEmail(request.email()).isPresent()) {
             return ResponseEntity.badRequest().body("E-Mail existiert bereits!");
         }
-        return ResponseEntity.ok(userService.create(request));
+        var created = userService.create(request);
+        var user = userRepository.findByEmail(request.email()).orElseThrow();
+        return ResponseEntity.ok(Map.of(
+                "user", created,
+                "emailVerificationToken", user.getEmailVerificationToken()
+        ));
+    }
+
+    @GetMapping("/verify-email")
+    public ResponseEntity<?> verifyEmail(@RequestParam String token) {
+        userService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of("message", "E-Mail wurde verifiziert."));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        String token = userService.createPasswordResetToken(request.email());
+        return ResponseEntity.ok(Map.of(
+                "message", "Passwort-Reset wurde vorbereitet.",
+                "resetToken", token
+        ));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+        userService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(Map.of("message", "Passwort wurde aktualisiert."));
     }
 
     // ---LOGIN ---
@@ -51,7 +79,8 @@ public class AuthController {
         String token = jwtUtil.generateToken(user.getEmail(), user.getAccountType());
         return ResponseEntity.ok(Map.of(
                 "token", token,
-                "userId", user.getId().toString()
+                "userId", user.getId().toString(),
+                "emailVerified", user.isEmailVerified()
         ));
     }
 }

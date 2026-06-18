@@ -2,6 +2,7 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateReviewRequest;
 import at.hcw.serviceratebackend.dto.ReviewResponse;
+import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.Review;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -25,9 +26,9 @@ public class ReviewService {
         Booking booking = bookingRepository.findById(request.bookingId())
                 .orElseThrow(() -> new IllegalArgumentException("Buchung nicht gefunden"));
 
-        // Bewerten ist nur erlaubt, wenn die Buchung akzeptiert wurde -> sonst 400 Bad Request
-        if (!"ACCEPTED".equals(booking.getStatus())) {
-            throw new IllegalArgumentException("Eine Bewertung ist nur für akzeptierte Buchungen möglich.");
+        // Bewerten ist erst erlaubt, wenn die Leistung abgeschlossen wurde.
+        if (!BookingStatus.COMPLETED.name().equals(booking.getStatus())) {
+            throw new IllegalArgumentException("Eine Bewertung ist erst nach abgeschlossener Buchung möglich.");
         }
 
         // Der Bewerter ist der Kunde der Buchung

@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,8 +38,44 @@ public class UserService {
         user.setLastName(request.lastName());
         user.setAccountType(request.accountType().toUpperCase());
         user.setStatus("ACTIVE");
+        user.setEmailVerified(false);
+        user.setEmailVerificationToken(UUID.randomUUID().toString());
 
         return toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public boolean verifyEmail(String token) {
+        User user = userRepository.findByEmailVerificationToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Ungültiger Verifizierungs-Link"));
+        user.setEmailVerified(true);
+        user.setEmailVerificationToken(null);
+        userRepository.save(user);
+        return true;
+    }
+
+    @Transactional
+    public String createPasswordResetToken(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Falls die E-Mail existiert, wurde ein Reset-Link erstellt."));
+        String token = UUID.randomUUID().toString();
+        user.setPasswordResetToken(token);
+        user.setPasswordResetExpiresAt(OffsetDateTime.now().plusMinutes(30));
+        userRepository.save(user);
+        return token;
+    }
+
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        User user = userRepository.findByPasswordResetToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Ungültiger Reset-Link"));
+        if (user.getPasswordResetExpiresAt() == null || user.getPasswordResetExpiresAt().isBefore(OffsetDateTime.now())) {
+            throw new IllegalArgumentException("Reset-Link ist abgelaufen");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordResetToken(null);
+        user.setPasswordResetExpiresAt(null);
+        userRepository.save(user);
     }
 
     // --- READ ONE ---

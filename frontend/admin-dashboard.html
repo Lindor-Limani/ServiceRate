@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ServiceRate - Admin</title>
+  <link rel="stylesheet" href="customer-style.css" />
+</head>
+<body>
+<header>
+  <a class="logo" href="customer-app.html">Service<span>Rate</span></a>
+  <div class="header-right">
+    <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Abmelden</button>
+  </div>
+</header>
+<main class="main">
+  <section id="adminLogin" class="service-detail-side" style="max-width:420px;margin:0 auto">
+    <h1 style="margin-bottom:1rem">Admin Login</h1>
+    <div class="form-group">
+      <label class="form-label">E-Mail</label>
+      <input class="form-input" id="adminEmail" type="email" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Passwort</label>
+      <input class="form-input" id="adminPassword" type="password" onkeydown="if(event.key==='Enter')adminLogin()" />
+    </div>
+    <button class="btn btn-primary btn-full" onclick="adminLogin()">Anmelden</button>
+  </section>
+
+  <section id="adminContent" style="display:none">
+    <div class="section-header">
+      <h1 class="section-title">Admin Dashboard</h1>
+      <span class="count-pill">ServiceRate</span>
+    </div>
+    <div class="admin-stats" id="adminStats"></div>
+    <div class="admin-grid">
+      <section class="admin-panel">
+        <h2>User</h2>
+        <div id="adminUsers"></div>
+      </section>
+      <section class="admin-panel">
+        <h2>Services</h2>
+        <div id="adminServices"></div>
+      </section>
+    </div>
+  </section>
+</main>
+<script src="utils.js"></script>
+<script src="api.js"></script>
+<script src="admin-dashboard.js"></script>
+</body>
+</html>

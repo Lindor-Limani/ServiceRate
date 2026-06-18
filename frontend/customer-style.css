@@ -184,6 +184,17 @@ header {
 }
 .chip:hover { border-color: var(--primary); color: var(--primary); }
 .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.advanced-filters {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, minmax(150px, 1fr));
+  gap: .75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .9rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
 
 /* ── CARDS GRID ──────────────────────────────────────────────────────────── */
 .cards-grid {
@@ -253,6 +264,29 @@ header {
   background: #fffbeb;
   border: 1px solid #fde68a;
   border-radius: var(--radius-sm);
+}
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  width: fit-content;
+  max-width: 100%;
+  padding: .38rem .65rem;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  color: #047857;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.trust-badge span {
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.trust-badge strong {
+  color: #065f46;
+  font-size: .9rem;
 }
 .service-rating-panel.is-empty {
   background: #f8fbfb;
@@ -467,6 +501,96 @@ header {
   color: var(--muted);
 }
 
+.service-detail-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 1.5rem;
+  align-items: start;
+}
+.service-detail-main,
+.service-detail-side {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.service-detail-main {
+  overflow: hidden;
+}
+.service-detail-main > :not(.card-image) {
+  margin-left: 1.5rem;
+  margin-right: 1.5rem;
+}
+.service-detail-main .card-image {
+  margin: 0;
+  height: 220px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.service-detail-kicker {
+  margin-top: 1.5rem;
+  color: var(--primary);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.service-detail-main h1 {
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  margin-top: .25rem;
+}
+.service-detail-desc {
+  color: var(--muted);
+  line-height: 1.7;
+  margin-top: .9rem;
+  margin-bottom: 1rem;
+}
+.service-detail-side {
+  position: sticky;
+  top: 84px;
+  padding: 1.25rem;
+}
+.detail-provider {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+}
+.detail-provider span {
+  display: block;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.detail-provider strong {
+  display: block;
+  color: var(--text);
+}
+.provider-profile-link {
+  display: inline-block;
+  margin-top: .18rem;
+  color: var(--primary);
+  font-size: .78rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.provider-profile-link:hover { color: var(--primary-dark); }
+.detail-price {
+  color: var(--primary);
+  font-size: 2rem;
+  font-weight: 800;
+  margin-bottom: .65rem;
+}
+.detail-price small {
+  color: var(--muted);
+  font-size: .9rem;
+  font-weight: 500;
+}
+
 /* Booking success */
 .book-success { text-align: center; padding: 1.5rem 0; }
 .success-icon {
@@ -540,9 +664,80 @@ header {
   .search-box select { width: 100%; }
   .main { padding: 1.5rem 1rem; }
   .cards-grid { grid-template-columns: 1fr; }
+  .advanced-filters { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
   .modal { padding: 1.5rem; }
   .price-block { flex-direction: column; gap: 1rem; text-align: center; }
+  .service-detail-page { grid-template-columns: 1fr; }
+  .service-detail-side { position: static; }
+}
+
+.provider-profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.provider-profile-avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 1.15rem;
+}
+.provider-profile-hero h1 {
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  line-height: 1.1;
+}
+.provider-profile-hero p {
+  color: var(--muted);
+  margin-top: .35rem;
+  margin-bottom: .8rem;
+}
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.admin-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  overflow-x: auto;
+}
+.admin-panel h2 {
+  font-size: 1rem;
+  margin-bottom: .75rem;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .84rem;
+}
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--border);
+  padding: .55rem;
+  text-align: left;
+}
+.admin-table th {
+  color: var(--muted);
+  font-size: .72rem;
+  text-transform: uppercase;
+}
+@media (max-width: 800px) {
+  .admin-grid { grid-template-columns: 1fr; }
 }
 
 /* ── BUCHUNGS-KACHELN "Meine Buchungen" (optische Übernahme aus lindor2) ─────── */
@@ -604,4 +799,36 @@ header {
 }
 .booking-review-comment.muted {
   color: var(--muted);
+}
+.chat-thread {
+  display: grid;
+  gap: .6rem;
+  max-height: 340px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .85rem;
+  margin-bottom: .85rem;
+}
+.chat-message {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .7rem .8rem;
+}
+.chat-message strong {
+  display: block;
+  font-size: .78rem;
+  color: var(--primary);
+  margin-bottom: .2rem;
+}
+.chat-message p {
+  color: var(--text);
+  font-size: .88rem;
+  line-height: 1.45;
+}
+.chat-compose {
+  display: grid;
+  gap: .6rem;
 }

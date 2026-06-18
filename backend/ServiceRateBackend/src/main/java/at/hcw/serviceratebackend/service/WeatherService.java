@@ -41,6 +41,10 @@ public class WeatherService {
         );
     }
 
+    public boolean isConfigured() {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
     public WeatherForecastResponse forecast(String city, LocalDate date) {
         requireApiKey();
         JsonNode root = get(FORECAST_URL, city);
