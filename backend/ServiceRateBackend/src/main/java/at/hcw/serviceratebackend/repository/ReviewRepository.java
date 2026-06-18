@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
@@ -17,4 +18,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     // Anzahl der Reviews für ein ServiceOffering
     @Query("SELECT COUNT(r) FROM Review r WHERE r.booking.serviceOffering.id = :serviceId")
     Long findReviewCountByServiceId(@Param("serviceId") UUID serviceId);
+
+    List<Review> findByBookingId(UUID bookingId);
+
+    List<Review> findByBookingServiceOfferingId(UUID serviceId);
 }

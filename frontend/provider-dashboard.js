@@ -7,6 +7,7 @@ let pendingDelete = null;
 let editMode      = false;
 let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalender-Navigation)
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
+let reviewsByBooking        = new Map();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
@@ -103,6 +104,7 @@ function renderServices() {
       </div>
       <div class="svc-title">${esc(s.title)}</div>
       <div class="svc-desc">${esc(s.description)}</div>
+      ${serviceRatingPanel(s)}
       <div style="font-size:.78rem;color:var(--muted)">
         Anbieter: <strong>${esc(s.providerName || '–')}</strong>
         &nbsp;·&nbsp; Status: <strong>${esc(s.status || 'ACTIVE')}</strong>
@@ -243,11 +245,27 @@ async function loadBookings() {
   try {
     const bookings = await fetchAPI(`/bookings/provider/${providerId}`, 'GET', null, 'provider_jwt');
     providerBookings = Array.isArray(bookings) ? bookings : [];
+    reviewsByBooking = await loadReviewsForBookings(providerBookings, 'provider_jwt');
     renderBookings();
   } catch (e) {
     console.error('Fehler beim Laden der Provider-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
   }
+}
+
+async function loadReviewsForBookings(bookings, tokenKey) {
+  const entries = await Promise.all((bookings || []).map(async b => {
+    if (!b.id) return [b.id, []];
+    try {
+      const reviews = await fetchAPI(`/reviews/booking/${b.id}`, 'GET', null, tokenKey);
+      return [b.id, Array.isArray(reviews) ? reviews : []];
+    } catch (e) {
+      console.warn('Review konnte nicht geladen werden:', b.id, e);
+      return [b.id, []];
+    }
+  }));
+
+  return new Map(entries);
 }
 
 // Zeichnet Übersichtskarte + Kalender + Anfragenliste aus dem State providerBookings
@@ -399,6 +417,7 @@ function goToCurrentProviderMonth() {
 // Einzelne Anfrage-Karte (Akzeptieren/Ablehnen-Logik unverändert)
 function renderProviderBookingCard(b) {
   const statusClass = statusToClass(b.status);
+  const review = reviewsByBooking.get(b.id)?.[0];
 
   return `
     <div class="svc-card appointment-card ${statusClass}">
@@ -408,6 +427,7 @@ function renderProviderBookingCard(b) {
       </div>
       <div class="svc-title">${esc(b.serviceTitle)}</div>
       <div class="svc-desc">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
+      ${review ? renderProviderReview(review) : renderProviderReviewEmpty(b.status)}
 
       ${b.status === 'PENDING' ? `
         <div class="svc-footer">
@@ -417,6 +437,55 @@ function renderProviderBookingCard(b) {
       ` : `
         <div class="svc-footer muted-text">Buchung ist abgeschlossen/abgelehnt.</div>
       `}
+    </div>
+  `;
+}
+
+function serviceRatingPanel(s) {
+  const count = s.reviewCount || 0;
+  const avg = s.averageRating || 0;
+
+  return `
+    <div class="service-rating-panel ${count ? '' : 'is-empty'}">
+      <div class="service-rating-score">
+        <strong>${count ? avg.toFixed(1) : '–'}</strong>
+        <span>${starString(avg)}</span>
+      </div>
+      <div class="service-rating-copy">
+        <b>${count ? `${count} Bewertung${count === 1 ? '' : 'en'}` : 'Noch keine Bewertungen'}</b>
+        <small>${count ? 'Kundenfeedback zu diesem Service' : 'Erscheint nach der ersten Kundenbewertung'}</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderProviderReview(review) {
+  return `
+    <div class="booking-review">
+      <div class="booking-review-head">
+        <span class="booking-review-label">Kundenbewertung</span>
+        <span class="booking-review-stars">${starString(review.rating || 0)}</span>
+      </div>
+      <div class="booking-review-meta">${esc(review.reviewerName || 'Kunde')}</div>
+      ${review.comment ? `<p class="booking-review-comment">“${esc(review.comment)}”</p>` : `
+        <p class="booking-review-comment muted">Ohne Kommentar abgegeben.</p>
+      `}
+    </div>
+  `;
+}
+
+function renderProviderReviewEmpty(status) {
+  const waiting = status === 'ACCEPTED' || status === 'COMPLETED';
+
+  return `
+    <div class="booking-review is-empty">
+      <div class="booking-review-head">
+        <span class="booking-review-label">${waiting ? 'Bewertung ausstehend' : 'Kundenbewertung'}</span>
+        <span class="booking-review-stars">☆☆☆☆☆</span>
+      </div>
+      <p class="booking-review-comment muted">
+        ${waiting ? 'Der Kunde hat diese Buchung noch nicht bewertet.' : 'Bewertungen erscheinen hier nach akzeptierten Buchungen.'}
+      </p>
     </div>
   `;
 }
@@ -444,6 +513,10 @@ function formatDateShort(value) {
 function shorten(value, max) {
   const str = String(value || '');
   return str.length > max ? `${str.slice(0, max - 1)}…` : str;
+}
+function starString(rating) {
+  const full = Math.max(0, Math.min(5, Math.round(rating)));
+  return '★★★★★'.slice(0, full) + '☆☆☆☆☆'.slice(0, 5 - full);
 }
 
 // ── Buchungs-Status ändern (PUT) ──────────────────────────────────────────────

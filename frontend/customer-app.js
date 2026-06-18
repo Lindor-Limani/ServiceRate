@@ -159,7 +159,7 @@ function renderServices() {
       </div>
       <div class="card-title">${esc(s.title)}</div>
       <div class="card-desc">${esc(s.description)}</div>
-      <div class="card-rating">${ratingHtml(s)}</div>
+      ${serviceRatingPanel(s)}
       <div class="card-footer">
         <div class="provider-row">
           <div class="avatar">${initials(s.providerName)}</div>
@@ -172,7 +172,7 @@ function renderServices() {
 }
 
 // ── Service-Detail-Modal ──────────────────────────────────────────────────────
-function openServiceModal(id) {
+async function openServiceModal(id) {
   const s = allServices.find(x => x.id === id);
   if (!s) return;
 
@@ -196,6 +196,18 @@ function openServiceModal(id) {
       </div>
     </div>
     <p class="modal-desc">${esc(s.description)}</p>
+    <section class="service-reviews" id="serviceReviews">
+      <div class="service-reviews-head">
+        <div>
+          <span class="service-reviews-kicker">Kundenstimmen</span>
+          <h4>Bewertungen zu diesem Service</h4>
+        </div>
+        <span class="service-reviews-summary">${ratingHtml(s)}</span>
+      </div>
+      <div class="service-reviews-list">
+        <div class="review-loading">Bewertungen werden geladen…</div>
+      </div>
+    </section>
     <div class="form-group">
       <label class="form-label">Wunschtermin</label>
       <input class="form-input" type="date" id="bookingDate" min="${todayISO()}" onchange="onBookingDateChange()" />
@@ -212,6 +224,7 @@ function openServiceModal(id) {
     </div>
   `;
   document.getElementById('serviceModal').classList.add('open');
+  loadServiceReviews(s.id);
 }
 
 function closeServiceModal() {
@@ -269,7 +282,7 @@ function switchAuthTab(tab) {
 }
 
 async function doLogin() {
-  const email    = document.getElementById('loginEmail').value.trim();
+  const email    = document.getElementById('loginEmail').value.trim().toLowerCase();
   const password = document.getElementById('loginPassword').value;
   if (!email || !password) { notify('Bitte E-Mail und Passwort eingeben.', 'error'); return; }
   try {
@@ -287,7 +300,7 @@ async function doLogin() {
 async function doRegister() {
   const firstName   = document.getElementById('regFirst').value.trim();
   const lastName    = document.getElementById('regLast').value.trim();
-  const email       = document.getElementById('regEmail').value.trim();
+  const email       = document.getElementById('regEmail').value.trim().toLowerCase();
   const password    = document.getElementById('regPassword').value;
   const accountType = document.getElementById('regType').value;
   if (!firstName || !lastName || !email || !password) {
@@ -367,6 +380,7 @@ async function loadCustomerBookings() {
 
   try {
     const bookings = await fetchAPI(`/bookings/customer/${customerId}`, 'GET', null, 'customer_jwt');
+    const reviewsByBooking = await loadReviewsForBookings(bookings, 'customer_jwt');
 
     if (bookings.length === 0) {
       grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
@@ -377,6 +391,7 @@ async function loadCustomerBookings() {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
       const dateLabel   = b.bookingDate ? `📅 Wunschtermin: ${b.bookingDate}` : '📅 Kein Termin angegeben';
+      const review      = reviewsByBooking.get(b.id)?.[0];
 
       return `
       <div class="service-card booking-card ${statusClass}" style="cursor: default;">
@@ -384,9 +399,10 @@ async function loadCustomerBookings() {
           <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
         </div>
         <div class="card-title" style="margin-top: 10px; font-size: 1.1rem;">${esc(b.serviceTitle || '–')}</div>
-        <div class="booking-date-line">Angeboten von: <strong>${esc(b.customerName || '–')}</strong></div>
+      <div class="booking-date-line">Angeboten von: <strong>${esc(b.customerName || '–')}</strong></div>
         <div class="booking-date-line">${dateLabel}</div>
-        ${b.status === 'ACCEPTED' ? `
+        ${review ? renderBookingReview(review) : renderBookingReviewEmpty(b.status)}
+        ${b.status === 'ACCEPTED' && !review ? `
         <div class="booking-actions">
           <button class="btn btn-primary btn-sm"
                   onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">⭐ Bewerten</button>
@@ -398,6 +414,34 @@ async function loadCustomerBookings() {
     console.error('Fehler beim Laden der Kunden-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
     notify('Fehler beim Laden der Buchungen.', 'error');
+  }
+}
+
+async function loadReviewsForBookings(bookings, tokenKey) {
+  const entries = await Promise.all((bookings || []).map(async b => {
+    if (!b.id) return [b.id, []];
+    try {
+      const reviews = await fetchAPI(`/reviews/booking/${b.id}`, 'GET', null, tokenKey);
+      return [b.id, Array.isArray(reviews) ? reviews : []];
+    } catch (e) {
+      console.warn('Review konnte nicht geladen werden:', b.id, e);
+      return [b.id, []];
+    }
+  }));
+
+  return new Map(entries);
+}
+
+async function loadServiceReviews(serviceId) {
+  const host = document.querySelector('#serviceReviews .service-reviews-list');
+  if (!host) return;
+
+  try {
+    const reviews = await fetchAPI(`/reviews/service/${serviceId}`, 'GET', null, 'customer_jwt');
+    host.innerHTML = renderPublicReviews(reviews);
+  } catch (e) {
+    console.error('Fehler beim Laden der Service-Bewertungen:', e);
+    host.innerHTML = `<div class="review-empty">Bewertungen konnten gerade nicht geladen werden.</div>`;
   }
 }
 
@@ -429,6 +473,77 @@ function ratingHtml(s) {
   const avg = s.averageRating || 0;
   return `<span class="stars">${starString(avg)}</span> ` +
          `<span class="rating-num">${avg.toFixed(1)}</span> <span>(${count})</span>`;
+}
+
+function serviceRatingPanel(s) {
+  const count = s.reviewCount || 0;
+  const avg = s.averageRating || 0;
+
+  return `
+    <div class="service-rating-panel ${count ? '' : 'is-empty'}">
+      <div class="service-rating-score">
+        <strong>${count ? avg.toFixed(1) : '–'}</strong>
+        <span>${starString(avg)}</span>
+      </div>
+      <div class="service-rating-copy">
+        <b>${count ? `${count} Bewertung${count === 1 ? '' : 'en'}` : 'Noch keine Bewertungen'}</b>
+        <small>${count ? 'Von gebuchten Kunden bewertet' : 'Bewertungen erscheinen nach abgeschlossenen Buchungen'}</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderBookingReview(review) {
+  return `
+    <div class="booking-review">
+      <div class="booking-review-head">
+        <span class="booking-review-label">Deine Bewertung</span>
+        <span class="booking-review-stars">${starString(review.rating || 0)}</span>
+      </div>
+      ${review.comment ? `<p class="booking-review-comment">“${esc(review.comment)}”</p>` : `
+        <p class="booking-review-comment muted">Ohne Kommentar abgegeben.</p>
+      `}
+    </div>
+  `;
+}
+
+function renderBookingReviewEmpty(status) {
+  const canReview = status === 'ACCEPTED';
+
+  return `
+    <div class="booking-review is-empty">
+      <div class="booking-review-head">
+        <span class="booking-review-label">${canReview ? 'Bewertung offen' : 'Bewertung'}</span>
+        <span class="booking-review-stars">☆☆☆☆☆</span>
+      </div>
+      <p class="booking-review-comment muted">
+        ${canReview ? 'Du kannst diese Buchung jetzt bewerten.' : 'Eine Bewertung ist möglich, sobald die Buchung akzeptiert wurde.'}
+      </p>
+    </div>
+  `;
+}
+
+function renderPublicReviews(reviews) {
+  if (!Array.isArray(reviews) || reviews.length === 0) {
+    return `
+      <div class="review-empty">
+        Noch keine Bewertungen vorhanden. Du kannst nach einer akzeptierten Buchung die erste Bewertung abgeben.
+      </div>
+    `;
+  }
+
+  return reviews.map(review => `
+    <article class="public-review">
+      <div class="public-review-top">
+        <div>
+          <strong>${esc(review.reviewerName || 'Kunde')}</strong>
+          <span>${esc(review.serviceTitle || '')}</span>
+        </div>
+        <span class="booking-review-stars">${starString(review.rating || 0)}</span>
+      </div>
+      ${review.comment ? `<p>${esc(review.comment)}</p>` : `<p class="muted">Ohne Kommentar bewertet.</p>`}
+    </article>
+  `).join('');
 }
 
 // ── Bewertungs-Modal ──────────────────────────────────────────────────────────

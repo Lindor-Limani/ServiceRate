@@ -244,6 +244,52 @@
     .svc-price small { font-size: .78rem; font-weight: 400; color: var(--muted); }
     .svc-title { font-size: 1rem; font-weight: 600; }
     .svc-desc { font-size: .83rem; color: var(--muted); line-height: 1.55; }
+    .service-rating-panel {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      padding: .8rem .9rem;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-sm);
+    }
+    .service-rating-panel.is-empty {
+      background: #f8fbfb;
+      border-color: var(--border);
+    }
+    .service-rating-score {
+      min-width: 58px;
+      text-align: center;
+    }
+    .service-rating-score strong {
+      display: block;
+      color: var(--text);
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+    .service-rating-score span {
+      display: block;
+      color: #f5a623;
+      font-size: .72rem;
+      letter-spacing: 0;
+      margin-top: .22rem;
+    }
+    .service-rating-panel.is-empty .service-rating-score span {
+      color: #cbd5d8;
+    }
+    .service-rating-copy { min-width: 0; }
+    .service-rating-copy b {
+      display: block;
+      font-size: .82rem;
+      color: var(--text);
+    }
+    .service-rating-copy small {
+      display: block;
+      margin-top: .1rem;
+      color: var(--muted);
+      font-size: .74rem;
+      line-height: 1.3;
+    }
 
     .svc-footer {
       display: flex;
@@ -502,6 +548,49 @@
     .appointment-card.status-accepted { border-top: 4px solid #10b981; }
     .appointment-card.status-rejected { border-top: 4px solid #ef4444; }
     .appointment-date { font-size: .78rem; color: var(--muted); font-weight: 700; text-align: right; }
+    .booking-review {
+      margin-top: .35rem;
+      padding: .9rem 1rem;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-sm);
+    }
+    .booking-review.is-empty {
+      background: #f8fbfb;
+      border-color: var(--border);
+    }
+    .booking-review-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      margin-bottom: .25rem;
+    }
+    .booking-review-label {
+      color: #92400e;
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .booking-review-stars {
+      color: #f5a623;
+      font-size: .95rem;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    .booking-review-meta {
+      color: var(--muted);
+      font-size: .76rem;
+      margin-bottom: .35rem;
+      font-weight: 600;
+    }
+    .booking-review-comment {
+      color: var(--text);
+      font-size: .86rem;
+      line-height: 1.55;
+    }
+    .booking-review-comment.muted { color: var(--muted); }
     .appointment-empty-card {
       grid-column: 1 / -1; background: #fff; border: 1px dashed var(--border);
       border-radius: 18px; padding: 2rem; text-align: center; color: var(--muted);

@@ -8,6 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/reviews")
 @RequiredArgsConstructor
@@ -19,5 +22,15 @@ public class ReviewController {
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewResponse create(@Valid @RequestBody CreateReviewRequest request) {
         return reviewService.create(request);
+    }
+
+    @GetMapping("/booking/{bookingId}")
+    public List<ReviewResponse> getReviewsForBooking(@PathVariable("bookingId") UUID bookingId) {
+        return reviewService.getReviewsForBookingId(bookingId);
+    }
+
+    @GetMapping("/service/{serviceId}")
+    public List<ReviewResponse> getReviewsForService(@PathVariable("serviceId") UUID serviceId) {
+        return reviewService.getReviewsForServiceId(serviceId);
     }
 }

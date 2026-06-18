@@ -9,7 +9,9 @@ import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -47,6 +49,38 @@ public class ReviewService {
                 booking.getServiceOffering().getTitle(),
                 saved.getRating(),
                 saved.getComment()
+        );
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<ReviewResponse> getReviewsForBookingId(UUID bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new IllegalArgumentException("Buchung nicht gefunden!"));
+
+        return reviewRepository.findByBookingId(bookingId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReviewResponse> getReviewsForServiceId(UUID serviceId) {
+        return reviewRepository.findByBookingServiceOfferingId(serviceId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private ReviewResponse toResponse(Review review) {
+        Booking booking = review.getBooking();
+        User reviewer = review.getReviewer();
+
+        return new ReviewResponse(
+                review.getId(),
+                booking.getId(),
+                reviewer.getFirstName() + " " + reviewer.getLastName(),
+                booking.getServiceOffering().getTitle(),
+                review.getRating(),
+                review.getComment()
         );
     }
 }
