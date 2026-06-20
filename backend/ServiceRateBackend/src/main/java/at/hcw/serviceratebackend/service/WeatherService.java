@@ -26,7 +26,7 @@ public class WeatherService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${openweather.api-key:}")
-    private String apiKey;
+    public String apiKey;
 
     public WeatherCurrentResponse current(String city) {
         requireApiKey();
