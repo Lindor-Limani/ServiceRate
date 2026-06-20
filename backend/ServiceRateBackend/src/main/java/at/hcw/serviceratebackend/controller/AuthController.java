@@ -5,6 +5,7 @@ import at.hcw.serviceratebackend.dto.CreateUserRequest;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import at.hcw.serviceratebackend.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +30,7 @@ public class AuthController {
 
     // --- REGISTRIERUNG ---
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody CreateUserRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody CreateUserRequest request) {
         if (userRepository.findByEmail(request.email()).isPresent()) {
             return ResponseEntity.badRequest().body("E-Mail existiert bereits!");
         }

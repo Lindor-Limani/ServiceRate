@@ -271,8 +271,14 @@ function closeAuthModal() {
 function switchAuthTab(tab) {
   document.getElementById('loginForm').style.display = tab === 'login'    ? 'block' : 'none';
   document.getElementById('regForm').style.display   = tab === 'register' ? 'block' : 'none';
+  document.getElementById('forgotForm').style.display = tab === 'forgot'   ? 'block' : 'none';
+  document.getElementById('resetForm').style.display  = tab === 'reset'    ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
   document.getElementById('tabReg').classList.toggle('active',   tab === 'register');
+
+  if (tab === 'forgot') {
+    document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value.trim();
+  }
 }
 
 async function doLogin() {
@@ -300,6 +306,9 @@ async function doRegister() {
   if (!firstName || !lastName || !email || !password) {
     notify('Bitte alle Felder ausfüllen.', 'error'); return;
   }
+  if (!['CUSTOMER', 'PROVIDER'].includes(accountType)) {
+    notify('Bitte wähle Kunde oder Handwerker aus.', 'error'); return;
+  }
   try {
     await fetchAPI('/auth/register', 'POST', { firstName, lastName, email, password, accountType }, 'customer_jwt');
     notify('Konto erstellt! Du kannst dich jetzt anmelden.', 'success');
@@ -307,6 +316,43 @@ async function doRegister() {
     document.getElementById('loginEmail').value = email;
   } catch (e) {
     notify(e.message || 'Registrierung fehlgeschlagen.', 'error');
+  }
+}
+
+async function requestPasswordReset() {
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+  if (!email) { notify('Bitte gib deine E-Mail ein.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/forgot-password', 'POST', { email }, 'customer_jwt');
+    if (data.resetToken) {
+      document.getElementById('resetToken').value = data.resetToken;
+    }
+    document.getElementById('forgotHint').textContent =
+      data.resetToken
+        ? 'Reset wurde vorbereitet. In dieser Demo wird der Reset-Code direkt eingetragen. Klicke danach auf "Ich habe einen Reset-Code".'
+        : 'Falls die E-Mail existiert, wurde ein Reset-Link versendet. Öffne den Link bzw. kopiere den Code und klicke danach auf "Ich habe einen Reset-Code".';
+    document.getElementById('forgotHint').style.display = 'block';
+    notify(data.message || 'Reset-Mail wurde vorbereitet.', 'success');
+  } catch (e) {
+    notify(e.message || 'Reset konnte nicht vorbereitet werden.', 'error');
+  }
+}
+
+async function doResetPassword() {
+  const token = document.getElementById('resetToken').value.trim();
+  const newPassword = document.getElementById('resetNewPassword').value;
+  if (!token || !newPassword) { notify('Bitte Token und neues Passwort eingeben.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/reset-password', 'POST', { token, newPassword }, 'customer_jwt');
+    notify(data.message || 'Passwort wurde aktualisiert.', 'success');
+    document.getElementById('loginEmail').value = document.getElementById('forgotEmail').value.trim().toLowerCase();
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('resetNewPassword').value = '';
+    switchAuthTab('login');
+  } catch (e) {
+    notify(e.message || 'Passwort konnte nicht gesetzt werden.', 'error');
   }
 }
 

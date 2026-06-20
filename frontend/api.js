@@ -31,7 +31,12 @@ async function fetchAPI(endpoint, method = 'GET', body = null, tokenKey = 'jwt_t
     // Wenn das Backend einen Fehler wirft (z.B. Falsches Passwort)
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(errorText || 'Ein Fehler ist aufgetreten');
+      let errorMessage = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorJson.message || errorText;
+      } catch { /* Backend liefert manchmal reinen Text */ }
+      throw new Error(errorMessage || 'Ein Fehler ist aufgetreten');
     }
 
     // Manche Endpunkte (wie DELETE) geben keinen Text zurück

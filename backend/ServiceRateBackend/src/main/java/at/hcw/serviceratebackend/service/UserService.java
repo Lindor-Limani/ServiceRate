@@ -29,6 +29,7 @@ public class UserService {
 
     // --- CREATE ---
     public UserResponse create(CreateUserRequest request) {
+        String accountType = normalizeAllowedPublicAccountType(request.accountType());
         User user = new User();
         user.setId(UUID.randomUUID());
         user.setEmail(request.email());
@@ -36,7 +37,7 @@ public class UserService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setAccountType(request.accountType().toUpperCase());
+        user.setAccountType(accountType);
         user.setStatus("ACTIVE");
         user.setEmailVerified(false);
         user.setEmailVerificationToken(UUID.randomUUID().toString());
@@ -101,7 +102,7 @@ public class UserService {
         if (request.firstName() != null) user.setFirstName(request.firstName());
         if (request.lastName() != null) user.setLastName(request.lastName());
         if (request.accountType() != null && !request.accountType().isBlank()) {
-            user.setAccountType(request.accountType().toUpperCase(Locale.ROOT));
+            user.setAccountType(normalizeAllowedPublicAccountType(request.accountType()));
         }
         if (request.status() != null && !request.status().isBlank()) {
             try {
@@ -139,6 +140,14 @@ public class UserService {
     private User findOrThrow(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("User nicht gefunden"));
+    }
+
+    private String normalizeAllowedPublicAccountType(String accountType) {
+        String normalized = accountType == null ? "" : accountType.trim().toUpperCase(Locale.ROOT);
+        if (!"CUSTOMER".equals(normalized) && !"PROVIDER".equals(normalized)) {
+            throw new IllegalArgumentException("accountType darf nur CUSTOMER oder PROVIDER sein");
+        }
+        return normalized;
     }
 
     private UserResponse toResponse(User user) {

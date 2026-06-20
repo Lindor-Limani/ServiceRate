@@ -645,16 +645,38 @@
     <div class="login-logo">Service<span>Rate</span></div>
     <p class="login-subtitle">Provider Dashboard – nur für Handwerker</p>
 
-    <div class="form-group">
-      <label class="form-label">E-Mail</label>
-      <input class="form-input" type="email" id="loginEmail" placeholder="handwerker@beispiel.at" />
+    <div id="providerLoginForm">
+      <div class="form-group">
+        <label class="form-label">E-Mail</label>
+        <input class="form-input" type="email" id="loginEmail" placeholder="handwerker@beispiel.at" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Passwort</label>
+        <input class="form-input" type="password" id="loginPassword" placeholder="••••••••"
+               onkeydown="if(event.key==='Enter')doLogin()" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doLogin()">Anmelden</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderResetForm()">Passwort vergessen?</button>
     </div>
-    <div class="form-group">
-      <label class="form-label">Passwort</label>
-      <input class="form-input" type="password" id="loginPassword" placeholder="••••••••"
-             onkeydown="if(event.key==='Enter')doLogin()" />
+
+    <div id="providerResetForm" style="display:none">
+      <div class="form-group">
+        <label class="form-label">E-Mail</label>
+        <input class="form-input" type="email" id="forgotEmail" placeholder="handwerker@beispiel.at" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="requestPasswordReset()">Reset vorbereiten</button>
+      <div class="form-group" id="resetTokenGroup" style="display:none;margin-top:1rem">
+        <label class="form-label">Reset-Token</label>
+        <input class="form-input" type="text" id="resetToken" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Neues Passwort</label>
+        <input class="form-input" type="password" id="resetNewPassword" placeholder="Mindestens 6 Zeichen"
+               onkeydown="if(event.key==='Enter')doResetPassword()" />
+      </div>
+      <button class="btn btn-primary btn-full" onclick="doResetPassword()">Passwort setzen</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderLoginForm()">Zurück zum Login</button>
     </div>
-    <button class="btn btn-primary btn-full" onclick="doLogin()">Anmelden</button>
 
     <p style="margin-top:1.25rem;text-align:center;font-size:.83rem;color:var(--muted)">
       Noch kein Konto?

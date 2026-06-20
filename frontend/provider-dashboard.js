@@ -64,6 +64,48 @@ function doLogout() {
   document.getElementById('loginPassword').value = '';
 }
 
+function showProviderResetForm() {
+  document.getElementById('providerLoginForm').style.display = 'none';
+  document.getElementById('providerResetForm').style.display = 'block';
+  document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value.trim();
+}
+
+function showProviderLoginForm() {
+  document.getElementById('providerResetForm').style.display = 'none';
+  document.getElementById('providerLoginForm').style.display = 'block';
+}
+
+async function requestPasswordReset() {
+  const email = document.getElementById('forgotEmail').value.trim().toLowerCase();
+  if (!email) { notify('Bitte gib deine E-Mail ein.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/forgot-password', 'POST', { email }, 'provider_jwt');
+    document.getElementById('resetToken').value = data.resetToken || '';
+    document.getElementById('resetTokenGroup').style.display = 'block';
+    notify(data.message || 'Reset wurde vorbereitet.', 'success');
+  } catch (e) {
+    notify(e.message || 'Reset konnte nicht vorbereitet werden.', 'error');
+  }
+}
+
+async function doResetPassword() {
+  const token = document.getElementById('resetToken').value.trim();
+  const newPassword = document.getElementById('resetNewPassword').value;
+  if (!token || !newPassword) { notify('Bitte Token und neues Passwort eingeben.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/reset-password', 'POST', { token, newPassword }, 'provider_jwt');
+    notify(data.message || 'Passwort wurde aktualisiert.', 'success');
+    document.getElementById('loginEmail').value = document.getElementById('forgotEmail').value.trim().toLowerCase();
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('resetNewPassword').value = '';
+    showProviderLoginForm();
+  } catch (e) {
+    notify(e.message || 'Passwort konnte nicht gesetzt werden.', 'error');
+  }
+}
+
 // ── Services laden & rendern ──────────────────────────────────────────────────
 async function loadServices() {
   const grid = document.getElementById('servicesGrid');
