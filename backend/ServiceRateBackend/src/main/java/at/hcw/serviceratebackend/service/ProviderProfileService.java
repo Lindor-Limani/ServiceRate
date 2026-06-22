@@ -45,6 +45,7 @@ public class ProviderProfileService {
         return new ProviderProfileResponse(
                 provider.getId(),
                 fullName(provider),
+                provider.getProfileImageUrl(),
                 provider.getStatus(),
                 services.size(),
                 averageRating,

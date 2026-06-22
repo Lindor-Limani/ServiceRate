@@ -50,12 +50,20 @@ public class MailService {
     @Value("${app.backend-base-url:http://localhost:8081}")
     private String backendBaseUrl;
 
+    @Value("${app.dev.log-tokens:false}")
+    private boolean logTokens;
+
     public void sendVerificationMail(User user) {
         String link = UriComponentsBuilder
                 .fromUriString(backendBaseUrl)
                 .path("/api/auth/verify-email")
                 .queryParam("token", user.getEmailVerificationToken())
                 .toUriString();
+
+        if (logTokens) {
+            System.out.printf("%n--- ServiceRate Dev Verification Link ---%nUser: %s%nToken: %s%nLink: %s%n--- End Dev Verification Link ---%n",
+                    user.getEmail(), user.getEmailVerificationToken(), link);
+        }
 
         String body = "Hallo " + displayName(user) + ",\n\n"
                 + "bitte verifiziere deine E-Mail-Adresse fuer ServiceRate:\n\n"

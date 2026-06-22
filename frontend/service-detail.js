@@ -29,7 +29,7 @@ function renderServiceDetail() {
   document.getElementById('serviceDetailRoot').innerHTML = `
     <section class="service-detail-page">
       <div class="service-detail-main">
-        ${catImage(s.category)}
+        ${catImage(s.category, s.imageUrl)}
         <div class="service-detail-kicker">${CAT_LABELS[s.category] || s.category}</div>
         <h1>${esc(s.title)}</h1>
         <p class="service-detail-desc">${esc(s.description)}</p>
@@ -48,7 +48,7 @@ function renderServiceDetail() {
       </div>
       <aside class="service-detail-side">
         <div class="detail-provider">
-          <div class="avatar">${initials(s.providerName)}</div>
+          ${avatarHtml(s.providerName, s.providerProfileImageUrl)}
           <div>
             <span>Anbieter</span>
             <strong>${esc(s.providerName || 'Unbekannt')}</strong>
@@ -57,6 +57,7 @@ function renderServiceDetail() {
         </div>
         <div class="detail-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></div>
         <div class="booking-date-line">Ort: <strong>${esc(s.location || '-')}</strong></div>
+        <div class="booking-date-line">Umfang: <strong>${esc(serviceMetaLine(s))}</strong></div>
         <div class="form-group">
           <label class="form-label">Wunschtermin</label>
           <input class="form-input" type="date" id="detailBookingDate" min="${todayISO()}" />
@@ -65,6 +66,14 @@ function renderServiceDetail() {
       </aside>
     </section>
   `;
+}
+
+function serviceMetaLine(s) {
+  const parts = [];
+  if (s.estimatedHours) parts.push(`ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
+  if (s.deliverableType === 'DIGITAL') parts.push('digitale Lieferung');
+  if (s.deliverableType === 'HYBRID') parts.push('hybrid');
+  return parts.length ? parts.join(' · ') : 'nach Vereinbarung';
 }
 
 async function bookDetailService() {

@@ -24,7 +24,7 @@ function renderProviderProfile(profile) {
   const root = document.getElementById('providerProfileRoot');
   root.innerHTML = `
     <section class="provider-profile-hero">
-      <div class="avatar provider-profile-avatar">${initials(profile.name)}</div>
+      ${avatarHtml(profile.name, profile.profileImageUrl, 'provider-profile-avatar')}
       <div>
         <span class="service-detail-kicker">Anbieterprofil</span>
         <h1>${esc(profile.name)}</h1>
@@ -45,7 +45,7 @@ function renderProviderProfile(profile) {
 function renderProviderServiceCard(s) {
   return `
     <article class="service-card" onclick="window.location.href='service-detail.html?id=${encodeURIComponent(s.id)}'">
-      ${catImage(s.category)}
+      ${catImage(s.category, s.imageUrl)}
       <div class="card-top">
         <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
         <span class="card-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>

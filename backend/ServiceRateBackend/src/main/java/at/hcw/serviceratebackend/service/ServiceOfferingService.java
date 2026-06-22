@@ -54,6 +54,9 @@ public class ServiceOfferingService {
         service.setDescription(request.description());
         service.setCategory(request.category());
         service.setPrice(request.price());
+        service.setEstimatedHours(request.estimatedHours());
+        service.setImageUrl(blankToNull(request.imageUrl()));
+        service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
         service.setLocation(location);
         service.setStatus("ACTIVE");
 
@@ -93,6 +96,9 @@ public class ServiceOfferingService {
         service.setDescription(request.description());
         service.setCategory(request.category());
         service.setPrice(request.price());
+        service.setEstimatedHours(request.estimatedHours());
+        service.setImageUrl(blankToNull(request.imageUrl()));
+        service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
 
         return mapToResponse(serviceRepository.save(service));
     }
@@ -112,10 +118,14 @@ public class ServiceOfferingService {
                 service.getId(),
                 service.getProvider().getId(),
                 service.getProvider().getFirstName() + " " + service.getProvider().getLastName(),
+                service.getProvider().getProfileImageUrl(),
                 service.getTitle(),
                 service.getDescription(),
                 service.getCategory(),
                 service.getPrice(),
+                service.getEstimatedHours(),
+                service.getImageUrl(),
+                service.getDeliverableType(),
                 service.getStatus(),
                 service.getLocation(),
                 averageRating,
@@ -130,5 +140,19 @@ public class ServiceOfferingService {
         double volumePoints = (Math.min(reviewCount, 20) / 20.0) * 20.0;
         double statusPoints = "ACTIVE".equals(status) ? 10.0 : 0.0;
         return (int) Math.round(Math.min(100.0, ratingPoints + volumePoints + statusPoints));
+    }
+
+    private String normalizeDeliverableType(String deliverableType) {
+        String normalized = deliverableType == null || deliverableType.isBlank()
+                ? "ON_SITE"
+                : deliverableType.trim().toUpperCase();
+        if (!normalized.equals("ON_SITE") && !normalized.equals("DIGITAL") && !normalized.equals("HYBRID")) {
+            throw new IllegalArgumentException("Ungültige Lieferart.");
+        }
+        return normalized;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

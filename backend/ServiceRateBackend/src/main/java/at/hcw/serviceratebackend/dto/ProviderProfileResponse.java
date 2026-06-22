@@ -6,6 +6,7 @@ import java.util.UUID;
 public record ProviderProfileResponse(
         UUID id,
         String name,
+        String profileImageUrl,
         String status,
         int serviceCount,
         double averageRating,

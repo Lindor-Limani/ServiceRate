@@ -7,6 +7,7 @@ public record ChatMessageResponse(
         UUID id,
         UUID bookingId,
         String senderName,
+        String senderRole,
         String content,
         OffsetDateTime createdAt
 ) {}

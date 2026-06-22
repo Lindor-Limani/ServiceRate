@@ -1,15 +1,23 @@
 package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.BookingResponse;
+import at.hcw.serviceratebackend.dto.CreateCheckoutRequest;
 import at.hcw.serviceratebackend.dto.CreateBookingRequest;
+import at.hcw.serviceratebackend.dto.CreateTimeEntryRequest;
+import at.hcw.serviceratebackend.dto.PublishDeliveryRequest;
+import at.hcw.serviceratebackend.dto.RecordPaymentRequest;
 import at.hcw.serviceratebackend.dto.ReviewResponse;
+import at.hcw.serviceratebackend.dto.TimeEntryResponse;
+import at.hcw.serviceratebackend.dto.UpdateBookingWorkRequest;
 import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
+import at.hcw.serviceratebackend.model.entity.TimeEntry;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
+import at.hcw.serviceratebackend.repository.TimeEntryRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +40,7 @@ public class BookingService {
     private final ServiceOfferingRepository serviceRepository;
     private final ReviewRepository reviewRepository;
     private final ReviewService reviewService;
+    private final TimeEntryRepository timeEntryRepository;
 
     public BookingResponse createBooking(CreateBookingRequest request, String customerEmail) {
         User customer = userRepository.findByEmail(customerEmail)
@@ -53,14 +62,7 @@ public class BookingService {
 
         Booking saved = bookingRepository.save(booking);
 
-        return new BookingResponse(
-                saved.getId(),
-                customer.getFirstName() + " " + customer.getLastName(),
-                service.getTitle(),
-                saved.getStatus(),
-                saved.getBookingDate(),
-                null
-        );
+        return toResponse(saved, null, null);
     }
 
     // Holt alle Buchungen für einen bestimmten Handwerker
@@ -100,14 +102,156 @@ public class BookingService {
         booking.setStatus(targetStatus.name());
         Booking saved = bookingRepository.save(booking);
 
-        return new BookingResponse(
-                saved.getId(),
-                saved.getCustomer().getFirstName() + " " + saved.getCustomer().getLastName(),
-                saved.getServiceOffering().getTitle(),
-                saved.getStatus(),
-                saved.getBookingDate(),
-                findReviewResponse(saved)
-        );
+        return toResponse(saved, null, findReviewResponse(saved));
+    }
+
+    public BookingResponse updateWorkLog(UUID bookingId, UpdateBookingWorkRequest request, String providerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new RuntimeException("Provider nicht gefunden"));
+        requireAccountType(provider, "PROVIDER");
+        requireProviderOwnsBooking(provider, booking);
+
+        if (request.actualHours() != null && request.actualHours() < 0) {
+            throw new IllegalArgumentException("Stunden dürfen nicht negativ sein.");
+        }
+
+        booking.setActualHours(request.actualHours());
+        booking.setProviderNotes(trimOrNull(request.providerNotes()));
+        return toResponse(bookingRepository.save(booking), fullName(booking.getCustomer()), findReviewResponse(booking));
+    }
+
+    public BookingResponse addTimeEntry(UUID bookingId, CreateTimeEntryRequest request, String providerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new RuntimeException("Provider nicht gefunden"));
+        requireAccountType(provider, "PROVIDER");
+        requireProviderOwnsBooking(provider, booking);
+
+        if (request.hours() == null || request.hours() <= 0) {
+            throw new IllegalArgumentException("Bitte positive Stunden angeben.");
+        }
+
+        TimeEntry entry = new TimeEntry();
+        entry.setId(UUID.randomUUID());
+        entry.setBooking(booking);
+        entry.setProvider(provider);
+        entry.setWorkDate(request.workDate() == null ? java.time.LocalDate.now() : request.workDate());
+        entry.setHours(request.hours());
+        entry.setNote(trimOrNull(request.note()));
+        timeEntryRepository.save(entry);
+
+        double total = timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(bookingId).stream()
+                .mapToDouble(TimeEntry::getHours)
+                .sum();
+        booking.setActualHours(total);
+        bookingRepository.save(booking);
+        return toResponse(booking, fullName(booking.getCustomer()), findReviewResponse(booking));
+    }
+
+    public BookingResponse publishDelivery(UUID bookingId, PublishDeliveryRequest request, String providerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new RuntimeException("Provider nicht gefunden"));
+        requireAccountType(provider, "PROVIDER");
+        requireProviderOwnsBooking(provider, booking);
+
+        if (request.deliveryUrl() == null || request.deliveryUrl().isBlank()) {
+            throw new IllegalArgumentException("Bitte einen Liefer-Link angeben.");
+        }
+
+        int hours = request.expiresInHours() == null ? 72 : Math.max(1, Math.min(request.expiresInHours(), 24 * 14));
+        booking.setDeliveryUrl(request.deliveryUrl().trim());
+        booking.setDeliveryLabel(trimOrNull(request.deliveryLabel()));
+        booking.setDeliveryExpiresAt(OffsetDateTime.now().plusHours(hours));
+        return toResponse(bookingRepository.save(booking), fullName(booking.getCustomer()), findReviewResponse(booking));
+    }
+
+    public BookingResponse createCheckout(UUID bookingId, CreateCheckoutRequest request, String customerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User customer = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
+        requireAccountType(customer, "CUSTOMER");
+        if (!booking.getCustomer().getId().equals(customer.getId())) {
+            throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
+        }
+
+        String provider = request.provider() == null || request.provider().isBlank()
+                ? "MANUAL"
+                : request.provider().trim().toUpperCase();
+        booking.setPaymentProvider(provider);
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setCheckoutUrl("/checkout.html?bookingId=" + booking.getId());
+        return toResponse(bookingRepository.save(booking), providerName(booking.getServiceOffering()), findReviewResponse(booking));
+    }
+
+    public BookingResponse markPaid(UUID bookingId, String customerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User customer = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
+        requireAccountType(customer, "CUSTOMER");
+        if (!booking.getCustomer().getId().equals(customer.getId())) {
+            throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
+        }
+        booking.setPaymentStatus("PAID");
+        booking.setPaymentNote("Online-Zahlung durch Kunden bestätigt.");
+        booking.setPaidAt(OffsetDateTime.now());
+        return toResponse(bookingRepository.save(booking), null, findReviewResponse(booking));
+    }
+
+    public BookingResponse recordProviderPayment(UUID bookingId, RecordPaymentRequest request, String providerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new RuntimeException("Provider nicht gefunden"));
+        requireAccountType(provider, "PROVIDER");
+        requireProviderOwnsBooking(provider, booking);
+
+        String method = request.provider() == null || request.provider().isBlank()
+                ? "CASH"
+                : request.provider().trim().toUpperCase();
+        if (!method.equals("CASH") && !method.equals("BANK_TRANSFER") && !method.equals("MANUAL") && !method.equals("PAYPAL") && !method.equals("STRIPE") && !method.equals("SEPA")) {
+            throw new IllegalArgumentException("Ungültige Zahlungsart.");
+        }
+
+        booking.setPaymentProvider(method);
+        booking.setPaymentStatus("PAID");
+        booking.setPaymentNote(trimOrNull(request.note()));
+        booking.setPaidAt(OffsetDateTime.now());
+        return toResponse(bookingRepository.save(booking), null, findReviewResponse(booking));
+    }
+
+    public String resolveDeliveryUrl(UUID bookingId, String email) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User nicht gefunden"));
+
+        UUID customerId = booking.getCustomer() != null ? booking.getCustomer().getId() : null;
+        UUID providerId = booking.getServiceOffering() != null && booking.getServiceOffering().getProvider() != null
+                ? booking.getServiceOffering().getProvider().getId()
+                : null;
+
+        boolean isCustomer = user.getId().equals(customerId);
+        boolean isProvider = user.getId().equals(providerId);
+        if (!isCustomer && !isProvider) {
+            throw new IllegalArgumentException("Kein Zugriff auf diese Lieferung.");
+        }
+        if (isCustomer && !"PAID".equals(booking.getPaymentStatus())) {
+            throw new IllegalArgumentException("Die Lieferung ist erst nach Zahlung verfügbar.");
+        }
+        if (booking.getDeliveryExpiresAt() != null && booking.getDeliveryExpiresAt().isBefore(OffsetDateTime.now())) {
+            throw new IllegalArgumentException("Der Liefer-Link ist abgelaufen.");
+        }
+        if (booking.getDeliveryUrl() == null || booking.getDeliveryUrl().isBlank()) {
+            throw new IllegalArgumentException("Für diese Buchung wurde noch keine Lieferung bereitgestellt.");
+        }
+        return booking.getDeliveryUrl();
     }
 
     // Holt alle Buchungen für das Kunden-Dashboard
@@ -128,12 +272,31 @@ public class BookingService {
     }
 
     private BookingResponse toResponse(Booking booking, String displayName, ReviewResponse review) {
+        User customer = booking.getCustomer();
+        User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
         return new BookingResponse(
                 booking.getId(),
-                displayName,
+                fullName(customer),
+                customer != null ? customer.getProfileImageUrl() : null,
+                providerName(booking.getServiceOffering()),
+                provider != null ? provider.getProfileImageUrl() : null,
                 serviceTitle(booking.getServiceOffering()),
+                servicePrice(booking.getServiceOffering()),
                 booking.getStatus(),
                 booking.getBookingDate(),
+                booking.getActualHours(),
+                booking.getProviderNotes(),
+                booking.getCustomerNotes(),
+                deliveryAccessPath(booking),
+                booking.getDeliveryLabel(),
+                booking.getDeliveryExpiresAt(),
+                isDeliveryAvailable(booking),
+                booking.getPaymentStatus(),
+                booking.getCheckoutUrl(),
+                booking.getPaymentProvider(),
+                booking.getPaymentNote(),
+                booking.getPaidAt(),
+                loadTimeEntries(booking.getId()),
                 review
         );
     }
@@ -186,6 +349,10 @@ public class BookingService {
         return offering.getTitle();
     }
 
+    private Double servicePrice(ServiceOffering offering) {
+        return offering == null ? 0.0 : offering.getPrice();
+    }
+
     private BookingStatus parseStatus(String status) {
         try {
             return BookingStatus.valueOf(status);
@@ -211,5 +378,35 @@ public class BookingService {
         if (owner == null || !owner.getId().equals(provider.getId())) {
             throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Anbieter.");
         }
+    }
+
+    private String trimOrNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private boolean isDeliveryAvailable(Booking booking) {
+        return booking.getDeliveryUrl() != null
+                && !booking.getDeliveryUrl().isBlank()
+                && "PAID".equals(booking.getPaymentStatus())
+                && (booking.getDeliveryExpiresAt() == null || booking.getDeliveryExpiresAt().isAfter(OffsetDateTime.now()));
+    }
+
+    private String deliveryAccessPath(Booking booking) {
+        if (booking.getDeliveryUrl() == null || booking.getDeliveryUrl().isBlank()) {
+            return null;
+        }
+        return "/api/bookings/" + booking.getId() + "/delivery/open";
+    }
+
+    private List<TimeEntryResponse> loadTimeEntries(UUID bookingId) {
+        return timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(bookingId).stream()
+                .map(entry -> new TimeEntryResponse(
+                        entry.getId(),
+                        entry.getBooking().getId(),
+                        entry.getWorkDate(),
+                        entry.getHours(),
+                        entry.getNote()
+                ))
+                .toList();
     }
 }

@@ -42,6 +42,7 @@ public class UserService {
         user.setStatus("ACTIVE");
         user.setEmailVerified(false);
         user.setEmailVerificationToken(UUID.randomUUID().toString());
+        user.setEmailVerificationExpiresAt(OffsetDateTime.now().plusMinutes(10));
 
         User saved = userRepository.save(user);
         mailService.sendVerificationMail(saved);
@@ -52,9 +53,13 @@ public class UserService {
     public String verifyEmail(String token) {
         User user = userRepository.findByEmailVerificationToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Ungültiger Verifizierungs-Link"));
+        if (user.getEmailVerificationExpiresAt() == null || user.getEmailVerificationExpiresAt().isBefore(OffsetDateTime.now())) {
+            throw new IllegalArgumentException("Verifizierungs-Link ist abgelaufen. Bitte fordere einen neuen Link an.");
+        }
         String accountType = user.getAccountType();
         user.setEmailVerified(true);
         user.setEmailVerificationToken(null);
+        user.setEmailVerificationExpiresAt(null);
         userRepository.save(user);
         return accountType;
     }
@@ -79,9 +84,8 @@ public class UserService {
         userRepository.findByEmail(email)
                 .filter(user -> !user.isEmailVerified())
                 .ifPresent(user -> {
-                    if (user.getEmailVerificationToken() == null || user.getEmailVerificationToken().isBlank()) {
-                        user.setEmailVerificationToken(UUID.randomUUID().toString());
-                    }
+                    user.setEmailVerificationToken(UUID.randomUUID().toString());
+                    user.setEmailVerificationExpiresAt(OffsetDateTime.now().plusMinutes(10));
                     mailService.sendVerificationMail(userRepository.save(user));
                 });
     }
@@ -121,6 +125,7 @@ public class UserService {
         }
         if (request.firstName() != null) user.setFirstName(request.firstName());
         if (request.lastName() != null) user.setLastName(request.lastName());
+        if (request.profileImageUrl() != null) user.setProfileImageUrl(trimOrNull(request.profileImageUrl()));
         if (request.accountType() != null && !request.accountType().isBlank()) {
             user.setAccountType(normalizeAllowedPublicAccountType(request.accountType()));
         }
@@ -176,8 +181,13 @@ public class UserService {
                 user.getEmail(),
                 user.getFirstName(),
                 user.getLastName(),
+                user.getProfileImageUrl(),
                 user.getAccountType(),
                 user.getStatus()
         );
+    }
+
+    private String trimOrNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

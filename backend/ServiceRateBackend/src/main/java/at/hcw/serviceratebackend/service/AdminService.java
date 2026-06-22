@@ -40,7 +40,7 @@ public class AdminService {
 
     public List<UserResponse> users() {
         return userRepository.findAll().stream()
-                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getAccountType(), u.getStatus()))
+                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getProfileImageUrl(), u.getAccountType(), u.getStatus()))
                 .toList();
     }
 

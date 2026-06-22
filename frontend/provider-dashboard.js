@@ -7,6 +7,7 @@ let pendingDelete = null;
 let editMode      = false;
 let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalender-Navigation)
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
+let activeBookingId = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
@@ -32,6 +33,26 @@ function showApp() {
 
   updateProviderVerifyBanner();
   loadServices();
+  loadProviderOverview();
+}
+
+async function loadProviderOverview() {
+  try {
+    const bookings = await fetchAPI('/bookings/provider/me', 'GET', null, 'provider_jwt');
+    const list = Array.isArray(bookings) ? bookings : [];
+    const revenue = list
+      .filter(b => b.paymentStatus === 'PAID')
+      .reduce((sum, b) => sum + (Number(b.actualHours || 1) * Number(b.servicePrice || 0)), 0);
+    const completed = list.filter(b => b.status === 'COMPLETED').length;
+    const open = list.filter(b => b.status === 'PENDING' || b.status === 'ACCEPTED').length;
+    document.getElementById('statCount').textContent = `€${revenue.toFixed(0)}`;
+    document.getElementById('statAvgPrice').textContent = completed;
+    document.getElementById('statCats').textContent = open;
+  } catch {
+    document.getElementById('statCount').textContent = '–';
+    document.getElementById('statAvgPrice').textContent = '–';
+    document.getElementById('statCats').textContent = '–';
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -71,6 +92,53 @@ function doLogout() {
   document.getElementById('appContent').style.display  = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
+}
+
+async function openProviderSettings() {
+  document.getElementById('providerSettingsModal').classList.add('open');
+  await loadProviderProfileSettings();
+}
+
+function closeProviderSettings() {
+  document.getElementById('providerSettingsModal').classList.remove('open');
+}
+
+async function loadProviderProfileSettings() {
+  const userId = localStorage.getItem('provider_user_id');
+  if (!userId) return;
+  try {
+    const user = await fetchAPI(`/users/${userId}`, 'GET', null, 'provider_jwt');
+    const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Profil';
+    document.getElementById('providerSettingsFirstName').value = user.firstName || '';
+    document.getElementById('providerSettingsLastName').value = user.lastName || '';
+    document.getElementById('providerSettingsProfileImage').value = user.profileImageUrl || '';
+    document.getElementById('providerSettingsName').textContent = name;
+    document.getElementById('providerSettingsAvatar').innerHTML = avatarHtml(name, user.profileImageUrl, 'profile-large');
+  } catch (e) {
+    notify(e.message || 'Profil konnte nicht geladen werden.', 'error');
+  }
+}
+
+async function saveProviderProfile() {
+  const userId = localStorage.getItem('provider_user_id');
+  if (!userId) return;
+  const payload = {
+    firstName: document.getElementById('providerSettingsFirstName').value.trim(),
+    lastName: document.getElementById('providerSettingsLastName').value.trim(),
+    profileImageUrl: document.getElementById('providerSettingsProfileImage').value.trim()
+  };
+  try {
+    const user = await fetchAPI(`/users/${userId}`, 'PUT', payload, 'provider_jwt');
+    const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || '';
+    document.getElementById('headerUser').textContent = user.email || localStorage.getItem('provider_email') || '';
+    document.getElementById('providerSettingsName').textContent = name || 'Profil';
+    document.getElementById('providerSettingsAvatar').innerHTML = avatarHtml(name, user.profileImageUrl, 'profile-large');
+    notify('Profil gespeichert.', 'success');
+    loadServices();
+    loadProviderOverview();
+  } catch (e) {
+    notify(e.message || 'Profil konnte nicht gespeichert werden.', 'error');
+  }
 }
 
 function showProviderResetForm() {
@@ -197,13 +265,14 @@ function renderServices() {
 
   grid.innerHTML = allServices.map(s => `
     <div class="svc-card">
-      ${catImage(s.category)}
+      ${catImage(s.category, s.imageUrl)}
       <div class="svc-top">
         <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
         <span class="svc-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
       </div>
       <div class="svc-title">${esc(s.title)}</div>
       <div class="svc-desc">${esc(s.description)}</div>
+      <div class="svc-desc">${serviceMetaLine(s)}</div>
       <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
       ${serviceRatingPanel(s)}
       <div style="font-size:.78rem;color:var(--muted)">
@@ -219,13 +288,7 @@ function renderServices() {
 }
 
 function updateStats() {
-  const count = allServices.length;
-  const avg   = count > 0 ? (allServices.reduce((sum, s) => sum + s.price, 0) / count) : 0;
-  const cats  = new Set(allServices.map(s => s.category)).size;
-
-  document.getElementById('statCount').textContent    = count;
-  document.getElementById('statAvgPrice').textContent = count > 0 ? `€${avg.toFixed(0)}` : '–';
-  document.getElementById('statCats').textContent     = cats || '–';
+  loadProviderOverview();
 }
 
 // ── Service-Modal (Erstellen / Bearbeiten) ────────────────────────────────────
@@ -243,6 +306,9 @@ function openCreateModal() {
   document.getElementById('svcDesc').value             = '';
   document.getElementById('svcCategory').value         = 'CLEANING';
   document.getElementById('svcPrice').value            = '';
+  document.getElementById('svcHours').value            = '';
+  document.getElementById('svcDeliverable').value      = 'ON_SITE';
+  document.getElementById('svcImage').value            = '';
   document.getElementById('svcZip').value              = '';
   document.getElementById('svcZipGroup').style.display = 'block'; // PLZ nur beim Erstellen
   document.getElementById('serviceModal').classList.add('open');
@@ -258,6 +324,9 @@ function openEditModal(id) {
   document.getElementById('svcDesc').value           = s.description;
   document.getElementById('svcCategory').value       = s.category;
   document.getElementById('svcPrice').value          = s.price;
+  document.getElementById('svcHours').value          = s.estimatedHours || '';
+  document.getElementById('svcDeliverable').value    = s.deliverableType || 'ON_SITE';
+  document.getElementById('svcImage').value          = s.imageUrl || '';
   // Der Ort lässt sich beim Bearbeiten nicht ändern (Backend-PUT kennt keine PLZ) -> Feld ausblenden
   document.getElementById('svcZipGroup').style.display = 'none';
   document.getElementById('serviceModal').classList.add('open');
@@ -272,15 +341,27 @@ async function saveService() {
   const desc     = document.getElementById('svcDesc').value.trim();
   const category = document.getElementById('svcCategory').value;
   const price    = parseFloat(document.getElementById('svcPrice').value);
+  const estimatedHours = parseFloat(document.getElementById('svcHours').value);
+  const deliverableType = document.getElementById('svcDeliverable').value;
+  const imageUrl = document.getElementById('svcImage').value.trim();
 
   if (!title || !desc || isNaN(price) || price <= 0) {
     notify('Bitte alle Felder korrekt ausfüllen.', 'error'); return;
   }
+  const payload = {
+    title,
+    description: desc,
+    category,
+    price,
+    estimatedHours: Number.isNaN(estimatedHours) ? null : estimatedHours,
+    deliverableType,
+    imageUrl
+  };
 
   if (editMode) {
     const id = document.getElementById('editServiceId').value;
     try {
-      await fetchAPI(`/services/${id}`, 'PUT', { title, description: desc, category, price }, 'provider_jwt');
+      await fetchAPI(`/services/${id}`, 'PUT', payload, 'provider_jwt');
       notify('Service aktualisiert ✓', 'success');
       closeServiceModal();
       loadServices();
@@ -291,7 +372,7 @@ async function saveService() {
     const zipCode = document.getElementById('svcZip').value.trim();
     if (!zipCode) { notify('Bitte eine Postleitzahl angeben.', 'error'); return; }
     try {
-      await fetchAPI('/services', 'POST', { title, description: desc, category, price, zipCode }, 'provider_jwt');
+      await fetchAPI('/services', 'POST', { ...payload, zipCode }, 'provider_jwt');
       notify('Service erstellt ✓', 'success');
       closeServiceModal();
       loadServices();
@@ -352,6 +433,14 @@ async function loadBookings() {
     console.error('Fehler beim Laden der Provider-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>Fehler beim Laden der Buchungen.</p></div>`;
   }
+}
+
+function serviceMetaLine(s) {
+  const parts = [];
+  if (s.estimatedHours) parts.push(`ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
+  if (s.deliverableType === 'DIGITAL') parts.push('digitale Lieferung');
+  if (s.deliverableType === 'HYBRID') parts.push('hybrid');
+  return parts.length ? parts.map(esc).join(' · ') : 'nach Vereinbarung';
 }
 
 // Zeichnet Übersichtskarte + Kalender + Anfragenliste aus dem State providerBookings
@@ -506,34 +595,237 @@ function renderProviderBookingCard(b) {
   const review = b.review;
 
   return `
-    <div class="svc-card appointment-card ${statusClass}">
+    <div class="svc-card appointment-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
       <div class="svc-top">
         <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
         <span class="appointment-date">${formatDateShort(b.bookingDate)}</span>
       </div>
       <div class="svc-title">${esc(b.serviceTitle)}</div>
-      <div class="svc-desc">Angefragt von: <strong>${esc(b.customerName)}</strong></div>
+      <div class="svc-desc" style="display:flex;align-items:center;gap:.5rem">
+        ${avatarHtml(b.customerName, b.customerProfileImageUrl)}
+        <span>Angefragt von: <strong>${esc(b.customerName)}</strong></span>
+      </div>
+      <div class="svc-desc">
+        Zahlung: <strong>${esc(b.paymentStatus || 'UNPAID')}</strong>
+        ${b.actualHours ? ` · Aufwand: <strong>${Number(b.actualHours).toFixed(2)} Std</strong>` : ''}
+      </div>
+      ${b.deliveryUrl ? `<div class="svc-desc">Lieferung bereitgestellt${b.deliveryExpiresAt ? ` · bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : ''}
       ${review ? renderProviderReview(review) : renderProviderReviewEmpty(b.status)}
 
       ${b.status === 'PENDING' ? `
-        <div class="svc-footer">
-          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">✅ Akzeptieren</button>
-          <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">❌ Ablehnen</button>
-          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
+        <div class="svc-footer" onclick="event.stopPropagation()">
+          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">Akzeptieren</button>
+          <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">Ablehnen</button>
+          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
         </div>
       ` : b.status === 'ACCEPTED' ? `
-        <div class="svc-footer">
+        <div class="svc-footer" onclick="event.stopPropagation()">
           <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'COMPLETED')">✓ Abschließen</button>
-          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
+          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
         </div>
       ` : `
-        <div class="svc-footer">
+        <div class="svc-footer" onclick="event.stopPropagation()">
           <span class="muted-text">Buchung ist abgeschlossen/abgelehnt.</span>
-          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'provider_jwt')">Nachrichten</button>
+          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
         </div>
       `}
     </div>
   `;
+}
+
+async function saveWorkLog(bookingId) {
+  const actualHours = parseFloat(document.getElementById('drawerTotalHours').value);
+  const providerNotes = document.getElementById('drawerProviderNotes').value.trim();
+  try {
+    await fetchAPI(`/bookings/${bookingId}/work`, 'PUT', {
+      actualHours: Number.isNaN(actualHours) ? null : actualHours,
+      providerNotes
+    }, 'provider_jwt');
+    notify('Aufwand gespeichert.', 'success');
+    await loadBookings();
+    activeBookingId = bookingId;
+    renderBookingDrawer();
+    loadProviderOverview();
+  } catch (e) {
+    notify(e.message || 'Aufwand konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+async function publishDelivery(bookingId) {
+  const deliveryUrl = document.getElementById('drawerDeliveryUrl').value.trim();
+  const deliveryLabel = document.getElementById('drawerDeliveryLabel').value.trim();
+  const expiresInHours = parseInt(document.getElementById('drawerDeliveryHours').value || '72', 10);
+  try {
+    await fetchAPI(`/bookings/${bookingId}/delivery`, 'POST', { deliveryUrl, deliveryLabel, expiresInHours }, 'provider_jwt');
+    notify('Lieferung bereitgestellt.', 'success');
+    await loadBookings();
+    activeBookingId = bookingId;
+    renderBookingDrawer();
+  } catch (e) {
+    notify(e.message || 'Lieferung konnte nicht bereitgestellt werden.', 'error');
+  }
+}
+
+function openBookingDrawer(bookingId) {
+  activeBookingId = bookingId;
+  renderBookingDrawer();
+  document.getElementById('bookingDrawer').classList.add('open');
+  loadDrawerChatMessages();
+}
+
+function closeBookingDrawer() {
+  activeBookingId = null;
+  document.getElementById('bookingDrawer').classList.remove('open');
+}
+
+function renderBookingDrawer() {
+  const b = providerBookings.find(x => x.id === activeBookingId);
+  if (!b) return;
+  document.getElementById('bookingDrawerTitle').textContent = b.serviceTitle || 'Auftrag';
+  const revenue = Number(b.actualHours || 1) * Number(b.servicePrice || 0);
+  document.getElementById('bookingDrawerContent').innerHTML = `
+    <div class="drawer-grid">
+      <div class="drawer-section">
+        <h3>Eckdaten</h3>
+        <div style="display:flex;align-items:center;gap:.7rem;margin-bottom:.7rem">
+          ${avatarHtml(b.customerName, b.customerProfileImageUrl, 'profile-large')}
+          <div>
+            <p><strong>Kunde:</strong> ${esc(b.customerName || '-')}</p>
+            <p class="muted-text">Auftrag ${esc(b.id || '')}</p>
+          </div>
+        </div>
+        <p><strong>Termin:</strong> ${esc(b.bookingDate || '-')}</p>
+        <p><strong>Status:</strong> ${esc(b.status || '-')}</p>
+        <p><strong>Stundensatz:</strong> €${Number(b.servicePrice || 0).toFixed(2)}</p>
+      </div>
+      <div class="drawer-section">
+        <h3>Payment</h3>
+        <p><span class="payment-pill ${b.paymentStatus === 'PAID' ? 'is-paid' : ''}">${esc(b.paymentStatus || 'UNPAID')}</span></p>
+        <p><strong>Bezahlt am:</strong> ${b.paidAt ? formatDateTimeShort(b.paidAt) : '-'}</p>
+        <p><strong>Zahlungsart:</strong> ${esc(b.paymentProvider || '-')}</p>
+        ${b.paymentNote ? `<p><strong>Notiz:</strong> ${esc(b.paymentNote)}</p>` : ''}
+        <p><strong>Umsatz:</strong> €${revenue.toFixed(2)}</p>
+        ${b.paymentStatus !== 'PAID' ? `
+          <select class="form-input" id="drawerPaymentMethod" style="margin-top:.7rem">
+            <option value="CASH">Barzahlung</option>
+            <option value="BANK_TRANSFER">Banküberweisung</option>
+            <option value="MANUAL">Manuell geprüft</option>
+            <option value="PAYPAL">PayPal</option>
+            <option value="SEPA">SEPA</option>
+          </select>
+          <input class="form-input" id="drawerPaymentNote" style="margin-top:.6rem" placeholder="Zahlungsnotiz, z.B. vor Ort bar erhalten" />
+          <button class="btn btn-primary btn-sm" style="margin-top:.6rem" onclick="recordProviderPayment('${b.id}')">Zahlung verbuchen</button>
+        ` : ''}
+      </div>
+    </div>
+
+    <section class="drawer-section">
+      <h3>Zeitaufzeichnung</h3>
+      <div class="drawer-grid">
+        <input class="form-input" type="date" id="drawerWorkDate" value="${todayISO()}" />
+        <input class="form-input" type="number" id="drawerEntryHours" min="0.25" step="0.25" placeholder="Stunden" />
+      </div>
+      <input class="form-input" style="margin-top:.6rem" id="drawerEntryNote" placeholder="Tätigkeit / Notiz" />
+      <button class="btn btn-primary btn-sm" style="margin-top:.6rem" onclick="addTimeEntry('${b.id}')">Zeitbuchung hinzufügen</button>
+      <div style="margin-top:.8rem">
+        ${(b.timeEntries || []).length ? b.timeEntries.map(entry => `
+          <div class="time-entry-row">
+            <strong>${esc(entry.workDate || '-')}</strong>
+            <span>${Number(entry.hours || 0).toFixed(2)}h</span>
+            <span>${esc(entry.note || '')}</span>
+          </div>
+        `).join('') : `<p class="muted-text">Noch keine Zeitbuchungen.</p>`}
+      </div>
+      <div class="drawer-grid" style="margin-top:.8rem">
+        <input class="form-input" type="number" id="drawerTotalHours" min="0" step="0.25" value="${b.actualHours || ''}" placeholder="Gesamtstunden" />
+        <input class="form-input" id="drawerProviderNotes" value="${esc(b.providerNotes || '')}" placeholder="Interne Notiz" />
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-top:.6rem" onclick="saveWorkLog('${b.id}')">Gesamtaufwand speichern</button>
+    </section>
+
+    <section class="drawer-section">
+      <h3>Digitale Lieferung</h3>
+      <p class="muted-text">Der echte Link wird Kunden erst nach Zahlung ueber einen geschützten Backend-Link freigegeben.</p>
+      <input class="form-input" type="url" id="drawerDeliveryUrl" placeholder="Privater Download-Link" />
+      <div class="drawer-grid" style="margin-top:.6rem">
+        <input class="form-input" id="drawerDeliveryLabel" value="${esc(b.deliveryLabel || '')}" placeholder="Label, z.B. Finale Dateien" />
+        <input class="form-input" type="number" id="drawerDeliveryHours" min="1" max="336" value="72" />
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:.6rem" onclick="publishDelivery('${b.id}')">Lieferung bereitstellen</button>
+      ${b.deliveryUrl ? `<p style="margin-top:.7rem"><strong>Status:</strong> Bereitgestellt${b.deliveryExpiresAt ? ` bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</p>` : ''}
+    </section>
+
+    <section class="drawer-section">
+      <h3>Kommunikation</h3>
+      <div class="chat-thread" id="drawerChatThread"></div>
+      <div class="chat-compose">
+        <textarea class="form-input" id="drawerChatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+        <button class="btn btn-primary btn-sm" onclick="sendDrawerChatMessage()">Senden</button>
+      </div>
+    </section>
+  `;
+}
+
+async function recordProviderPayment(bookingId) {
+  const provider = document.getElementById('drawerPaymentMethod').value;
+  const note = document.getElementById('drawerPaymentNote').value.trim();
+  try {
+    await fetchAPI(`/bookings/${bookingId}/record-payment`, 'POST', { provider, note }, 'provider_jwt');
+    notify('Zahlung verbucht.', 'success');
+    await loadBookings();
+    activeBookingId = bookingId;
+    renderBookingDrawer();
+    loadDrawerChatMessages();
+    loadProviderOverview();
+  } catch (e) {
+    notify(e.message || 'Zahlung konnte nicht verbucht werden.', 'error');
+  }
+}
+
+async function loadDrawerChatMessages() {
+  const thread = document.getElementById('drawerChatThread');
+  if (!thread || !activeBookingId) return;
+  thread.innerHTML = `<div class="muted-text">Nachrichten werden geladen...</div>`;
+  try {
+    const messages = await fetchAPI(`/messages/booking/${activeBookingId}`, 'GET', null, 'provider_jwt');
+    thread.innerHTML = messages.length ? messages.map(renderChatMessage).join('') : `<div class="muted-text">Noch keine Nachrichten.</div>`;
+    thread.scrollTop = thread.scrollHeight;
+  } catch {
+    thread.innerHTML = `<div class="muted-text">Nachrichten konnten nicht geladen werden.</div>`;
+  }
+}
+
+async function sendDrawerChatMessage() {
+  const input = document.getElementById('drawerChatInput');
+  const content = input.value.trim();
+  if (!content || !activeBookingId) return;
+  try {
+    await fetchAPI(`/messages/booking/${activeBookingId}`, 'POST', { content }, 'provider_jwt');
+    input.value = '';
+    await loadDrawerChatMessages();
+  } catch (e) {
+    notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
+  }
+}
+
+async function addTimeEntry(bookingId) {
+  const workDate = document.getElementById('drawerWorkDate').value;
+  const hours = parseFloat(document.getElementById('drawerEntryHours').value);
+  const note = document.getElementById('drawerEntryNote').value.trim();
+  if (!workDate || Number.isNaN(hours) || hours <= 0) {
+    notify('Bitte Datum und positive Stunden angeben.', 'error');
+    return;
+  }
+  try {
+    await fetchAPI(`/bookings/${bookingId}/time-entries`, 'POST', { workDate, hours, note }, 'provider_jwt');
+    notify('Zeitbuchung hinzugefügt.', 'success');
+    await loadBookings();
+    activeBookingId = bookingId;
+    renderBookingDrawer();
+    loadProviderOverview();
+  } catch (e) {
+    notify(e.message || 'Zeitbuchung konnte nicht gespeichert werden.', 'error');
+  }
 }
 
 function serviceRatingPanel(s) {
@@ -605,6 +897,17 @@ function formatDateShort(value) {
   if (Number.isNaN(d.getTime())) return '–';
   return d.toLocaleDateString('de-AT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
+function formatDateTimeShort(value) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleString('de-AT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function todayISO() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().split('T')[0];
+}
 function shorten(value, max) {
   const str = String(value || '');
   return str.length > max ? `${str.slice(0, max - 1)}…` : str;
@@ -652,7 +955,7 @@ async function loadChatMessages(tokenKey) {
 
 function renderChatMessage(message) {
   return `
-    <div class="chat-message">
+    <div class="chat-message ${message.senderRole === 'PROVIDER' ? 'from-provider' : 'from-customer'}">
       <strong>${esc(message.senderName || 'User')}</strong>
       <p>${esc(message.content || '')}</p>
     </div>

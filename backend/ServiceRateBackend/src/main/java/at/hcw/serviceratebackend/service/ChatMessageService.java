@@ -68,6 +68,7 @@ public class ChatMessageService {
                 message.getId(),
                 message.getBooking().getId(),
                 fullName(message.getSender()),
+                message.getSender() != null ? message.getSender().getAccountType() : "UNKNOWN",
                 message.getContent(),
                 message.getCreatedAt()
         );

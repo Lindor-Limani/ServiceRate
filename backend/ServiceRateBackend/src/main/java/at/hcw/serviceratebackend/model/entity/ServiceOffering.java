@@ -28,6 +28,15 @@ public class ServiceOffering extends AuditableEntity {
     @Column(nullable = false)
     private Double price; // Simpler Fest- oder Stundenpreis
 
+    @Column(name = "estimated_hours")
+    private Double estimatedHours;
+
+    @Column(name = "image_url", length = 1000)
+    private String imageUrl;
+
+    @Column(name = "deliverable_type")
+    private String deliverableType = "ON_SITE"; // ON_SITE, DIGITAL, HYBRID
+
     @Column(name = "currency_code", nullable = false)
     private String currencyCode = "EUR";
 

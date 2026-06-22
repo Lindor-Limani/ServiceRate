@@ -18,9 +18,27 @@ const CAT_IMAGES = {
 };
 
 // Liefert das HTML für das Kategorie-Platzhalterbild oben auf einer Karte
-function catImage(category) {
+function catImage(category, imageUrl = '') {
+  if (imageUrl) {
+    return `<div class="card-image has-photo" style="background-image:url('${esc(imageUrl)}')"></div>`;
+  }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="card-image" style="background:${img.bg}">${img.emoji}</div>`;
+}
+
+function initials(name) {
+  return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function avatarHtml(name, imageUrl = '', extraClass = '') {
+  if (imageUrl) {
+    return `<div class="avatar has-photo ${esc(extraClass)}" style="background-image:url('${esc(imageUrl)}')" aria-label="${esc(name || 'Profilbild')}"></div>`;
+  }
+  const lower = String(name || '').toLowerCase();
+  const feminineHints = ['a', 'e', 'i'];
+  const firstName = lower.split(/\s+/)[0] || '';
+  const variant = feminineHints.includes(firstName.slice(-1)) ? 'avatar-pink' : 'avatar-blue';
+  return `<div class="avatar ${variant} ${esc(extraClass)}">${initials(name)}</div>`;
 }
 
 // Escaped Nutzereingaben, bevor sie ins DOM geschrieben werden (XSS-Schutz)

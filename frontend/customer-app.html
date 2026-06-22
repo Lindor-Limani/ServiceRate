@@ -19,6 +19,7 @@
 
   <div class="header-right">
     <span id="navUser" style="font-size:.84rem;color:var(--muted)"></span>
+    <button class="btn btn-ghost btn-sm" id="paymentSettingsBtn" style="display:none" onclick="openPaymentSettings()">Settings</button>
     <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none" onclick="logout()">Abmelden</button>
     <button class="btn btn-primary btn-sm" id="loginNavBtn" onclick="openAuthModal('login')">Anmelden</button>
     <a href="provider-dashboard.html" class="btn btn-ghost btn-sm">Für Handwerker →</a>
@@ -197,6 +198,78 @@
       <button class="btn btn-primary btn-full" onclick="resendVerificationMail()">Verifizierungs-Mail erneut senden</button>
       <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="switchAuthTab('login')">Zurück zum Login</button>
     </div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS MODAL ═════════════════════════════════════════════════════ -->
+<div class="overlay" id="paymentModal" onclick="if(event.target===this)closePaymentSettings()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h2 class="modal-title">Settings</h2>
+      <button class="modal-close" onclick="closePaymentSettings()">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Vorname</label>
+        <input class="form-input" id="settingsFirstName" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nachname</label>
+        <input class="form-input" id="settingsLastName" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Profilbild-URL</label>
+      <input class="form-input" id="settingsProfileImage" placeholder="https://..." />
+    </div>
+    <button class="btn btn-ghost btn-full" style="margin-bottom:1.2rem" onclick="saveCustomerProfile()">Profil speichern</button>
+    <h3 style="font-size:1rem;margin-bottom:.8rem">Zahlungsarten</h3>
+    <div id="paymentMethodsList" class="service-reviews-list"></div>
+    <div class="form-group">
+      <label class="form-label">Name auf der Karte</label>
+      <input class="form-input" id="cardHolder" placeholder="Max Muster" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Kartennummer</label>
+      <input class="form-input" id="cardNumber" inputmode="numeric" placeholder="4242 4242 4242 4242" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Monat</label>
+        <input class="form-input" id="cardMonth" type="number" min="1" max="12" placeholder="12" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Jahr</label>
+        <input class="form-input" id="cardYear" type="number" min="2026" placeholder="2028" />
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:.82rem;margin-bottom:1rem">
+      Kartennummer und CVC werden nicht im Backend gespeichert. In Produktion muss hier Stripe/PayPal tokenisieren.
+    </p>
+    <button class="btn btn-primary btn-full" onclick="savePaymentMethod()">Zahlungsart hinzufügen</button>
+  </div>
+</div>
+
+<!-- ══ CHECKOUT MODAL ══════════════════════════════════════════════════════ -->
+<div class="overlay" id="checkoutModal" onclick="if(event.target===this)closeCheckoutModal()">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <h2 class="modal-title">Sicher bezahlen</h2>
+      <button class="modal-close" onclick="closeCheckoutModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Zahlungsart</label>
+      <select class="form-input" id="checkoutMethod" onchange="renderCheckoutFields()">
+        <option value="STRIPE">Karte / Stripe</option>
+        <option value="PAYPAL">PayPal</option>
+        <option value="SEPA">SEPA-Lastschrift</option>
+      </select>
+    </div>
+    <div id="checkoutFields"></div>
+    <p style="color:var(--muted);font-size:.82rem;margin:1rem 0">
+      Demo-Checkout: Kartendaten bleiben tokenisiert, SEPA/PayPal werden hier nur als Zahlungsart vorgemerkt.
+    </p>
+    <button class="btn btn-primary btn-full" onclick="confirmBookingPayment()">Zahlung bestätigen</button>
   </div>
 </div>
 

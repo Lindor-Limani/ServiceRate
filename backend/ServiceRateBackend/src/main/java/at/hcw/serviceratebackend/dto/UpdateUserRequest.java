@@ -7,6 +7,7 @@ public record UpdateUserRequest(
         String password,
         String firstName,
         String lastName,
+        String profileImageUrl,
         String accountType,
         String status
 ) {

@@ -28,6 +28,9 @@ public class User extends AuditableEntity {
     @Column(name = "last_name")
     private String lastName;
 
+    @Column(name = "profile_image_url", length = 1000)
+    private String profileImageUrl;
+
     @Column(nullable = false)
     private String status = "ACTIVE";
 
@@ -36,6 +39,9 @@ public class User extends AuditableEntity {
 
     @Column(name = "email_verification_token")
     private String emailVerificationToken;
+
+    @Column(name = "email_verification_expires_at")
+    private OffsetDateTime emailVerificationExpiresAt;
 
     @Column(name = "password_reset_token")
     private String passwordResetToken;

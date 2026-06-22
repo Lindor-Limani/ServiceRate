@@ -203,6 +203,8 @@ header {
   gap: 1.25rem;
 }
 
+#customerBookingsGrid { padding-bottom: 4rem; }
+
 .service-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -230,6 +232,11 @@ header {
   justify-content: center;
   font-size: 3.2rem;
   border-radius: var(--radius) var(--radius) 0 0;
+}
+.card-image.has-photo {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* Wetter-Hinweis unter dem Datepicker im Buchungs-Modal */
@@ -354,6 +361,13 @@ header {
   display: flex; align-items: center; justify-content: center;
   font-size: .7rem; font-weight: 700; flex-shrink: 0;
 }
+.avatar.has-photo {
+  background-size: cover;
+  background-position: center;
+  color: transparent;
+}
+.avatar.avatar-blue { background: #2563eb; }
+.avatar.avatar-pink { background: #db2777; }
 .provider-name { font-size: .82rem; color: var(--muted); }
 .avail-dot { font-size: .75rem; color: #16a34a; font-weight: 500; }
 
@@ -816,6 +830,14 @@ header {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: .7rem .8rem;
+}
+.chat-message.from-customer {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+.chat-message.from-provider {
+  background: #ffedd5;
+  border-color: #fdba74;
 }
 .chat-message strong {
   display: block;
