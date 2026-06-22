@@ -31,8 +31,11 @@ public class ServiceOffering extends AuditableEntity {
     @Column(name = "estimated_hours")
     private Double estimatedHours;
 
-    @Column(name = "image_url", length = 1000)
+    @Column(name = "image_url", columnDefinition = "text")
     private String imageUrl;
+
+    @Column(name = "image_urls", columnDefinition = "text")
+    private String imageUrls;
 
     @Column(name = "deliverable_type")
     private String deliverableType = "ON_SITE"; // ON_SITE, DIGITAL, HYBRID

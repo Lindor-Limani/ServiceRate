@@ -202,8 +202,8 @@
 </div>
 
 <!-- ══ SETTINGS MODAL ═════════════════════════════════════════════════════ -->
-<div class="overlay" id="paymentModal" onclick="if(event.target===this)closePaymentSettings()">
-  <div class="modal" style="max-width:520px">
+<div class="overlay settings-overlay" id="paymentModal" onclick="if(event.target===this)closePaymentSettings()">
+  <aside class="settings-drawer">
     <div class="modal-header">
       <h2 class="modal-title">Settings</h2>
       <button class="modal-close" onclick="closePaymentSettings()">✕</button>
@@ -219,8 +219,10 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Profilbild-URL</label>
-      <input class="form-input" id="settingsProfileImage" placeholder="https://..." />
+      <label class="form-label">Profilbild hochladen</label>
+      <input class="form-input" type="file" id="settingsProfileFile" accept="image/*" onchange="handleCustomerProfileFile()" />
+      <input type="hidden" id="settingsProfileImage" />
+      <div class="image-preview-strip" id="settingsProfilePreview"></div>
     </div>
     <button class="btn btn-ghost btn-full" style="margin-bottom:1.2rem" onclick="saveCustomerProfile()">Profil speichern</button>
     <h3 style="font-size:1rem;margin-bottom:.8rem">Zahlungsarten</h3>
@@ -243,11 +245,15 @@
         <input class="form-input" id="cardYear" type="number" min="2026" placeholder="2028" />
       </div>
     </div>
+    <div class="form-group">
+      <label class="form-label">Prüfziffer</label>
+      <input class="form-input" id="cardCvc" inputmode="numeric" maxlength="4" placeholder="123" />
+    </div>
     <p style="color:var(--muted);font-size:.82rem;margin-bottom:1rem">
-      Kartennummer und CVC werden nicht im Backend gespeichert. In Produktion muss hier Stripe/PayPal tokenisieren.
+      Kartennummer und Prüfziffer werden nur lokal geprüft und nicht im Backend gespeichert. In Produktion muss hier Stripe/PayPal tokenisieren.
     </p>
     <button class="btn btn-primary btn-full" onclick="savePaymentMethod()">Zahlungsart hinzufügen</button>
-  </div>
+  </aside>
 </div>
 
 <!-- ══ CHECKOUT MODAL ══════════════════════════════════════════════════════ -->

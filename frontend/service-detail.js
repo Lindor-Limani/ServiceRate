@@ -1,4 +1,6 @@
 let detailService = null;
+let galleryImages = [];
+let galleryIndex = 0;
 
 (function initServiceDetail() {
   loadServiceDetail();
@@ -30,6 +32,7 @@ function renderServiceDetail() {
     <section class="service-detail-page">
       <div class="service-detail-main">
         ${catImage(s.category, s.imageUrl)}
+        ${renderServiceGallery(s.imageUrls)}
         <div class="service-detail-kicker">${CAT_LABELS[s.category] || s.category}</div>
         <h1>${esc(s.title)}</h1>
         <p class="service-detail-desc">${esc(s.description)}</p>
@@ -63,9 +66,59 @@ function renderServiceDetail() {
           <input class="form-input" type="date" id="detailBookingDate" min="${todayISO()}" />
         </div>
         <button class="btn btn-primary btn-full" onclick="bookDetailService()">Jetzt buchen</button>
+        <button class="btn btn-ghost btn-full" style="margin-top:.7rem" onclick="reportService()">Service melden</button>
       </aside>
     </section>
   `;
+}
+
+async function reportService() {
+  if (!localStorage.getItem('customer_jwt')) {
+    notify('Bitte melde dich an, um etwas zu melden.', 'error');
+    return;
+  }
+  const reason = prompt('Warum möchtest du diesen Service melden?');
+  if (!reason || !reason.trim()) return;
+  try {
+    await fetchAPI('/reports', 'POST', {
+      targetType: 'SERVICE',
+      targetId: detailService.id,
+      reason: reason.trim(),
+      details: `Gemeldet aus Service-Detail: ${detailService.title}`
+    }, 'customer_jwt');
+    notify('Report wurde an Admins gesendet.', 'success');
+  } catch (e) {
+    notify(e.message || 'Report konnte nicht gesendet werden.', 'error');
+  }
+}
+
+function renderServiceGallery(images) {
+  const list = Array.isArray(images) && images.length ? images.filter(Boolean) : (detailService.imageUrl ? [detailService.imageUrl] : []);
+  galleryImages = list;
+  if (!list.length) return '';
+  return `<div class="service-gallery-strip">${list.map((src, index) => `<img src="${esc(src)}" alt="Servicefoto ${index + 1}" loading="lazy" onerror="this.style.opacity=.35" onclick="openGallery(${index})">`).join('')}</div>`;
+}
+
+function openGallery(index) {
+  galleryIndex = index;
+  renderGalleryImage();
+  document.getElementById('galleryLightbox').classList.add('open');
+}
+
+function closeGallery() {
+  document.getElementById('galleryLightbox').classList.remove('open');
+}
+
+function moveGallery(delta) {
+  if (!galleryImages.length) return;
+  galleryIndex = (galleryIndex + delta + galleryImages.length) % galleryImages.length;
+  renderGalleryImage();
+}
+
+function renderGalleryImage() {
+  const img = document.getElementById('galleryImage');
+  img.src = galleryImages[galleryIndex] || '';
+  document.getElementById('galleryCounter').textContent = `${galleryIndex + 1} / ${galleryImages.length}`;
 }
 
 function serviceMetaLine(s) {

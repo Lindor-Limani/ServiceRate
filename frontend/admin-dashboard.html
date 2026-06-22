@@ -30,19 +30,11 @@
   <section id="adminContent" style="display:none">
     <div class="section-header">
       <h1 class="section-title">Admin Dashboard</h1>
-      <span class="count-pill">ServiceRate</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadAdminData()">Aktualisieren</button>
     </div>
     <div class="admin-stats" id="adminStats"></div>
-    <div class="admin-grid">
-      <section class="admin-panel">
-        <h2>User</h2>
-        <div id="adminUsers"></div>
-      </section>
-      <section class="admin-panel">
-        <h2>Services</h2>
-        <div id="adminServices"></div>
-      </section>
-    </div>
+    <div class="filter-chips" id="adminTabs"></div>
+    <section class="admin-panel" id="adminMainPanel"></section>
   </section>
 </main>
 <script src="utils.js"></script>

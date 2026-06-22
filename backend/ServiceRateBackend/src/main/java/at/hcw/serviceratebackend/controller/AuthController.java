@@ -94,6 +94,10 @@ public class AuthController {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Falsches Passwort.");
         }
+        if (!"ACTIVE".equals(user.getStatus())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body("Dein Account wurde deaktiviert. Bitte kontaktiere den Support.");
+        }
 
         String token = jwtUtil.generateToken(user.getEmail(), user.getAccountType());
         return ResponseEntity.ok(Map.of(

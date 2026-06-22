@@ -28,8 +28,11 @@ public class User extends AuditableEntity {
     @Column(name = "last_name")
     private String lastName;
 
-    @Column(name = "profile_image_url", length = 1000)
+    @Column(name = "profile_image_url", columnDefinition = "text")
     private String profileImageUrl;
+
+    @Column(name = "payout_iban")
+    private String payoutIban;
 
     @Column(nullable = false)
     private String status = "ACTIVE";

@@ -18,6 +18,15 @@ let activeCheckoutBookingId = null;
   document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') applyFilters();
   });
+  document.getElementById('cardNumber')?.addEventListener('input', e => {
+    e.target.value = formatCardNumberValue(e.target.value);
+  });
+  document.getElementById('cardCvc')?.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+  });
+  document.getElementById('checkoutIban')?.addEventListener('input', e => {
+    e.target.value = formatIbanValue(e.target.value);
+  });
 
   document.getElementById('filterChips').addEventListener('click', e => {
     const chip = e.target.closest('.chip');
@@ -573,9 +582,23 @@ async function loadCustomerProfile() {
     document.getElementById('settingsFirstName').value = user.firstName || '';
     document.getElementById('settingsLastName').value = user.lastName || '';
     document.getElementById('settingsProfileImage').value = user.profileImageUrl || '';
+    renderCustomerProfilePreview();
   } catch (e) {
     notify(e.message || 'Profil konnte nicht geladen werden.', 'error');
   }
+}
+
+async function handleCustomerProfileFile() {
+  const input = document.getElementById('settingsProfileFile');
+  const images = await readImageFiles(input, 1);
+  if (!images.length) return;
+  document.getElementById('settingsProfileImage').value = images[0];
+  renderCustomerProfilePreview();
+}
+
+function renderCustomerProfilePreview() {
+  const image = document.getElementById('settingsProfileImage').value;
+  document.getElementById('settingsProfilePreview').innerHTML = image ? `<img src="${esc(image)}" alt="Profilbild Vorschau">` : '';
 }
 
 async function saveCustomerProfile() {
@@ -599,7 +622,16 @@ async function savePaymentMethod() {
   const holderName = document.getElementById('cardHolder').value.trim();
   const expiryMonth = parseInt(document.getElementById('cardMonth').value, 10);
   const expiryYear = parseInt(document.getElementById('cardYear').value, 10);
-  if (rawNumber.length < 12 || !holderName || !expiryMonth || !expiryYear) {
+  const cvc = document.getElementById('cardCvc').value.trim();
+  if (!isValidCardNumber(rawNumber)) {
+    notify('Kartennummer ist ungültig.', 'error');
+    return;
+  }
+  if (!/^\d{3,4}$/.test(cvc)) {
+    notify('Bitte gültige Prüfziffer eingeben.', 'error');
+    return;
+  }
+  if (!holderName || !expiryMonth || !expiryYear) {
     notify('Bitte Kartendaten vollständig eingeben.', 'error');
     return;
   }
@@ -616,6 +648,7 @@ async function savePaymentMethod() {
     editingPaymentMethodId = null;
     document.getElementById('cardNumber').value = '';
     document.getElementById('cardHolder').value = '';
+    document.getElementById('cardCvc').value = '';
     notify('Zahlungsart gespeichert.', 'success');
     loadPaymentMethods();
   } catch (e) {
@@ -631,6 +664,7 @@ function editPaymentMethod(id) {
   document.getElementById('cardMonth').value = method.expiryMonth || '';
   document.getElementById('cardYear').value = method.expiryYear || '';
   document.getElementById('cardNumber').value = '';
+  document.getElementById('cardCvc').value = '';
   notify('Bitte Kartennummer erneut eingeben. Sie wird nicht gespeichert.', 'info');
 }
 
@@ -662,11 +696,31 @@ function closeCheckoutModal() {
   activeCheckoutBookingId = null;
 }
 
-function renderCheckoutFields() {
+async function renderCheckoutFields() {
   const method = document.getElementById('checkoutMethod').value;
   const host = document.getElementById('checkoutFields');
   if (method === 'STRIPE') {
-    host.innerHTML = `<div class="review-loading">Gespeicherte Karte wird verwendet. Du kannst Karten in den Settings ändern.</div>`;
+    host.innerHTML = `<div class="review-loading">Zahlungsmethoden werden geladen...</div>`;
+    try {
+      const methods = await fetchAPI('/payment-methods', 'GET', null, 'customer_jwt');
+      cachedPaymentMethods = Array.isArray(methods) ? methods : [];
+      if (!cachedPaymentMethods.length) {
+        host.innerHTML = `
+          <div class="review-empty">Keine gespeicherte Karte vorhanden.</div>
+          <button class="btn btn-ghost btn-full" onclick="closeCheckoutModal();openPaymentSettings()">Neue Zahlungsmethode hinzufügen</button>`;
+        return;
+      }
+      host.innerHTML = `
+        <div class="form-group">
+          <label class="form-label">Gespeicherte Zahlungsmethode</label>
+          <select class="form-input" id="checkoutPaymentMethodId">
+            ${cachedPaymentMethods.map(m => `<option value="${esc(m.id)}">${esc(m.brand)} •••• ${esc(m.last4)} · ${String(m.expiryMonth).padStart(2, '0')}/${m.expiryYear}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-ghost btn-full" onclick="closeCheckoutModal();openPaymentSettings()">Zahlungsmethode ändern / hinzufügen</button>`;
+    } catch {
+      host.innerHTML = `<div class="review-empty">Zahlungsmethoden konnten nicht geladen werden.</div>`;
+    }
     return;
   }
   if (method === 'PAYPAL') {
@@ -686,6 +740,9 @@ function renderCheckoutFields() {
       <label class="form-label">IBAN</label>
       <input class="form-input" id="checkoutIban" placeholder="AT00 0000 0000 0000 0000" />
     </div>`;
+  document.getElementById('checkoutIban')?.addEventListener('input', e => {
+    e.target.value = formatIbanValue(e.target.value);
+  });
 }
 
 async function confirmBookingPayment() {
@@ -694,8 +751,7 @@ async function confirmBookingPayment() {
   const method = document.getElementById('checkoutMethod').value;
   try {
     if (method === 'STRIPE') {
-      const methods = await fetchAPI('/payment-methods', 'GET', null, 'customer_jwt');
-      if (!Array.isArray(methods) || methods.length === 0) {
+      if (!document.getElementById('checkoutPaymentMethodId')) {
         notify('Bitte zuerst eine Karte in den Settings hinterlegen.', 'info');
         closeCheckoutModal();
         openPaymentSettings();
@@ -708,7 +764,7 @@ async function confirmBookingPayment() {
     }
     if (method === 'SEPA') {
       const iban = document.getElementById('checkoutIban').value.replace(/\s/g, '');
-      if (iban.length < 15 || !document.getElementById('checkoutSepaHolder').value.trim()) {
+      if (!isValidIbanBasic(iban) || !document.getElementById('checkoutSepaHolder').value.trim()) {
         notify('Bitte SEPA-Daten vollständig eingeben.', 'error');
         return;
       }

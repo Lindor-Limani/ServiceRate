@@ -24,7 +24,8 @@ public class ProviderProfileService {
                 .orElseThrow(() -> new IllegalArgumentException("Anbieter nicht gefunden"));
 
         List<ServiceOfferingResponse> services = serviceOfferingRepository.findByProviderId(providerId).stream()
-                .map(service -> serviceOfferingService.getById(service.getId()))
+                .filter(service -> "ACTIVE".equals(service.getStatus()))
+                .map(service -> serviceOfferingService.getByIdForAdmin(service.getId()))
                 .toList();
 
         long reviewCount = services.stream()

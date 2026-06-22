@@ -8,6 +8,8 @@ let editMode      = false;
 let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalender-Navigation)
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
 let activeBookingId = null;
+let serviceImageUrls = [];
+let providerPaymentMethods = [];
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
@@ -32,8 +34,21 @@ function showApp() {
   } catch { /* ignore */ }
 
   updateProviderVerifyBanner();
+  wireProviderFormatting();
   loadServices();
   loadProviderOverview();
+}
+
+function wireProviderFormatting() {
+  document.getElementById('providerCardNumber')?.addEventListener('input', e => {
+    e.target.value = formatCardNumberValue(e.target.value);
+  });
+  document.getElementById('providerCardCvc')?.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+  });
+  document.getElementById('providerPayoutIban')?.addEventListener('input', e => {
+    e.target.value = formatIbanValue(e.target.value);
+  });
 }
 
 async function loadProviderOverview() {
@@ -97,6 +112,7 @@ function doLogout() {
 async function openProviderSettings() {
   document.getElementById('providerSettingsModal').classList.add('open');
   await loadProviderProfileSettings();
+  await loadProviderPaymentMethods();
 }
 
 function closeProviderSettings() {
@@ -114,9 +130,22 @@ async function loadProviderProfileSettings() {
     document.getElementById('providerSettingsProfileImage').value = user.profileImageUrl || '';
     document.getElementById('providerSettingsName').textContent = name;
     document.getElementById('providerSettingsAvatar').innerHTML = avatarHtml(name, user.profileImageUrl, 'profile-large');
+    document.getElementById('providerSettingsProfilePreview').innerHTML = user.profileImageUrl ? `<img src="${esc(user.profileImageUrl)}" alt="Profilbild Vorschau">` : '';
+    document.getElementById('providerPayoutIban').value = user.payoutIban || '';
   } catch (e) {
     notify(e.message || 'Profil konnte nicht geladen werden.', 'error');
   }
+}
+
+async function handleProviderProfileFile() {
+  const input = document.getElementById('providerSettingsProfileFile');
+  const images = await readImageFiles(input, 1);
+  if (!images.length) return;
+  document.getElementById('providerSettingsProfileImage').value = images[0];
+  document.getElementById('providerSettingsProfilePreview').innerHTML = `<img src="${esc(images[0])}" alt="Profilbild Vorschau">`;
+  const first = document.getElementById('providerSettingsFirstName').value;
+  const last = document.getElementById('providerSettingsLastName').value;
+  document.getElementById('providerSettingsAvatar').innerHTML = avatarHtml(`${first} ${last}`.trim(), images[0], 'profile-large');
 }
 
 async function saveProviderProfile() {
@@ -125,7 +154,8 @@ async function saveProviderProfile() {
   const payload = {
     firstName: document.getElementById('providerSettingsFirstName').value.trim(),
     lastName: document.getElementById('providerSettingsLastName').value.trim(),
-    profileImageUrl: document.getElementById('providerSettingsProfileImage').value.trim()
+    profileImageUrl: document.getElementById('providerSettingsProfileImage').value.trim(),
+    payoutIban: document.getElementById('providerPayoutIban').value.trim()
   };
   try {
     const user = await fetchAPI(`/users/${userId}`, 'PUT', payload, 'provider_jwt');
@@ -138,6 +168,65 @@ async function saveProviderProfile() {
     loadProviderOverview();
   } catch (e) {
     notify(e.message || 'Profil konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+async function loadProviderPaymentMethods() {
+  const host = document.getElementById('providerPaymentMethodsList');
+  host.innerHTML = `<div class="muted-text">Zahlungsinfos werden geladen...</div>`;
+  try {
+    providerPaymentMethods = await fetchAPI('/payment-methods', 'GET', null, 'provider_jwt');
+    host.innerHTML = providerPaymentMethods.length ? providerPaymentMethods.map(m => `
+      <div class="drawer-section" style="margin-top:0;margin-bottom:.6rem">
+        <strong>${esc(m.brand)} •••• ${esc(m.last4)}</strong>
+        <p class="muted-text">${esc(m.holderName || '')} · gültig bis ${String(m.expiryMonth).padStart(2, '0')}/${m.expiryYear}</p>
+      </div>
+    `).join('') : `<div class="muted-text">Noch keine Zahlungsinfo gespeichert.</div>`;
+  } catch {
+    host.innerHTML = `<div class="muted-text">Zahlungsinfos konnten nicht geladen werden.</div>`;
+  }
+}
+
+async function saveProviderPaymentMethod() {
+  const rawNumber = document.getElementById('providerCardNumber').value.replace(/\D/g, '');
+  const holderName = document.getElementById('providerCardHolder').value.trim();
+  const expiryMonth = parseInt(document.getElementById('providerCardMonth').value, 10);
+  const expiryYear = parseInt(document.getElementById('providerCardYear').value, 10);
+  const cvc = document.getElementById('providerCardCvc').value.trim();
+  const payoutIban = document.getElementById('providerPayoutIban').value;
+  if (!isValidIbanBasic(payoutIban)) {
+    notify('Bitte gültige Auszahlungs-IBAN eingeben.', 'error');
+    return;
+  }
+  if (!isValidCardNumber(rawNumber)) {
+    notify('Kartennummer ist ungültig.', 'error');
+    return;
+  }
+  if (!/^\d{3,4}$/.test(cvc)) {
+    notify('Bitte gültige Prüfziffer eingeben.', 'error');
+    return;
+  }
+  if (!holderName || !expiryMonth || !expiryYear) {
+    notify('Bitte Zahlungsinfos vollständig eingeben.', 'error');
+    return;
+  }
+  const payload = {
+    brand: detectCardBrand(rawNumber),
+    last4: rawNumber.slice(-4),
+    holderName,
+    expiryMonth,
+    expiryYear,
+    providerToken: `tok_provider_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`,
+    defaultMethod: true
+  };
+  try {
+    await fetchAPI('/payment-methods', 'POST', payload, 'provider_jwt');
+    document.getElementById('providerCardNumber').value = '';
+    document.getElementById('providerCardCvc').value = '';
+    notify('Zahlungsinfo gespeichert.', 'success');
+    loadProviderPaymentMethods();
+  } catch (e) {
+    notify(e.message || 'Zahlungsinfo konnte nicht gespeichert werden.', 'error');
   }
 }
 
@@ -309,6 +398,8 @@ function openCreateModal() {
   document.getElementById('svcHours').value            = '';
   document.getElementById('svcDeliverable').value      = 'ON_SITE';
   document.getElementById('svcImage').value            = '';
+  serviceImageUrls = [];
+  renderServiceImagePreview();
   document.getElementById('svcZip').value              = '';
   document.getElementById('svcZipGroup').style.display = 'block'; // PLZ nur beim Erstellen
   document.getElementById('serviceModal').classList.add('open');
@@ -327,6 +418,8 @@ function openEditModal(id) {
   document.getElementById('svcHours').value          = s.estimatedHours || '';
   document.getElementById('svcDeliverable').value    = s.deliverableType || 'ON_SITE';
   document.getElementById('svcImage').value          = s.imageUrl || '';
+  serviceImageUrls = Array.isArray(s.imageUrls) && s.imageUrls.length ? s.imageUrls : (s.imageUrl ? [s.imageUrl] : []);
+  renderServiceImagePreview();
   // Der Ort lässt sich beim Bearbeiten nicht ändern (Backend-PUT kennt keine PLZ) -> Feld ausblenden
   document.getElementById('svcZipGroup').style.display = 'none';
   document.getElementById('serviceModal').classList.add('open');
@@ -343,7 +436,7 @@ async function saveService() {
   const price    = parseFloat(document.getElementById('svcPrice').value);
   const estimatedHours = parseFloat(document.getElementById('svcHours').value);
   const deliverableType = document.getElementById('svcDeliverable').value;
-  const imageUrl = document.getElementById('svcImage').value.trim();
+  const imageUrl = serviceImageUrls[0] || document.getElementById('svcImage').value.trim();
 
   if (!title || !desc || isNaN(price) || price <= 0) {
     notify('Bitte alle Felder korrekt ausfüllen.', 'error'); return;
@@ -355,7 +448,8 @@ async function saveService() {
     price,
     estimatedHours: Number.isNaN(estimatedHours) ? null : estimatedHours,
     deliverableType,
-    imageUrl
+    imageUrl,
+    imageUrls: serviceImageUrls
   };
 
   if (editMode) {
@@ -381,6 +475,29 @@ async function saveService() {
       notify(e.message || 'Fehler beim Erstellen.', 'error');
     }
   }
+}
+
+async function handleServiceImageFiles() {
+  const input = document.getElementById('svcImages');
+  const images = await readImageFiles(input, 10);
+  serviceImageUrls = images;
+  document.getElementById('svcImage').value = images[0] || '';
+  renderServiceImagePreview();
+}
+
+function renderServiceImagePreview() {
+  const host = document.getElementById('svcImagePreview');
+  if (!host) return;
+  host.innerHTML = serviceImageUrls.length
+    ? serviceImageUrls.map(src => `<img src="${esc(src)}" alt="Servicefoto Vorschau">`).join('')
+    : `<span class="muted-text">Noch keine Bilder ausgewählt.</span>`;
+}
+
+function detectCardBrand(number) {
+  if (number.startsWith('4')) return 'Visa';
+  if (/^5[1-5]/.test(number)) return 'Mastercard';
+  if (/^3[47]/.test(number)) return 'Amex';
+  return 'Card';
 }
 
 // ── Löschen ───────────────────────────────────────────────────────────────────

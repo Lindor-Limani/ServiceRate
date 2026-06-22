@@ -1,5 +1,7 @@
 package at.hcw.serviceratebackend.dto;
 
+import java.util.List;
+
 public record UpdateServiceRequest(
         String title,
         String description,
@@ -7,5 +9,6 @@ public record UpdateServiceRequest(
         Double price,
         Double estimatedHours,
         String imageUrl,
+        List<String> imageUrls,
         String deliverableType
 ) {}

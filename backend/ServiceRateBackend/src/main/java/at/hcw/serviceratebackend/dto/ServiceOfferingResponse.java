@@ -14,6 +14,7 @@ public record ServiceOfferingResponse(
         Double price,
         Double estimatedHours,
         String imageUrl,
+        List<String> imageUrls,
         String deliverableType,
         String status,
         String location,        // Ortsname, ermittelt aus der PLZ (Zippopotam.us)

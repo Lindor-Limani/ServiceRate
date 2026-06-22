@@ -367,6 +367,31 @@
       backdrop-filter: blur(2px);
     }
     .overlay.open { display: flex; }
+    .settings-overlay {
+      align-items: stretch;
+      justify-content: flex-end;
+    }
+    .settings-drawer {
+      background: var(--surface);
+      width: min(560px, 100vw);
+      height: 100vh;
+      overflow-y: auto;
+      padding: 2rem;
+      box-shadow: -18px 0 44px rgba(0,0,0,.18);
+    }
+    .image-preview-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+      margin: .65rem 0 1rem;
+    }
+    .image-preview-strip img {
+      width: 64px;
+      height: 64px;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
 
     .modal {
       background: var(--surface);
@@ -834,8 +859,8 @@
 </div>
 
 <!-- ══ PROVIDER SETTINGS MODAL ════════════════════════════════════════════ -->
-<div class="overlay" id="providerSettingsModal" onclick="if(event.target===this)closeProviderSettings()">
-  <div class="modal" style="max-width:520px">
+<div class="overlay settings-overlay" id="providerSettingsModal" onclick="if(event.target===this)closeProviderSettings()">
+  <aside class="settings-drawer">
     <div class="modal-header">
       <h2 class="modal-title">Settings</h2>
       <button class="modal-close" onclick="closeProviderSettings()">✕</button>
@@ -858,18 +883,45 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Profilbild-URL</label>
-      <input class="form-input" id="providerSettingsProfileImage" placeholder="https://..." />
+      <label class="form-label">Profilbild hochladen</label>
+      <input class="form-input" type="file" id="providerSettingsProfileFile" accept="image/*" onchange="handleProviderProfileFile()" />
+      <input type="hidden" id="providerSettingsProfileImage" />
+      <div class="image-preview-strip" id="providerSettingsProfilePreview"></div>
+    </div>
+    <h3 style="font-size:1rem;margin:1.2rem 0 .8rem">Zahlungs- und Auszahlungsinfos</h3>
+    <div id="providerPaymentMethodsList" class="service-reviews-list"></div>
+    <div class="form-group">
+      <label class="form-label">Name auf der Karte</label>
+      <input class="form-input" id="providerCardHolder" placeholder="ServiceRate Provider" />
     </div>
     <div class="form-group">
-      <label class="form-label">Auszahlungsnotiz</label>
-      <input class="form-input" id="providerPayoutNote" placeholder="z.B. IBAN intern hinterlegt / Stripe Connect geplant" />
+      <label class="form-label">Kartennummer</label>
+      <input class="form-input" id="providerCardNumber" inputmode="numeric" placeholder="4242 4242 4242 4242" />
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+      <div class="form-group">
+        <label class="form-label">Monat</label>
+        <input class="form-input" id="providerCardMonth" type="number" min="1" max="12" placeholder="12" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Jahr</label>
+        <input class="form-input" id="providerCardYear" type="number" min="2026" placeholder="2028" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prüfziffer</label>
+        <input class="form-input" id="providerCardCvc" inputmode="numeric" maxlength="4" placeholder="123" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Auszahlungs-IBAN</label>
+      <input class="form-input" id="providerPayoutIban" placeholder="AT00 0000 0000 0000 0000" />
     </div>
     <p class="muted-text" style="margin-bottom:1rem">
       Bank- und Kartendaten werden hier nicht im Klartext gespeichert. Für echte Auszahlungen sollte Stripe Connect oder ein vergleichbarer Anbieter angebunden werden.
     </p>
+    <button class="btn btn-ghost btn-full" style="margin-bottom:.75rem" onclick="saveProviderPaymentMethod()">Zahlungsinfo speichern</button>
     <button class="btn btn-primary btn-full" onclick="saveProviderProfile()">Profil speichern</button>
-  </div>
+  </aside>
 </div>
 
 <!-- ══ BOOKING PROJECT DRAWER ═════════════════════════════════════════════ -->
@@ -935,8 +987,10 @@
     </div>
 
     <div class="form-group">
-      <label class="form-label">Bild-URL (optional)</label>
-      <input class="form-input" type="url" id="svcImage" placeholder="https://..." />
+      <label class="form-label">Servicefotos (max. 10)</label>
+      <input class="form-input" type="file" id="svcImages" accept="image/*" multiple onchange="handleServiceImageFiles()" />
+      <input type="hidden" id="svcImage" />
+      <div class="image-preview-strip" id="svcImagePreview"></div>
     </div>
 
     <div class="form-group" id="svcZipGroup">

@@ -14,10 +14,16 @@ public class SchemaMigrationConfig {
     @PostConstruct
     public void migrate() {
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP WITH TIME ZONE");
-        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR(1000)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_iban VARCHAR(64)");
+        tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url TYPE TEXT");
+        tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url SET DATA TYPE TEXT");
 
         jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS estimated_hours DOUBLE PRECISION");
-        jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS image_url VARCHAR(1000)");
+        jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS image_url TEXT");
+        jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS image_urls TEXT");
+        tryExecute("ALTER TABLE service_offerings ALTER COLUMN image_url TYPE TEXT");
+        tryExecute("ALTER TABLE service_offerings ALTER COLUMN image_url SET DATA TYPE TEXT");
         jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS deliverable_type VARCHAR(255) DEFAULT 'ON_SITE'");
         jdbcTemplate.execute("UPDATE service_offerings SET deliverable_type = 'ON_SITE' WHERE deliverable_type IS NULL");
 
@@ -63,5 +69,27 @@ public class SchemaMigrationConfig {
                     updated_at TIMESTAMP WITH TIME ZONE
                 )
                 """);
+
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS reports (
+                    id UUID PRIMARY KEY,
+                    reporter_id UUID NOT NULL REFERENCES users(id),
+                    target_type VARCHAR(255) NOT NULL,
+                    target_id UUID NOT NULL,
+                    reason VARCHAR(255) NOT NULL,
+                    details TEXT,
+                    status VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE
+                )
+                """);
+    }
+
+    private void tryExecute(String sql) {
+        try {
+            jdbcTemplate.execute(sql);
+        } catch (Exception ignored) {
+            // H2 and PostgreSQL use different ALTER COLUMN syntax. One successful variant is enough.
+        }
     }
 }

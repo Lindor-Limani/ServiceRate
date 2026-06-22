@@ -41,6 +41,63 @@ function avatarHtml(name, imageUrl = '', extraClass = '') {
   return `<div class="avatar ${variant} ${esc(extraClass)}">${initials(name)}</div>`;
 }
 
+function readImageFiles(input, maxFiles = 1) {
+  const files = Array.from(input.files || []);
+  if (files.length > maxFiles) {
+    notify(`Bitte maximal ${maxFiles} Bild${maxFiles === 1 ? '' : 'er'} auswählen.`, 'error');
+    input.value = '';
+    return Promise.resolve([]);
+  }
+  const tooLarge = files.find(file => file.size > 900 * 1024);
+  if (tooLarge) {
+    notify('Bitte Bilder unter 900 KB verwenden.', 'error');
+    input.value = '';
+    return Promise.resolve([]);
+  }
+  const invalid = files.find(file => !file.type.startsWith('image/'));
+  if (invalid) {
+    notify('Bitte nur Bilddateien auswählen.', 'error');
+    input.value = '';
+    return Promise.resolve([]);
+  }
+  return Promise.all(files.map(file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  })));
+}
+
+function formatCardNumberValue(value) {
+  return String(value || '').replace(/\D/g, '').slice(0, 19).replace(/(.{4})/g, '$1 ').trim();
+}
+
+function isValidCardNumber(number) {
+  const digits = String(number || '').replace(/\D/g, '');
+  if (digits.length < 12 || digits.length > 19) return false;
+  let sum = 0;
+  let shouldDouble = false;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let digit = Number(digits[i]);
+    if (shouldDouble) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    shouldDouble = !shouldDouble;
+  }
+  return sum % 10 === 0;
+}
+
+function formatIbanValue(value) {
+  return String(value || '').replace(/\s/g, '').toUpperCase().slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
+}
+
+function isValidIbanBasic(value) {
+  const iban = String(value || '').replace(/\s/g, '').toUpperCase();
+  return /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban);
+}
+
 // Escaped Nutzereingaben, bevor sie ins DOM geschrieben werden (XSS-Schutz)
 function esc(str) {
   return String(str || '')

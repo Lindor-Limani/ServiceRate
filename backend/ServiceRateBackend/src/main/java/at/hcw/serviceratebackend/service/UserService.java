@@ -126,6 +126,7 @@ public class UserService {
         if (request.firstName() != null) user.setFirstName(request.firstName());
         if (request.lastName() != null) user.setLastName(request.lastName());
         if (request.profileImageUrl() != null) user.setProfileImageUrl(trimOrNull(request.profileImageUrl()));
+        if (request.payoutIban() != null) user.setPayoutIban(trimOrNull(request.payoutIban()));
         if (request.accountType() != null && !request.accountType().isBlank()) {
             user.setAccountType(normalizeAllowedPublicAccountType(request.accountType()));
         }
@@ -182,6 +183,7 @@ public class UserService {
                 user.getFirstName(),
                 user.getLastName(),
                 user.getProfileImageUrl(),
+                user.getPayoutIban(),
                 user.getAccountType(),
                 user.getStatus()
         );

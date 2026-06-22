@@ -4,7 +4,14 @@ public record AdminStatsResponse(
         long users,
         long providers,
         long customers,
+        long admins,
         long services,
         long bookings,
-        long reviews
+        long reviews,
+        double averageRating,
+        long openBookings,
+        long completedBookings,
+        long cancelledBookings,
+        long openReports,
+        double paidRevenue
 ) {}

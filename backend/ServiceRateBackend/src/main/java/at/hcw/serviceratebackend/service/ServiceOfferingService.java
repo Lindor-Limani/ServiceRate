@@ -11,6 +11,8 @@ import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,7 +57,9 @@ public class ServiceOfferingService {
         service.setCategory(request.category());
         service.setPrice(request.price());
         service.setEstimatedHours(request.estimatedHours());
-        service.setImageUrl(blankToNull(request.imageUrl()));
+        List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
+        service.setImageUrl(imageUrls.isEmpty() ? null : imageUrls.get(0));
+        service.setImageUrls(serializeImageUrls(imageUrls));
         service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
         service.setLocation(location);
         service.setStatus("ACTIVE");
@@ -65,11 +69,19 @@ public class ServiceOfferingService {
 
     public List<ServiceOfferingResponse> getAll() {
         return serviceRepository.findAll().stream()
+                .filter(service -> "ACTIVE".equals(service.getStatus()))
                 .map(this::mapToResponse)
                 .toList();
     }
 
     public ServiceOfferingResponse getById(UUID id) {
+        return serviceRepository.findById(id)
+                .filter(service -> "ACTIVE".equals(service.getStatus()))
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
+    }
+
+    public ServiceOfferingResponse getByIdForAdmin(UUID id) {
         return serviceRepository.findById(id)
                 .map(this::mapToResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
@@ -97,7 +109,9 @@ public class ServiceOfferingService {
         service.setCategory(request.category());
         service.setPrice(request.price());
         service.setEstimatedHours(request.estimatedHours());
-        service.setImageUrl(blankToNull(request.imageUrl()));
+        List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
+        service.setImageUrl(imageUrls.isEmpty() ? null : imageUrls.get(0));
+        service.setImageUrls(serializeImageUrls(imageUrls));
         service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
 
         return mapToResponse(serviceRepository.save(service));
@@ -125,6 +139,7 @@ public class ServiceOfferingService {
                 service.getPrice(),
                 service.getEstimatedHours(),
                 service.getImageUrl(),
+                parseImageUrls(service.getImageUrls(), service.getImageUrl()),
                 service.getDeliverableType(),
                 service.getStatus(),
                 service.getLocation(),
@@ -154,5 +169,43 @@ public class ServiceOfferingService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private List<String> normalizeImageUrls(List<String> imageUrls, String fallbackImageUrl) {
+        List<String> values = new ArrayList<>();
+        if (imageUrls != null) {
+            List<String> cleaned = imageUrls.stream()
+                    .map(this::blankToNull)
+                    .filter(value -> value != null)
+                    .toList();
+            if (cleaned.size() > 10) {
+                throw new IllegalArgumentException("Maximal 10 Bilder pro Service erlaubt.");
+            }
+            values.addAll(cleaned);
+        }
+        String fallback = blankToNull(fallbackImageUrl);
+        if (values.isEmpty() && fallback != null) {
+            values.add(fallback);
+        }
+        return values;
+    }
+
+    private String serializeImageUrls(List<String> imageUrls) {
+        return imageUrls == null || imageUrls.isEmpty() ? null : String.join("\n", imageUrls);
+    }
+
+    private List<String> parseImageUrls(String imageUrls, String fallbackImageUrl) {
+        List<String> parsed = imageUrls == null || imageUrls.isBlank()
+                ? new ArrayList<>()
+                : new ArrayList<>(Arrays.stream(imageUrls.split("\\R"))
+                        .map(this::blankToNull)
+                        .filter(value -> value != null)
+                        .limit(10)
+                        .toList());
+        String fallback = blankToNull(fallbackImageUrl);
+        if (parsed.isEmpty() && fallback != null) {
+            parsed.add(fallback);
+        }
+        return parsed;
     }
 }

@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import at.hcw.serviceratebackend.repository.UserRepository;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -20,6 +21,7 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(
@@ -41,6 +43,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (jwtUtil.isTokenValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
             String email       = jwtUtil.extractSubject(token);
             String accountType = jwtUtil.extractAccountType(token);
+
+            boolean active = userRepository.findByEmail(email)
+                    .map(user -> "ACTIVE".equals(user.getStatus()))
+                    .orElse(false);
+            if (!active) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"message\":\"Dein Account wurde deaktiviert. Bitte kontaktiere den Support.\"}");
+                return;
+            }
 
             // Die Rolle leiten wir aus dem accountType ab (z.B. ROLE_PROVIDER / ROLE_CUSTOMER)
             var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + accountType));

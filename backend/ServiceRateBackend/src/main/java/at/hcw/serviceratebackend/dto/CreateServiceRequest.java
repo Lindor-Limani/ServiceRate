@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.dto;
 
 import java.util.UUID;
+import java.util.List;
 
 public record CreateServiceRequest(
         UUID providerId, // Wer bietet das an? (Die ID, die du gerade in der Datenbank gesehen hast!)
@@ -10,6 +11,7 @@ public record CreateServiceRequest(
         Double price,
         Double estimatedHours,
         String imageUrl,
+        List<String> imageUrls,
         String deliverableType,
         String zipCode   // Österreichische PLZ; wird über Zippopotam.us in einen Ortsnamen aufgelöst
 ) {}

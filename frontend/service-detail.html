@@ -23,6 +23,14 @@
   </div>
 </main>
 
+<div class="gallery-lightbox" id="galleryLightbox" onclick="if(event.target===this)closeGallery()">
+  <button class="modal-close gallery-close" onclick="closeGallery()">✕</button>
+  <button class="gallery-nav gallery-prev" onclick="moveGallery(-1)">‹</button>
+  <img id="galleryImage" alt="Servicefoto groß" />
+  <button class="gallery-nav gallery-next" onclick="moveGallery(1)">›</button>
+  <div class="gallery-counter" id="galleryCounter"></div>
+</div>
+
 <script src="utils.js"></script>
 <script src="api.js"></script>
 <script src="service-detail.js"></script>

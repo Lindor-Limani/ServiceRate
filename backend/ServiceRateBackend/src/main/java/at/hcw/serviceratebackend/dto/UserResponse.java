@@ -8,6 +8,7 @@ public record UserResponse(
         String firstName,
         String lastName,
         String profileImageUrl,
+        String payoutIban,
         String accountType,
         String status
 ) {
