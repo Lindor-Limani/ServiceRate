@@ -659,23 +659,26 @@
       <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderResetForm()">Passwort vergessen?</button>
     </div>
 
-    <div id="providerResetForm" style="display:none">
+    <div id="providerForgotForm" style="display:none">
       <div class="form-group">
         <label class="form-label">E-Mail</label>
         <input class="form-input" type="email" id="forgotEmail" placeholder="handwerker@beispiel.at" />
       </div>
-      <button class="btn btn-primary btn-full" onclick="requestPasswordReset()">Reset vorbereiten</button>
-      <div class="form-group" id="resetTokenGroup" style="display:none;margin-top:1rem">
-        <label class="form-label">Reset-Token</label>
-        <input class="form-input" type="text" id="resetToken" />
-      </div>
+      <button class="btn btn-primary btn-full" onclick="requestPasswordReset()">Reset-Mail senden</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderPasswordForm()">Ich habe den Reset-Link geöffnet</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderLoginForm()">Zurück zum Login</button>
+      <p id="forgotHint" style="display:none;margin-top:1rem;color:var(--muted);font-size:.84rem;line-height:1.45"></p>
+    </div>
+
+    <div id="providerResetForm" style="display:none">
+      <input type="hidden" id="resetToken" />
       <div class="form-group">
         <label class="form-label">Neues Passwort</label>
         <input class="form-input" type="password" id="resetNewPassword" placeholder="Mindestens 6 Zeichen"
                onkeydown="if(event.key==='Enter')doResetPassword()" />
       </div>
       <button class="btn btn-primary btn-full" onclick="doResetPassword()">Passwort setzen</button>
-      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderLoginForm()">Zurück zum Login</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="showProviderResetForm()">Zurück zu Passwort vergessen</button>
     </div>
 
     <p style="margin-top:1.25rem;text-align:center;font-size:.83rem;color:var(--muted)">
@@ -711,6 +714,18 @@
         <p>Verwalte deine Angebote – erstelle, bearbeite und lösche Services.</p>
       </div>
       <button class="btn btn-primary" onclick="openCreateModal()">+ Neuer Service</button>
+    </div>
+
+    <div id="providerVerifyBanner" class="notification-card has-pending" style="display:none">
+      <div class="notification-left">
+        <span class="notification-icon">!</span>
+        <div>
+          <span class="notification-kicker">E-Mail verifizieren</span>
+          <strong>Bitte verifiziere deine E-Mail-Adresse</strong>
+          <p>Erst danach kannst du neue Services erstellen.</p>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="resendVerificationMail()">Mail erneut senden</button>
     </div>
 
     <div class="dash-tabs">

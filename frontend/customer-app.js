@@ -7,6 +7,7 @@ let activeCategory = '';
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
+  handleAuthLinks();
   updateNavUI();
   loadWeather();
   loadServices();
@@ -235,6 +236,13 @@ async function doBook(serviceId, title, price) {
     return;
   }
 
+  if (!isCurrentCustomerEmailVerified()) {
+    closeServiceModal();
+    openAuthModal('verify');
+    notify('Bitte verifiziere zuerst deine E-Mail-Adresse.', 'error');
+    return;
+  }
+
   const bookingDate = document.getElementById('bookingDate').value;
   if (!bookingDate) { notify('Bitte wähle einen Wunschtermin.', 'error'); return; }
 
@@ -273,6 +281,7 @@ function switchAuthTab(tab) {
   document.getElementById('regForm').style.display   = tab === 'register' ? 'block' : 'none';
   document.getElementById('forgotForm').style.display = tab === 'forgot'   ? 'block' : 'none';
   document.getElementById('resetForm').style.display  = tab === 'reset'    ? 'block' : 'none';
+  document.getElementById('verifyNotice').style.display = tab === 'verify' ? 'block' : 'none';
   document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
   document.getElementById('tabReg').classList.toggle('active',   tab === 'register');
 
@@ -289,8 +298,14 @@ async function doLogin() {
     const data = await fetchAPI('/auth/login', 'POST', { email, password }, 'customer_jwt');
     localStorage.setItem('customer_jwt', data.token);
     localStorage.setItem('customer_user_id', data.userId);
+    localStorage.setItem('customer_email', email);
+    localStorage.setItem('customer_email_verified', String(data.emailVerified !== false));
     updateNavUI();
     closeAuthModal();
+    if (data.emailVerified === false) {
+      notify('Bitte verifiziere deine E-Mail-Adresse, bevor du Services buchst.', 'info');
+      return;
+    }
     notify('Erfolgreich angemeldet ✓', 'success');
   } catch {
     notify('Login fehlgeschlagen. E-Mail oder Passwort falsch?', 'error');
@@ -311,7 +326,7 @@ async function doRegister() {
   }
   try {
     await fetchAPI('/auth/register', 'POST', { firstName, lastName, email, password, accountType }, 'customer_jwt');
-    notify('Konto erstellt! Du kannst dich jetzt anmelden.', 'success');
+    notify('Konto erstellt! Bitte verifiziere deine E-Mail-Adresse über den Link in der Mail.', 'success');
     switchAuthTab('login');
     document.getElementById('loginEmail').value = email;
   } catch (e) {
@@ -325,15 +340,10 @@ async function requestPasswordReset() {
 
   try {
     const data = await fetchAPI('/auth/forgot-password', 'POST', { email }, 'customer_jwt');
-    if (data.resetToken) {
-      document.getElementById('resetToken').value = data.resetToken;
-    }
     document.getElementById('forgotHint').textContent =
-      data.resetToken
-        ? 'Reset wurde vorbereitet. In dieser Demo wird der Reset-Code direkt eingetragen. Klicke danach auf "Ich habe einen Reset-Code".'
-        : 'Falls die E-Mail existiert, wurde ein Reset-Link versendet. Öffne den Link bzw. kopiere den Code und klicke danach auf "Ich habe einen Reset-Code".';
+      'Falls die E-Mail existiert und verifiziert ist, wurde ein Reset-Link versendet. Öffne den Link aus der Mail, um dein Passwort neu zu setzen.';
     document.getElementById('forgotHint').style.display = 'block';
-    notify(data.message || 'Reset-Mail wurde vorbereitet.', 'success');
+    notify(data.message || 'Reset-Mail wurde versendet.', 'success');
   } catch (e) {
     notify(e.message || 'Reset konnte nicht vorbereitet werden.', 'error');
   }
@@ -356,9 +366,44 @@ async function doResetPassword() {
   }
 }
 
+async function resendVerificationMail() {
+  const email = (document.getElementById('loginEmail').value || localStorage.getItem('customer_email') || '').trim().toLowerCase();
+  if (!email) { notify('Bitte gib zuerst deine E-Mail im Login-Feld ein.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/resend-verification', 'POST', { email }, 'customer_jwt');
+    notify(data.message || 'Verifizierungs-Mail wurde vorbereitet.', 'success');
+  } catch (e) {
+    notify(e.message || 'Verifizierungs-Mail konnte nicht gesendet werden.', 'error');
+  }
+}
+
+function handleAuthLinks() {
+  const params = new URLSearchParams(window.location.search);
+  const resetToken = params.get('resetToken');
+  if (resetToken) {
+    document.getElementById('resetToken').value = resetToken;
+    openAuthModal('reset');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (params.get('verified') === 'true') {
+    localStorage.setItem('customer_email_verified', 'true');
+    notify('E-Mail wurde verifiziert. Du kannst dich jetzt anmelden.', 'success');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+function isCurrentCustomerEmailVerified() {
+  return localStorage.getItem('customer_email_verified') === 'true';
+}
+
 function logout() {
   localStorage.removeItem('customer_jwt');
   localStorage.removeItem('customer_user_id');
+  localStorage.removeItem('customer_email');
+  localStorage.removeItem('customer_email_verified');
   updateNavUI();
   notify('Abgemeldet.', 'info');
 }

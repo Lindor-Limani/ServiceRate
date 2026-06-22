@@ -11,6 +11,7 @@ let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Mon
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
 (function init() {
+  if (handleAuthLinks()) return;
   const token = localStorage.getItem('provider_jwt');
   if (token) {
     try {
@@ -29,6 +30,7 @@ function showApp() {
     document.getElementById('headerUser').textContent = payload.sub || '';
   } catch { /* ignore */ }
 
+  updateProviderVerifyBanner();
   loadServices();
 }
 
@@ -50,7 +52,12 @@ async function doLogin() {
 
     localStorage.setItem('provider_jwt', data.token);
     localStorage.setItem('provider_user_id', data.userId);
+    localStorage.setItem('provider_email', email);
+    localStorage.setItem('provider_email_verified', String(data.emailVerified !== false));
     showApp();
+    if (data.emailVerified === false) {
+      notify('Bitte verifiziere deine E-Mail-Adresse, bevor du Services erstellst.', 'info');
+    }
   } catch {
     notify('Login fehlgeschlagen. Zugangsdaten prüfen.', 'error');
   }
@@ -59,6 +66,8 @@ async function doLogin() {
 function doLogout() {
   localStorage.removeItem('provider_jwt');
   localStorage.removeItem('provider_user_id');
+  localStorage.removeItem('provider_email');
+  localStorage.removeItem('provider_email_verified');
   document.getElementById('appContent').style.display  = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('loginPassword').value = '';
@@ -66,13 +75,21 @@ function doLogout() {
 
 function showProviderResetForm() {
   document.getElementById('providerLoginForm').style.display = 'none';
-  document.getElementById('providerResetForm').style.display = 'block';
+  document.getElementById('providerForgotForm').style.display = 'block';
+  document.getElementById('providerResetForm').style.display = 'none';
   document.getElementById('forgotEmail').value = document.getElementById('loginEmail').value.trim();
 }
 
 function showProviderLoginForm() {
+  document.getElementById('providerForgotForm').style.display = 'none';
   document.getElementById('providerResetForm').style.display = 'none';
   document.getElementById('providerLoginForm').style.display = 'block';
+}
+
+function showProviderPasswordForm() {
+  document.getElementById('providerLoginForm').style.display = 'none';
+  document.getElementById('providerForgotForm').style.display = 'none';
+  document.getElementById('providerResetForm').style.display = 'block';
 }
 
 async function requestPasswordReset() {
@@ -81,9 +98,10 @@ async function requestPasswordReset() {
 
   try {
     const data = await fetchAPI('/auth/forgot-password', 'POST', { email }, 'provider_jwt');
-    document.getElementById('resetToken').value = data.resetToken || '';
-    document.getElementById('resetTokenGroup').style.display = 'block';
-    notify(data.message || 'Reset wurde vorbereitet.', 'success');
+    document.getElementById('forgotHint').textContent =
+      'Falls die E-Mail existiert und verifiziert ist, wurde ein Reset-Link versendet. Öffne den Link aus der Mail, um dein Passwort neu zu setzen.';
+    document.getElementById('forgotHint').style.display = 'block';
+    notify(data.message || 'Reset-Mail wurde versendet.', 'success');
   } catch (e) {
     notify(e.message || 'Reset konnte nicht vorbereitet werden.', 'error');
   }
@@ -104,6 +122,47 @@ async function doResetPassword() {
   } catch (e) {
     notify(e.message || 'Passwort konnte nicht gesetzt werden.', 'error');
   }
+}
+
+async function resendVerificationMail() {
+  const email = (document.getElementById('loginEmail').value || localStorage.getItem('provider_email') || '').trim().toLowerCase();
+  if (!email) { notify('Bitte gib zuerst deine E-Mail im Login-Feld ein.', 'error'); return; }
+
+  try {
+    const data = await fetchAPI('/auth/resend-verification', 'POST', { email }, 'provider_jwt');
+    notify(data.message || 'Verifizierungs-Mail wurde vorbereitet.', 'success');
+  } catch (e) {
+    notify(e.message || 'Verifizierungs-Mail konnte nicht gesendet werden.', 'error');
+  }
+}
+
+function handleAuthLinks() {
+  const params = new URLSearchParams(window.location.search);
+  const resetToken = params.get('resetToken');
+  if (resetToken) {
+    document.getElementById('resetToken').value = resetToken;
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appContent').style.display = 'none';
+    showProviderPasswordForm();
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return true;
+  }
+
+  if (params.get('verified') === 'true') {
+    localStorage.setItem('provider_email_verified', 'true');
+    notify('E-Mail wurde verifiziert. Du kannst dich jetzt anmelden.', 'success');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  return false;
+}
+
+function isProviderEmailVerified() {
+  return localStorage.getItem('provider_email_verified') === 'true';
+}
+
+function updateProviderVerifyBanner() {
+  const banner = document.getElementById('providerVerifyBanner');
+  if (banner) banner.style.display = isProviderEmailVerified() ? 'none' : 'flex';
 }
 
 // ── Services laden & rendern ──────────────────────────────────────────────────
@@ -171,6 +230,12 @@ function updateStats() {
 
 // ── Service-Modal (Erstellen / Bearbeiten) ────────────────────────────────────
 function openCreateModal() {
+  if (!isProviderEmailVerified()) {
+    updateProviderVerifyBanner();
+    notify('Bitte verifiziere zuerst deine E-Mail-Adresse.', 'error');
+    return;
+  }
+
   editMode = false;
   document.getElementById('modalTitle').textContent    = 'Neuer Service';
   document.getElementById('editServiceId').value       = '';

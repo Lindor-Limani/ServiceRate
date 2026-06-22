@@ -40,6 +40,9 @@ public class ServiceOfferingService {
         if (!"PROVIDER".equals(provider.getAccountType())) {
             throw new IllegalArgumentException("Nur Anbieter dürfen Services erstellen.");
         }
+        if (!provider.isEmailVerified()) {
+            throw new IllegalArgumentException("Bitte verifiziere zuerst deine E-Mail-Adresse.");
+        }
 
         // PLZ über die externe Zippopotam.us-API in einen Ortsnamen auflösen (400, falls ungültig)
         String location = locationValidationService.resolveCityName(request.zipCode());

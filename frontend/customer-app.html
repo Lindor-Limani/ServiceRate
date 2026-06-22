@@ -179,10 +179,7 @@
 
     <!-- Reset Password Form -->
     <div id="resetForm" style="display:none">
-      <div class="form-group">
-        <label class="form-label">Reset-Token</label>
-        <input class="form-input" type="text" id="resetToken" />
-      </div>
+      <input type="hidden" id="resetToken" />
       <div class="form-group">
         <label class="form-label">Neues Passwort</label>
         <input class="form-input" type="password" id="resetNewPassword" placeholder="Mindestens 6 Zeichen"
@@ -190,6 +187,15 @@
       </div>
       <button class="btn btn-primary btn-full" onclick="doResetPassword()">Passwort setzen</button>
       <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="switchAuthTab('forgot')">Zurück zu Passwort vergessen</button>
+    </div>
+
+    <!-- Verify Mail Notice -->
+    <div id="verifyNotice" style="display:none">
+      <p style="color:var(--muted);font-size:.9rem;line-height:1.5;margin-bottom:1rem">
+        Bitte verifiziere deine E-Mail-Adresse, bevor du Services buchst.
+      </p>
+      <button class="btn btn-primary btn-full" onclick="resendVerificationMail()">Verifizierungs-Mail erneut senden</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.6rem" onclick="switchAuthTab('login')">Zurück zum Login</button>
     </div>
   </div>
 </div>

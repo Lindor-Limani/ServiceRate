@@ -26,6 +26,7 @@ public class UserService {
     private final ServiceOfferingRepository serviceOfferingRepository;
     private final BookingRepository bookingRepository;
     private final PasswordEncoder passwordEncoder;
+    private final MailService mailService;
 
     // --- CREATE ---
     public UserResponse create(CreateUserRequest request) {
@@ -42,28 +43,47 @@ public class UserService {
         user.setEmailVerified(false);
         user.setEmailVerificationToken(UUID.randomUUID().toString());
 
-        return toResponse(userRepository.save(user));
+        User saved = userRepository.save(user);
+        mailService.sendVerificationMail(saved);
+        return toResponse(saved);
     }
 
     @Transactional
-    public boolean verifyEmail(String token) {
+    public String verifyEmail(String token) {
         User user = userRepository.findByEmailVerificationToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Ungültiger Verifizierungs-Link"));
+        String accountType = user.getAccountType();
         user.setEmailVerified(true);
         user.setEmailVerificationToken(null);
         userRepository.save(user);
-        return true;
+        return accountType;
     }
 
     @Transactional
     public String createPasswordResetToken(String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Falls die E-Mail existiert, wurde ein Reset-Link erstellt."));
+        Optional<User> maybeUser = userRepository.findByEmail(email);
+        if (maybeUser.isEmpty() || !maybeUser.get().isEmailVerified()) {
+            return null;
+        }
+        User user = maybeUser.get();
         String token = UUID.randomUUID().toString();
         user.setPasswordResetToken(token);
         user.setPasswordResetExpiresAt(OffsetDateTime.now().plusMinutes(30));
         userRepository.save(user);
+        mailService.sendPasswordResetMail(user, token);
         return token;
+    }
+
+    @Transactional
+    public void resendVerificationMail(String email) {
+        userRepository.findByEmail(email)
+                .filter(user -> !user.isEmailVerified())
+                .ifPresent(user -> {
+                    if (user.getEmailVerificationToken() == null || user.getEmailVerificationToken().isBlank()) {
+                        user.setEmailVerificationToken(UUID.randomUUID().toString());
+                    }
+                    mailService.sendVerificationMail(userRepository.save(user));
+                });
     }
 
     @Transactional

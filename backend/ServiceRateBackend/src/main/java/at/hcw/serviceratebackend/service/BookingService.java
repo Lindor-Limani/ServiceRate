@@ -38,6 +38,7 @@ public class BookingService {
                 .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
 
         requireAccountType(customer, "CUSTOMER");
+        requireVerifiedEmail(customer);
 
         ServiceOffering service = serviceRepository.findById(request.serviceOfferingId())
                 .orElseThrow(() -> new RuntimeException("Service nicht gefunden"));
@@ -196,6 +197,12 @@ public class BookingService {
     private void requireAccountType(User user, String expectedType) {
         if (user == null || !expectedType.equals(user.getAccountType())) {
             throw new IllegalArgumentException("Diese Aktion ist für diese Rolle nicht erlaubt.");
+        }
+    }
+
+    private void requireVerifiedEmail(User user) {
+        if (!user.isEmailVerified()) {
+            throw new IllegalArgumentException("Bitte verifiziere zuerst deine E-Mail-Adresse.");
         }
     }
 

@@ -63,3 +63,18 @@ Für Wetterdaten nutzt das Backend OpenWeatherMap als Proxy. Der API-Key wird ni
 $env:OPENWEATHER_API_KEY="dein_api_key"
 .\gradlew.bat bootRun
 ```
+
+### E-Mail-Versand
+
+Registrierung, E-Mail-Verifizierung und Passwort-Reset versenden Mails ueber das Backend. Lokal laeuft der Mailversand standardmaessig im Console-Modus; die Mail-Inhalte erscheinen dann in der Backend-Konsole. Fuer echten SMTP-Versand vor dem Backend-Start konfigurieren:
+
+```powershell
+$env:APP_MAIL_MODE="smtp"
+$env:APP_MAIL_HOST="smtp.example.com"
+$env:APP_MAIL_PORT="587"
+$env:APP_MAIL_USERNAME="smtp_user"
+$env:APP_MAIL_PASSWORD="smtp_password"
+$env:APP_MAIL_FROM="noreply@example.com"
+$env:APP_FRONTEND_BASE_URL="http://localhost:5500/frontend"
+$env:APP_BACKEND_BASE_URL="http://localhost:8081"
+```
