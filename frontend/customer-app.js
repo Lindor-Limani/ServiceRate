@@ -433,7 +433,6 @@ function logout() {
 function updateNavUI() {
   const token     = localStorage.getItem('customer_jwt');
   const loginBtn  = document.getElementById('loginNavBtn');
-  const logoutBtn = document.getElementById('logoutBtn');
   const paymentBtn = document.getElementById('paymentSettingsBtn');
   const navUser   = document.getElementById('navUser');
   const tabs      = document.getElementById('customerTabs');
@@ -443,7 +442,6 @@ function updateNavUI() {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.accountType === 'CUSTOMER') {
         loginBtn.style.display  = 'none';
-        logoutBtn.style.display = 'inline-flex';
         if (paymentBtn) paymentBtn.style.display = 'inline-flex';
         navUser.textContent     = payload.sub || '';
         if (tabs) tabs.style.display = 'flex';
@@ -454,7 +452,6 @@ function updateNavUI() {
 
   // Ausgeloggter Zustand
   loginBtn.style.display  = 'inline-flex';
-  logoutBtn.style.display = 'none';
   if (paymentBtn) paymentBtn.style.display = 'none';
   navUser.textContent     = '';
   if (tabs) tabs.style.display = 'none';

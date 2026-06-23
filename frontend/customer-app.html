@@ -20,9 +20,8 @@
   <div class="header-right">
     <span id="navUser" style="font-size:.84rem;color:var(--muted)"></span>
     <button class="btn btn-ghost btn-sm" id="paymentSettingsBtn" style="display:none" onclick="openPaymentSettings()">Settings</button>
-    <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none" onclick="logout()">Abmelden</button>
     <button class="btn btn-primary btn-sm" id="loginNavBtn" onclick="openAuthModal('login')">Anmelden</button>
-    <a href="provider-dashboard.html" class="btn btn-ghost btn-sm">Für Handwerker →</a>
+    <a href="provider-dashboard.html" class="btn btn-ghost btn-sm provider-nav-link">Für Handwerker</a>
   </div>
 </header>
 
@@ -253,6 +252,9 @@
       Kartennummer und Prüfziffer werden nur lokal geprüft und nicht im Backend gespeichert. In Produktion muss hier Stripe/PayPal tokenisieren.
     </p>
     <button class="btn btn-primary btn-full" onclick="savePaymentMethod()">Zahlungsart hinzufügen</button>
+    <div class="settings-danger-zone">
+      <button class="btn btn-danger btn-full" onclick="logout();closePaymentSettings()">Abmelden</button>
+    </div>
   </aside>
 </div>
 

@@ -66,27 +66,42 @@ function renderServiceDetail() {
           <input class="form-input" type="date" id="detailBookingDate" min="${todayISO()}" />
         </div>
         <button class="btn btn-primary btn-full" onclick="bookDetailService()">Jetzt buchen</button>
-        <button class="btn btn-ghost btn-full" style="margin-top:.7rem" onclick="reportService()">Service melden</button>
+        <button class="btn btn-danger btn-full" style="margin-top:.7rem" onclick="openReportDialog()">Service melden</button>
       </aside>
     </section>
   `;
 }
 
-async function reportService() {
+function openReportDialog() {
   if (!localStorage.getItem('customer_jwt')) {
     notify('Bitte melde dich an, um etwas zu melden.', 'error');
     return;
   }
-  const reason = prompt('Warum möchtest du diesen Service melden?');
-  if (!reason || !reason.trim()) return;
+  document.getElementById('reportReason').value = 'Unangemessener Inhalt';
+  document.getElementById('reportDetails').value = '';
+  document.getElementById('reportModal').classList.add('open');
+}
+
+function closeReportDialog() {
+  document.getElementById('reportModal').classList.remove('open');
+}
+
+async function submitServiceReport() {
+  const reason = document.getElementById('reportReason').value.trim();
+  const details = document.getElementById('reportDetails').value.trim();
+  if (!reason) {
+    notify('Bitte wähle einen Grund aus.', 'error');
+    return;
+  }
   try {
     await fetchAPI('/reports', 'POST', {
       targetType: 'SERVICE',
       targetId: detailService.id,
-      reason: reason.trim(),
-      details: `Gemeldet aus Service-Detail: ${detailService.title}`
+      reason,
+      details: details || `Gemeldet aus Service-Detail: ${detailService.title}`
     }, 'customer_jwt');
-    notify('Report wurde an Admins gesendet.', 'success');
+    closeReportDialog();
+    notify('Service wurde gemeldet.', 'success');
   } catch (e) {
     notify(e.message || 'Report konnte nicht gesendet werden.', 'error');
   }

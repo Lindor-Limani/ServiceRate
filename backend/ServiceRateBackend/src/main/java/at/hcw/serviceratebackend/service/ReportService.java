@@ -18,6 +18,7 @@ public class ReportService {
 
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
+    private final MailService mailService;
 
     @Transactional
     public ReportResponse create(ReportRequest request, String reporterEmail) {
@@ -41,7 +42,9 @@ public class ReportService {
         report.setReason(request.reason().trim());
         report.setDetails(request.details() == null || request.details().isBlank() ? null : request.details().trim());
         report.setStatus("OPEN");
-        return toResponse(reportRepository.save(report));
+        Report saved = reportRepository.save(report);
+        mailService.sendReportCreatedMail(saved, userRepository.findByAccountType("ADMIN"));
+        return toResponse(saved);
     }
 
     private String normalizeTargetType(String targetType) {

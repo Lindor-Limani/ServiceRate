@@ -41,6 +41,7 @@ public class BookingService {
     private final ReviewRepository reviewRepository;
     private final ReviewService reviewService;
     private final TimeEntryRepository timeEntryRepository;
+    private final MailService mailService;
 
     public BookingResponse createBooking(CreateBookingRequest request, String customerEmail) {
         User customer = userRepository.findByEmail(customerEmail)
@@ -61,6 +62,7 @@ public class BookingService {
         booking.setStatus(BookingStatus.PENDING.name());
 
         Booking saved = bookingRepository.save(booking);
+        mailService.sendBookingCreatedMail(saved);
 
         return toResponse(saved, null, null);
     }
@@ -101,6 +103,7 @@ public class BookingService {
 
         booking.setStatus(targetStatus.name());
         Booking saved = bookingRepository.save(booking);
+        mailService.sendBookingStatusMail(saved);
 
         return toResponse(saved, null, findReviewResponse(saved));
     }
@@ -167,7 +170,9 @@ public class BookingService {
         booking.setDeliveryUrl(request.deliveryUrl().trim());
         booking.setDeliveryLabel(trimOrNull(request.deliveryLabel()));
         booking.setDeliveryExpiresAt(OffsetDateTime.now().plusHours(hours));
-        return toResponse(bookingRepository.save(booking), fullName(booking.getCustomer()), findReviewResponse(booking));
+        Booking saved = bookingRepository.save(booking);
+        mailService.sendDeliveryPublishedMail(saved);
+        return toResponse(saved, fullName(saved.getCustomer()), findReviewResponse(saved));
     }
 
     public BookingResponse createCheckout(UUID bookingId, CreateCheckoutRequest request, String customerEmail) {
@@ -201,7 +206,9 @@ public class BookingService {
         booking.setPaymentStatus("PAID");
         booking.setPaymentNote("Online-Zahlung durch Kunden bestätigt.");
         booking.setPaidAt(OffsetDateTime.now());
-        return toResponse(bookingRepository.save(booking), null, findReviewResponse(booking));
+        Booking saved = bookingRepository.save(booking);
+        mailService.sendPaymentRecordedMail(saved);
+        return toResponse(saved, null, findReviewResponse(saved));
     }
 
     public BookingResponse recordProviderPayment(UUID bookingId, RecordPaymentRequest request, String providerEmail) {
@@ -223,7 +230,9 @@ public class BookingService {
         booking.setPaymentStatus("PAID");
         booking.setPaymentNote(trimOrNull(request.note()));
         booking.setPaidAt(OffsetDateTime.now());
-        return toResponse(bookingRepository.save(booking), null, findReviewResponse(booking));
+        Booking saved = bookingRepository.save(booking);
+        mailService.sendPaymentRecordedMail(saved);
+        return toResponse(saved, null, findReviewResponse(saved));
     }
 
     public String resolveDeliveryUrl(UUID bookingId, String email) {

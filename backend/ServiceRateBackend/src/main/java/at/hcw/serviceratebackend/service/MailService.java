@@ -1,5 +1,9 @@
 package at.hcw.serviceratebackend.service;
 
+import at.hcw.serviceratebackend.model.entity.Booking;
+import at.hcw.serviceratebackend.model.entity.Report;
+import at.hcw.serviceratebackend.model.entity.Review;
+import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,6 +94,131 @@ public class MailService {
         send(user.getEmail(), "ServiceRate Passwort neu setzen", body);
     }
 
+    public void sendBookingCreatedMail(Booking booking) {
+        User customer = booking.getCustomer();
+        User provider = providerOf(booking);
+        ServiceOffering service = booking.getServiceOffering();
+        if (provider == null || provider.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(provider) + ",\n\n"
+                + "du hast eine neue Buchungsanfrage erhalten.\n\n"
+                + "Service: " + serviceTitle(service) + "\n"
+                + "Kunde: " + displayName(customer) + "\n"
+                + "Wunschtermin: " + valueOrDash(booking.getBookingDate()) + "\n\n"
+                + "Bitte pruefe die Anfrage in deinem ServiceRate Dashboard.\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(provider.getEmail(), "Neue Buchungsanfrage bei ServiceRate", body);
+    }
+
+    public void sendBookingStatusMail(Booking booking) {
+        User customer = booking.getCustomer();
+        if (customer == null || customer.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(customer) + ",\n\n"
+                + "der Status deiner Buchung wurde aktualisiert.\n\n"
+                + "Service: " + serviceTitle(booking.getServiceOffering()) + "\n"
+                + "Status: " + valueOrDash(booking.getStatus()) + "\n"
+                + "Wunschtermin: " + valueOrDash(booking.getBookingDate()) + "\n\n"
+                + "Details findest du in deinen Buchungen.\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(customer.getEmail(), "Deine ServiceRate Buchung wurde aktualisiert", body);
+    }
+
+    public void sendPaymentRecordedMail(Booking booking) {
+        User customer = booking.getCustomer();
+        User provider = providerOf(booking);
+        String subject = "ServiceRate Zahlung bestaetigt";
+        String body = "Hallo,\n\n"
+                + "fuer folgende Buchung wurde eine Zahlung bestaetigt:\n\n"
+                + "Service: " + serviceTitle(booking.getServiceOffering()) + "\n"
+                + "Zahlungsart: " + valueOrDash(booking.getPaymentProvider()) + "\n"
+                + "Bezahlt am: " + valueOrDash(booking.getPaidAt()) + "\n\n"
+                + "Dein ServiceRate Team\n";
+
+        if (customer != null && customer.getEmail() != null) {
+            trySend(customer.getEmail(), subject, body.replace("Hallo,", "Hallo " + displayName(customer) + ","));
+        }
+        if (provider != null && provider.getEmail() != null) {
+            trySend(provider.getEmail(), subject, body.replace("Hallo,", "Hallo " + displayName(provider) + ","));
+        }
+    }
+
+    public void sendDeliveryPublishedMail(Booking booking) {
+        User customer = booking.getCustomer();
+        if (customer == null || customer.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(customer) + ",\n\n"
+                + "fuer deine Buchung wurde eine digitale Lieferung bereitgestellt.\n\n"
+                + "Service: " + serviceTitle(booking.getServiceOffering()) + "\n"
+                + "Lieferung: " + valueOrDash(booking.getDeliveryLabel()) + "\n"
+                + "Gueltig bis: " + valueOrDash(booking.getDeliveryExpiresAt()) + "\n\n"
+                + "Der Download ist in deinen Buchungen verfuegbar, sobald die Zahlung abgeschlossen ist.\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(customer.getEmail(), "ServiceRate Lieferung verfuegbar", body);
+    }
+
+    public void sendReviewCreatedMail(Review review) {
+        Booking booking = review.getBooking();
+        User provider = providerOf(booking);
+        if (provider == null || provider.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(provider) + ",\n\n"
+                + "dein Service wurde bewertet.\n\n"
+                + "Service: " + serviceTitle(booking == null ? null : booking.getServiceOffering()) + "\n"
+                + "Bewertung: " + review.getRating() + " von 5 Sternen\n"
+                + "Kommentar: " + valueOrDash(review.getComment()) + "\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(provider.getEmail(), "Neue Bewertung bei ServiceRate", body);
+    }
+
+    public void sendReportCreatedMail(Report report, List<User> admins) {
+        if (admins == null || admins.isEmpty()) return;
+        String body = "Hallo Admin,\n\n"
+                + "ein neuer Report wurde erstellt.\n\n"
+                + "Typ: " + valueOrDash(report.getTargetType()) + "\n"
+                + "Grund: " + valueOrDash(report.getReason()) + "\n"
+                + "Reporter: " + (report.getReporter() == null ? "-" : report.getReporter().getEmail()) + "\n"
+                + "Details: " + valueOrDash(report.getDetails()) + "\n\n"
+                + "Bitte pruefe den Report im Admin Dashboard.\n\n"
+                + "Dein ServiceRate Team\n";
+
+        admins.stream()
+                .filter(admin -> admin.getEmail() != null && !admin.getEmail().isBlank())
+                .forEach(admin -> trySend(admin.getEmail(), "Neuer ServiceRate Report", body.replace("Hallo Admin,", "Hallo " + displayName(admin) + ",")));
+    }
+
+    public void sendReportStatusMail(Report report) {
+        User reporter = report.getReporter();
+        if (reporter == null || reporter.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(reporter) + ",\n\n"
+                + "deine Meldung wurde aktualisiert.\n\n"
+                + "Typ: " + valueOrDash(report.getTargetType()) + "\n"
+                + "Status: " + valueOrDash(report.getStatus()) + "\n"
+                + "Grund: " + valueOrDash(report.getReason()) + "\n\n"
+                + "Danke, dass du ServiceRate sicherer machst.\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(reporter.getEmail(), "ServiceRate Meldung aktualisiert", body);
+    }
+
+    public void sendServiceStatusMail(ServiceOffering service) {
+        User provider = service == null ? null : service.getProvider();
+        if (provider == null || provider.getEmail() == null) return;
+
+        String body = "Hallo " + displayName(provider) + ",\n\n"
+                + "der Status deines Service wurde aktualisiert.\n\n"
+                + "Service: " + serviceTitle(service) + "\n"
+                + "Status: " + valueOrDash(service.getStatus()) + "\n\n"
+                + "Dein ServiceRate Team\n";
+
+        trySend(provider.getEmail(), "ServiceRate Service-Status aktualisiert", body);
+    }
+
     private void send(String to, String subject, String body) {
         if (!"smtp".equalsIgnoreCase(mode)) {
             System.out.printf("%n--- ServiceRate Mail (console mode) ---%nTo: %s%nSubject: %s%n%n%s%n--- End Mail ---%n",
@@ -105,6 +234,15 @@ public class MailService {
             sendSmtp(to, subject, body);
         } catch (Exception e) {
             throw new IllegalStateException("E-Mail konnte nicht versendet werden.", e);
+        }
+    }
+
+    private void trySend(String to, String subject, String body) {
+        try {
+            send(to, subject, body);
+        } catch (Exception e) {
+            System.err.printf("ServiceRate Mail konnte nicht gesendet werden: to=%s subject=%s error=%s%n",
+                    to, subject, e.getMessage());
         }
     }
 
@@ -190,5 +328,20 @@ public class MailService {
         String name = ((user.getFirstName() == null ? "" : user.getFirstName()) + " " +
                 (user.getLastName() == null ? "" : user.getLastName())).trim();
         return name.isBlank() ? user.getEmail() : name;
+    }
+
+    private User providerOf(Booking booking) {
+        if (booking == null || booking.getServiceOffering() == null) return null;
+        return booking.getServiceOffering().getProvider();
+    }
+
+    private String serviceTitle(ServiceOffering service) {
+        return service == null || service.getTitle() == null ? "-" : service.getTitle();
+    }
+
+    private String valueOrDash(Object value) {
+        if (value == null) return "-";
+        String text = String.valueOf(value);
+        return text.isBlank() ? "-" : text;
     }
 }

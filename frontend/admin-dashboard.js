@@ -187,9 +187,27 @@ async function toggleUserStatus(id, active) {
 }
 
 function renderServicesPanel() {
+  const q = (document.getElementById('adminServiceSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('adminServiceStatusFilter')?.value || '';
+  const services = adminState.services.filter(s => {
+    const text = `${s.title || ''} ${s.providerName || ''} ${s.category || ''} ${s.location || ''}`.toLowerCase();
+    return (!q || text.includes(q)) && (!status || (s.status || 'ACTIVE') === status);
+  });
   document.getElementById('adminMainPanel').innerHTML = `
-    <div class="admin-panel-head"><h2>Service Management</h2><span class="count-pill">${adminState.services.length}</span></div>
-    <div class="admin-card-list">${adminState.services.map(s => `
+    <div class="admin-panel-head">
+      <h2>Service Management</h2>
+      <div class="admin-filters">
+        <input class="form-input" id="adminServiceSearch" placeholder="Services suchen" value="${esc(q)}" oninput="renderServicesPanel()">
+        <select class="form-input" id="adminServiceStatusFilter" onchange="renderServicesPanel()">
+          <option value="">Alle Status</option>
+          <option value="ACTIVE" ${status === 'ACTIVE' ? 'selected' : ''}>Aktiv</option>
+          <option value="HIDDEN" ${status === 'HIDDEN' ? 'selected' : ''}>Versteckt</option>
+          <option value="UNDER_REVIEW" ${status === 'UNDER_REVIEW' ? 'selected' : ''}>In Prüfung</option>
+        </select>
+        <span class="count-pill">${services.length}</span>
+      </div>
+    </div>
+    <div class="admin-card-list">${services.map(s => `
       <article class="admin-row-card">
         <div><strong>${esc(s.title)}</strong><span>${esc(s.providerName)} · €${Number(s.price || 0).toFixed(2)} · ${s.reviewCount || 0} Reviews</span></div>
         <span class="status-pill ${s.status === 'ACTIVE' ? 'active' : 'inactive'}">${esc(s.status || 'ACTIVE')}</span>
@@ -210,10 +228,37 @@ async function setServiceStatus(id, status) {
 }
 
 function renderBookingsPanel() {
-  const open = adminState.bookings.filter(b => b.status === 'PENDING' || b.status === 'ACCEPTED').length;
+  const q = (document.getElementById('adminBookingSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('adminBookingStatusFilter')?.value || '';
+  const payment = document.getElementById('adminBookingPaymentFilter')?.value || '';
+  const bookings = adminState.bookings.filter(b => {
+    const text = `${b.serviceTitle || ''} ${b.customerName || ''} ${b.providerName || ''} ${b.bookingDate || ''}`.toLowerCase();
+    return (!q || text.includes(q)) && (!status || b.status === status) && (!payment || (b.paymentStatus || 'UNPAID') === payment);
+  });
+  const open = bookings.filter(b => b.status === 'PENDING' || b.status === 'ACCEPTED').length;
   document.getElementById('adminMainPanel').innerHTML = `
-    <div class="admin-panel-head"><h2>Booking Management</h2><span class="count-pill">${open} offen</span></div>
-    <div class="admin-card-list">${adminState.bookings.map(b => `
+    <div class="admin-panel-head">
+      <h2>Booking Management</h2>
+      <div class="admin-filters">
+        <input class="form-input" id="adminBookingSearch" placeholder="Bookings suchen" value="${esc(q)}" oninput="renderBookingsPanel()">
+        <select class="form-input" id="adminBookingStatusFilter" onchange="renderBookingsPanel()">
+          <option value="">Alle Status</option>
+          <option value="PENDING" ${status === 'PENDING' ? 'selected' : ''}>Pending</option>
+          <option value="ACCEPTED" ${status === 'ACCEPTED' ? 'selected' : ''}>Accepted</option>
+          <option value="COMPLETED" ${status === 'COMPLETED' ? 'selected' : ''}>Completed</option>
+          <option value="REJECTED" ${status === 'REJECTED' ? 'selected' : ''}>Rejected</option>
+          <option value="CANCELLED" ${status === 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
+        </select>
+        <select class="form-input" id="adminBookingPaymentFilter" onchange="renderBookingsPanel()">
+          <option value="">Alle Zahlungen</option>
+          <option value="UNPAID" ${payment === 'UNPAID' ? 'selected' : ''}>Unpaid</option>
+          <option value="CHECKOUT_CREATED" ${payment === 'CHECKOUT_CREATED' ? 'selected' : ''}>Checkout</option>
+          <option value="PAID" ${payment === 'PAID' ? 'selected' : ''}>Paid</option>
+        </select>
+        <span class="count-pill">${open} offen</span>
+      </div>
+    </div>
+    <div class="admin-card-list">${bookings.map(b => `
       <article class="admin-row-card">
         <div><strong>${esc(b.serviceTitle)}</strong><span>${esc(b.customerName)} → ${esc(b.providerName)} · ${esc(b.bookingDate || '-')}</span></div>
         <span class="status-pill">${esc(b.status)}</span>
@@ -222,9 +267,26 @@ function renderBookingsPanel() {
 }
 
 function renderReviewsPanel() {
+  const q = (document.getElementById('adminReviewSearch')?.value || '').toLowerCase();
+  const minRating = Number(document.getElementById('adminReviewRatingFilter')?.value || 0);
+  const reviews = adminState.reviews.filter(r => {
+    const text = `${r.serviceTitle || ''} ${r.reviewerName || ''} ${r.comment || ''}`.toLowerCase();
+    return (!q || text.includes(q)) && (!minRating || Number(r.rating || 0) <= minRating);
+  });
   document.getElementById('adminMainPanel').innerHTML = `
-    <div class="admin-panel-head"><h2>Review Management</h2><span class="count-pill">${adminState.reviews.length}</span></div>
-    <div class="admin-card-list">${adminState.reviews.map(r => `
+    <div class="admin-panel-head">
+      <h2>Review Management</h2>
+      <div class="admin-filters">
+        <input class="form-input" id="adminReviewSearch" placeholder="Reviews suchen" value="${esc(q)}" oninput="renderReviewsPanel()">
+        <select class="form-input" id="adminReviewRatingFilter" onchange="renderReviewsPanel()">
+          <option value="0">Alle Ratings</option>
+          <option value="2" ${minRating === 2 ? 'selected' : ''}>Kritisch bis 2 Sterne</option>
+          <option value="3" ${minRating === 3 ? 'selected' : ''}>Bis 3 Sterne</option>
+        </select>
+        <span class="count-pill">${reviews.length}</span>
+      </div>
+    </div>
+    <div class="admin-card-list">${reviews.map(r => `
       <article class="admin-row-card ${r.rating <= 2 ? 'flagged' : ''}">
         <div><strong>${esc(r.serviceTitle)}</strong><span>${esc(r.reviewerName)} · ${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span></div>
         <p>${esc(r.comment || 'Ohne Kommentar')}</p>
@@ -232,9 +294,35 @@ function renderReviewsPanel() {
 }
 
 function renderReportsPanel() {
+  const q = (document.getElementById('adminReportSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('adminReportStatusFilter')?.value || '';
+  const type = document.getElementById('adminReportTypeFilter')?.value || '';
+  const reports = adminState.reports.filter(r => {
+    const text = `${r.targetType || ''} ${r.reason || ''} ${r.reporterEmail || ''} ${r.details || ''}`.toLowerCase();
+    return (!q || text.includes(q)) && (!status || r.status === status) && (!type || r.targetType === type);
+  });
   document.getElementById('adminMainPanel').innerHTML = `
-    <div class="admin-panel-head"><h2>Reports</h2><span class="count-pill">${adminState.reports.filter(r => r.status === 'OPEN').length} offen</span></div>
-    <div class="admin-card-list">${adminState.reports.map(r => `
+    <div class="admin-panel-head">
+      <h2>Reports</h2>
+      <div class="admin-filters">
+        <input class="form-input" id="adminReportSearch" placeholder="Reports suchen" value="${esc(q)}" oninput="renderReportsPanel()">
+        <select class="form-input" id="adminReportStatusFilter" onchange="renderReportsPanel()">
+          <option value="">Alle Status</option>
+          <option value="OPEN" ${status === 'OPEN' ? 'selected' : ''}>Offen</option>
+          <option value="IN_REVIEW" ${status === 'IN_REVIEW' ? 'selected' : ''}>In Prüfung</option>
+          <option value="RESOLVED" ${status === 'RESOLVED' ? 'selected' : ''}>Geschlossen</option>
+          <option value="REJECTED" ${status === 'REJECTED' ? 'selected' : ''}>Abgelehnt</option>
+        </select>
+        <select class="form-input" id="adminReportTypeFilter" onchange="renderReportsPanel()">
+          <option value="">Alle Typen</option>
+          <option value="SERVICE" ${type === 'SERVICE' ? 'selected' : ''}>Service</option>
+          <option value="REVIEW" ${type === 'REVIEW' ? 'selected' : ''}>Review</option>
+          <option value="PROVIDER" ${type === 'PROVIDER' ? 'selected' : ''}>Provider</option>
+        </select>
+        <span class="count-pill">${reports.filter(r => r.status === 'OPEN').length} offen</span>
+      </div>
+    </div>
+    <div class="admin-card-list">${reports.map(r => `
       <article class="admin-row-card flagged">
         <div><strong>${esc(r.targetType)} · ${esc(r.reason)}</strong><span>${esc(r.reporterEmail)} · ${formatDateTimeShort(r.createdAt)}</span><p>${esc(r.details || '')}</p></div>
         <span class="status-pill">${esc(r.status)}</span>

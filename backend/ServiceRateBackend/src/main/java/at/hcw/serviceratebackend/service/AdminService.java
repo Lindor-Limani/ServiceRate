@@ -18,11 +18,13 @@ import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class AdminService {
 
     private final UserRepository userRepository;
@@ -31,6 +33,7 @@ public class AdminService {
     private final ReviewRepository reviewRepository;
     private final ReportRepository reportRepository;
     private final ServiceOfferingService serviceOfferingService;
+    private final MailService mailService;
 
     public AdminStatsResponse stats() {
         List<User> users = userRepository.findAll();
@@ -111,7 +114,8 @@ public class AdminService {
             throw new IllegalArgumentException("Ungültiger Service-Status.");
         }
         service.setStatus(normalized);
-        serviceOfferingRepository.save(service);
+        ServiceOffering saved = serviceOfferingRepository.save(service);
+        mailService.sendServiceStatusMail(saved);
         return serviceOfferingService.getByIdForAdmin(id);
     }
 
@@ -123,7 +127,9 @@ public class AdminService {
             throw new IllegalArgumentException("Ungültiger Report-Status.");
         }
         report.setStatus(normalized);
-        return toReportResponse(reportRepository.save(report));
+        Report saved = reportRepository.save(report);
+        mailService.sendReportStatusMail(saved);
+        return toReportResponse(saved);
     }
 
     private AdminBookingResponse toBookingResponse(Booking booking) {

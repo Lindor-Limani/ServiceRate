@@ -21,6 +21,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final BookingRepository bookingRepository;
+    private final MailService mailService;
 
     public ReviewResponse create(CreateReviewRequest request) {
         Booking booking = bookingRepository.findById(request.bookingId())
@@ -42,6 +43,7 @@ public class ReviewService {
         review.setComment(request.comment());
 
         Review saved = reviewRepository.save(review);
+        mailService.sendReviewCreatedMail(saved);
 
         return new ReviewResponse(
                 saved.getId(),
