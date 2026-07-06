@@ -11,6 +11,27 @@ let activeBookingId = null;
 let serviceImageUrls = [];
 let providerPaymentMethods = [];
 
+document.addEventListener('click', event => {
+  const button = event.target.closest('#providerPaypalConnectBtn');
+  if (!button) return;
+  event.preventDefault();
+  startPayPalOnboarding();
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('#providerPaypalConfirmBtn');
+  if (!button) return;
+  event.preventDefault();
+  confirmPayPalOnboardingManually();
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('#providerPaypalRefreshBtn');
+  if (!button) return;
+  event.preventDefault();
+  refreshPayPalOnboardingStatus();
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 // Token aus dem localStorage lesen und nur PROVIDER automatisch einloggen
 (function init() {
@@ -37,6 +58,82 @@ function showApp() {
   wireProviderFormatting();
   loadServices();
   loadProviderOverview();
+  notifyPendingPayPalOnboardingWithoutParams();
+}
+
+async function startPayPalOnboarding() {
+  const button = document.getElementById('providerPaypalConnectBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'PayPal wird geöffnet...';
+  }
+
+  try {
+    if (!localStorage.getItem('provider_jwt')) {
+      throw new Error('Bitte zuerst als Handwerker anmelden.');
+    }
+    const data = await fetchAPI('/providers/me/paypal/onboarding-link', 'POST', null, 'provider_jwt');
+    if (!data || !data.actionUrl) {
+      throw new Error('PayPal hat keinen Onboarding-Link geliefert.');
+    }
+    notify('Weiterleitung zu PayPal...', 'info');
+    localStorage.setItem('provider_paypal_onboarding_started', 'true');
+    window.location.href = data.actionUrl;
+  } catch (e) {
+    notify(e.message || 'PayPal-Verbindung konnte nicht gestartet werden.', 'error');
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = `<img src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-color.svg" alt="PayPal" /> Continue with PayPal`;
+    }
+  }
+}
+window.startPayPalOnboarding = startPayPalOnboarding;
+
+async function confirmPayPalOnboardingManually() {
+  const merchantId = document.getElementById('providerPaypalMerchantId')?.value.trim() || '';
+  const paypalEmail = document.getElementById('providerPaypalEmail')?.value.trim() || '';
+  if (!merchantId && !paypalEmail) {
+    notify('Bitte PayPal Merchant ID oder PayPal E-Mail eintragen.', 'error');
+    return;
+  }
+
+  try {
+    const user = await fetchAPI('/providers/me/paypal/onboarding-return', 'POST', {
+      merchantIdInPayPal: merchantId,
+      paypalEmail,
+      permissionsGranted: true,
+      accountStatus: 'BUSINESS_ACCOUNT',
+      consentStatus: true,
+      isEmailConfirmed: true
+    }, 'provider_jwt');
+    localStorage.removeItem('provider_paypal_onboarding_started');
+    renderProviderPayPalStatus(user);
+    notify('PayPal-Verbindung wurde gespeichert.', 'success');
+  } catch (e) {
+    notify(e.message || 'PayPal-Verbindung konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+async function refreshPayPalOnboardingStatus() {
+  const button = document.getElementById('providerPaypalRefreshBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Status wird geprüft...';
+  }
+  try {
+    const user = await fetchAPI('/providers/me/paypal/onboarding-status', 'POST', null, 'provider_jwt');
+    renderProviderPayPalStatus(user);
+    notify(user.paypalOnboardingStatus === 'CONNECTED'
+      ? 'PayPal-Verbindung wurde erkannt.'
+      : 'PayPal-Status wurde aktualisiert. Eventuell ist noch ein Schritt bei PayPal offen.', 'success');
+  } catch (e) {
+    notify(e.message || 'PayPal-Status konnte nicht geprüft werden.', 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Status bei PayPal prüfen';
+    }
+  }
 }
 
 function wireProviderFormatting() {
@@ -132,9 +229,30 @@ async function loadProviderProfileSettings() {
     document.getElementById('providerSettingsAvatar').innerHTML = avatarHtml(name, user.profileImageUrl, 'profile-large');
     document.getElementById('providerSettingsProfilePreview').innerHTML = user.profileImageUrl ? `<img src="${esc(user.profileImageUrl)}" alt="Profilbild Vorschau">` : '';
     document.getElementById('providerPayoutIban').value = user.payoutIban || '';
+    document.getElementById('providerPaypalMerchantId').value = user.paypalMerchantId || '';
+    document.getElementById('providerPaypalEmail').value = user.paypalEmail || '';
+    renderProviderPayPalStatus(user);
   } catch (e) {
     notify(e.message || 'Profil konnte nicht geladen werden.', 'error');
   }
+}
+
+function renderProviderPayPalStatus(user) {
+  const host = document.getElementById('providerPaypalStatus');
+  if (!host) return;
+  const status = user.paypalOnboardingStatus || 'NOT_CONNECTED';
+  const labels = {
+    NOT_CONNECTED: 'Nicht verbunden. Verbinde PayPal, damit Kunden online direkt an dich zahlen koennen.',
+    LINK_CREATED: 'Onboarding-Link erstellt. Bitte PayPal-Verbindung abschliessen.',
+    CONNECTED: 'Verbunden. Online-Zahlungen koennen an dein PayPal-Konto geleitet werden.',
+    ACTION_REQUIRED: 'PayPal-Konto erkannt, aber es fehlen noch Berechtigungen oder E-Mail-Bestaetigung.',
+    RETURNED_INCOMPLETE: 'PayPal-Onboarding wurde nicht vollstaendig abgeschlossen.'
+  };
+  const parts = [labels[status] || status];
+  if (user.paypalMerchantId) parts.push(`Merchant ID: ${user.paypalMerchantId}`);
+  if (user.paypalPermissionsGranted === false) parts.push('Berechtigungen fehlen');
+  if (user.paypalEmailConfirmed === false) parts.push('PayPal-E-Mail nicht bestaetigt');
+  host.textContent = parts.join(' · ');
 }
 
 async function handleProviderProfileFile() {
@@ -155,7 +273,9 @@ async function saveProviderProfile() {
     firstName: document.getElementById('providerSettingsFirstName').value.trim(),
     lastName: document.getElementById('providerSettingsLastName').value.trim(),
     profileImageUrl: document.getElementById('providerSettingsProfileImage').value.trim(),
-    payoutIban: document.getElementById('providerPayoutIban').value.trim()
+    payoutIban: document.getElementById('providerPayoutIban').value.trim(),
+    paypalMerchantId: document.getElementById('providerPaypalMerchantId').value.trim(),
+    paypalEmail: document.getElementById('providerPaypalEmail').value.trim()
   };
   try {
     const user = await fetchAPI(`/users/${userId}`, 'PUT', payload, 'provider_jwt');
@@ -296,6 +416,18 @@ async function resendVerificationMail() {
 function handleAuthLinks() {
   const params = new URLSearchParams(window.location.search);
   const resetToken = params.get('resetToken');
+  const paypalCode = params.get('code');
+  if (paypalCode) {
+    completePayPalIdentityFromReturn(params);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  const paypalOnboarding = params.get('paypalOnboarding');
+  if (paypalOnboarding === 'return' || hasPayPalReturnParams(params)) {
+    completePayPalOnboardingFromReturn(params);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   if (resetToken) {
     document.getElementById('resetToken').value = resetToken;
     document.getElementById('loginScreen').style.display = 'flex';
@@ -311,6 +443,80 @@ function handleAuthLinks() {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
   return false;
+}
+
+async function completePayPalIdentityFromReturn(params) {
+  if (!localStorage.getItem('provider_jwt')) {
+    notify('Bitte melde dich an, um die PayPal-Verbindung abzuschliessen.', 'info');
+    return;
+  }
+
+  try {
+    const user = await fetchAPI('/providers/me/paypal/identity-return', 'POST', {
+      code: params.get('code'),
+      state: params.get('state'),
+      redirectUri: `${window.location.origin}${window.location.pathname}`
+    }, 'provider_jwt');
+    localStorage.removeItem('provider_paypal_onboarding_started');
+    renderProviderPayPalStatus(user);
+    notify('PayPal wurde verbunden.', 'success');
+  } catch (e) {
+    notify(e.message || 'PayPal-Verbindung konnte nicht abgeschlossen werden.', 'error');
+  }
+}
+
+async function completePayPalOnboardingFromReturn(params) {
+  if (!localStorage.getItem('provider_jwt')) {
+    notify('Bitte melde dich an, um die PayPal-Verbindung abzuschliessen.', 'info');
+    return;
+  }
+  try {
+    const user = await fetchAPI('/providers/me/paypal/onboarding-return', 'POST', {
+      merchantIdInPayPal: firstParam(params, ['merchantIdInPayPal', 'merchant_id', 'payerId', 'payer_id']),
+      paypalEmail: firstParam(params, ['paypalEmail', 'email', 'email_address']),
+      permissionsGranted: parseBooleanParam(firstParam(params, ['permissionsGranted', 'permissions_granted'])),
+      accountStatus: firstParam(params, ['accountStatus', 'account_status']),
+      consentStatus: parseBooleanParam(firstParam(params, ['consentStatus', 'consent_status'])),
+      isEmailConfirmed: parseBooleanParam(firstParam(params, ['isEmailConfirmed', 'is_email_confirmed', 'emailConfirmed']))
+    }, 'provider_jwt');
+    localStorage.removeItem('provider_paypal_onboarding_started');
+    notify(user.paypalOnboardingStatus === 'CONNECTED'
+      ? 'PayPal wurde verbunden.'
+      : 'PayPal-Verbindung gespeichert. Bitte pruefe, ob noch Schritte bei PayPal offen sind.', 'success');
+    if (document.getElementById('providerSettingsModal')?.classList.contains('open')) {
+      renderProviderPayPalStatus(user);
+    }
+    if (user.paypalMerchantId && user.paypalOnboardingStatus !== 'CONNECTED') {
+      await refreshPayPalOnboardingStatus();
+    }
+  } catch (e) {
+    notify(e.message || 'PayPal-Rueckkehr konnte nicht gespeichert werden.', 'error');
+  }
+}
+
+async function notifyPendingPayPalOnboardingWithoutParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.toString() || localStorage.getItem('provider_paypal_onboarding_started') !== 'true') return;
+  notify('PayPal wurde geoeffnet, hat aber keine verwertbaren Onboarding-Daten zurueckgegeben. Der Status wird jetzt direkt bei PayPal geprueft.', 'info');
+  await refreshPayPalOnboardingStatus();
+}
+
+function hasPayPalReturnParams(params) {
+  return ['merchantIdInPayPal', 'merchant_id', 'payerId', 'payer_id', 'permissionsGranted', 'permissions_granted', 'isEmailConfirmed', 'is_email_confirmed']
+    .some(key => params.has(key));
+}
+
+function firstParam(params, keys) {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value != null && value !== '') return value;
+  }
+  return null;
+}
+
+function parseBooleanParam(value) {
+  if (value == null) return null;
+  return String(value).toLowerCase() === 'true';
 }
 
 function isProviderEmailVerified() {
@@ -822,6 +1028,11 @@ function renderBookingDrawer() {
         <p><strong>Zahlungsart:</strong> ${esc(b.paymentProvider || '-')}</p>
         ${b.paymentNote ? `<p><strong>Notiz:</strong> ${esc(b.paymentNote)}</p>` : ''}
         <p><strong>Umsatz:</strong> €${revenue.toFixed(2)}</p>
+        <p><strong>Brutto:</strong> €${Number(b.grossAmount || revenue).toFixed(2)}</p>
+        <p><strong>Plattformprovision:</strong> €${Number(b.platformFeeAmount || 0).toFixed(2)}</p>
+        <p><strong>Provider-Netto:</strong> €${Number(b.providerReceivableAmount || revenue).toFixed(2)}</p>
+        <p><strong>Abrechnung:</strong> ${esc(settlementLabel(b.settlementStatus || 'NOT_READY'))}</p>
+        ${b.settlementNote ? `<p class="muted-text">${esc(b.settlementNote)}</p>` : ''}
         ${b.paymentStatus !== 'PAID' ? `
           <select class="form-input" id="drawerPaymentMethod" style="margin-top:.7rem">
             <option value="CASH">Barzahlung</option>
@@ -881,6 +1092,20 @@ function renderBookingDrawer() {
       </div>
     </section>
   `;
+}
+
+function settlementLabel(status) {
+  const labels = {
+    NOT_READY: 'Noch nicht abrechnungsbereit',
+    PAYPAL_PLATFORM_FEE_PENDING: 'PayPal Split vorbereitet',
+    PAYPAL_SPLIT_COMPLETED: 'PayPal Split abgeschlossen',
+    PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT: 'Provider-Auszahlung offen',
+    PROVIDER_PAYOUT_SENT: 'Provider-Auszahlung gesendet',
+    PLATFORM_FEE_DUE_FROM_PROVIDER: 'Provision vom Provider offen',
+    PLATFORM_FEE_SETTLED: 'Provision beglichen',
+    DISPUTED: 'In Klärung'
+  };
+  return labels[status] || status;
 }
 
 async function recordProviderPayment(bookingId) {

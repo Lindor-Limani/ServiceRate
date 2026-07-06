@@ -11,6 +11,12 @@ public record AdminBookingResponse(
         String serviceTitle,
         String status,
         String paymentStatus,
+        String paymentProvider,
+        Double grossAmount,
+        Double platformFeeAmount,
+        Double providerReceivableAmount,
+        String settlementStatus,
+        String settlementNote,
         LocalDate bookingDate,
         OffsetDateTime paidAt
 ) {}

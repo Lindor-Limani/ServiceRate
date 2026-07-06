@@ -7,6 +7,7 @@ let activeCategory = '';
 let editingPaymentMethodId = null;
 let cachedPaymentMethods = [];
 let activeCheckoutBookingId = null;
+let customerBookings = [];
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
@@ -402,6 +403,22 @@ async function resendVerificationMail() {
 function handleAuthLinks() {
   const params = new URLSearchParams(window.location.search);
   const resetToken = params.get('resetToken');
+  const paypalStatus = params.get('paypal');
+  const paypalBookingId = params.get('bookingId');
+  const paypalOrderId = params.get('token');
+
+  if (paypalStatus === 'success' && paypalBookingId && paypalOrderId) {
+    capturePayPalPayment(paypalBookingId, paypalOrderId);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (paypalStatus === 'cancel') {
+    notify('PayPal-Zahlung wurde abgebrochen.', 'info');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
   if (resetToken) {
     document.getElementById('resetToken').value = resetToken;
     openAuthModal('reset');
@@ -485,18 +502,21 @@ async function loadCustomerBookings() {
 
   try {
     const bookings = await fetchAPI('/bookings/customer/me', 'GET', null, 'customer_jwt');
+    customerBookings = Array.isArray(bookings) ? bookings : [];
 
-    if (bookings.length === 0) {
+    if (customerBookings.length === 0) {
       grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
       return;
     }
 
-    grid.innerHTML = bookings.map(b => {
+    grid.innerHTML = customerBookings.map(b => {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
       const dateLabel   = b.bookingDate ? `📅 Wunschtermin: ${b.bookingDate}` : '📅 Kein Termin angegeben';
       const review      = b.review;
-      const canPay = (b.status === 'ACCEPTED' || b.status === 'COMPLETED') && b.paymentStatus !== 'PAID';
+      const canPay = (b.status === 'ACCEPTED' || b.status === 'COMPLETED')
+        && b.paymentStatus !== 'PAID'
+        && b.paymentStatus !== 'AWAITING_OFFLINE_PAYMENT';
 
       return `
       <div class="service-card booking-card ${statusClass}" style="cursor: default;">
@@ -685,6 +705,7 @@ function detectCardBrand(number) {
 function payBooking(bookingId) {
   activeCheckoutBookingId = bookingId;
   document.getElementById('checkoutModal').classList.add('open');
+  renderCheckoutOptions();
   renderCheckoutFields();
 }
 
@@ -696,50 +717,46 @@ function closeCheckoutModal() {
 async function renderCheckoutFields() {
   const method = document.getElementById('checkoutMethod').value;
   const host = document.getElementById('checkoutFields');
-  if (method === 'STRIPE') {
-    host.innerHTML = `<div class="review-loading">Zahlungsmethoden werden geladen...</div>`;
-    try {
-      const methods = await fetchAPI('/payment-methods', 'GET', null, 'customer_jwt');
-      cachedPaymentMethods = Array.isArray(methods) ? methods : [];
-      if (!cachedPaymentMethods.length) {
-        host.innerHTML = `
-          <div class="review-empty">Keine gespeicherte Karte vorhanden.</div>
-          <button class="btn btn-ghost btn-full" onclick="closeCheckoutModal();openPaymentSettings()">Neue Zahlungsmethode hinzufügen</button>`;
-        return;
-      }
-      host.innerHTML = `
-        <div class="form-group">
-          <label class="form-label">Gespeicherte Zahlungsmethode</label>
-          <select class="form-input" id="checkoutPaymentMethodId">
-            ${cachedPaymentMethods.map(m => `<option value="${esc(m.id)}">${esc(m.brand)} •••• ${esc(m.last4)} · ${String(m.expiryMonth).padStart(2, '0')}/${m.expiryYear}</option>`).join('')}
-          </select>
-        </div>
-        <button class="btn btn-ghost btn-full" onclick="closeCheckoutModal();openPaymentSettings()">Zahlungsmethode ändern / hinzufügen</button>`;
-    } catch {
-      host.innerHTML = `<div class="review-empty">Zahlungsmethoden konnten nicht geladen werden.</div>`;
-    }
-    return;
-  }
+  renderCheckoutConfirmButton(method);
   if (method === 'PAYPAL') {
     host.innerHTML = `
-      <div class="form-group">
-        <label class="form-label">PayPal E-Mail</label>
-        <input class="form-input" id="checkoutPaypalEmail" type="email" placeholder="paypal@beispiel.at" />
+      <div class="review-empty">
+        <strong>PayPal</strong><br/>
+        Du wirst zu PayPal weitergeleitet. Nach der Bestätigung kommst du automatisch zurück zur Buchung.
       </div>`;
     return;
   }
-  host.innerHTML = `
-    <div class="form-group">
-      <label class="form-label">Kontoinhaber</label>
-      <input class="form-input" id="checkoutSepaHolder" placeholder="Max Muster" />
-    </div>
-    <div class="form-group">
-      <label class="form-label">IBAN</label>
-      <input class="form-input" id="checkoutIban" placeholder="AT00 0000 0000 0000 0000" />
-    </div>`;
-  document.getElementById('checkoutIban')?.addEventListener('input', e => {
-    e.target.value = formatIbanValue(e.target.value);
-  });
+  if (method === 'BANK_TRANSFER') {
+    host.innerHTML = `
+      <div class="review-empty">
+        Du zahlst per Bankueberweisung direkt an den Anbieter. Der Anbieter verbucht den Zahlungseingang danach im Dashboard.
+      </div>`;
+    return;
+  }
+  if (method === 'CASH') {
+    host.innerHTML = `
+      <div class="review-empty">
+        Du bezahlst vor Ort direkt beim Anbieter. Der Anbieter verbucht die Zahlung danach im Dashboard.
+      </div>`;
+    return;
+  }
+  host.innerHTML = `<div class="review-empty">Keine Zahlungsart verfuegbar.</div>`;
+}
+
+function renderCheckoutConfirmButton(method) {
+  const button = document.getElementById('checkoutConfirmButton');
+  if (!button) return;
+  button.classList.toggle('btn-paypal', method === 'PAYPAL');
+  button.classList.toggle('btn-primary', method !== 'PAYPAL');
+  if (method === 'PAYPAL') {
+    button.innerHTML = `<img src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-color.svg" alt="PayPal" /> Pay with PayPal`;
+  } else if (method === 'BANK_TRANSFER') {
+    button.textContent = 'Überweisung vormerken';
+  } else if (method === 'CASH') {
+    button.textContent = 'Barzahlung vormerken';
+  } else {
+    button.textContent = 'Zahlung starten';
+  }
 }
 
 async function confirmBookingPayment() {
@@ -747,32 +764,54 @@ async function confirmBookingPayment() {
   if (!bookingId) return;
   const method = document.getElementById('checkoutMethod').value;
   try {
-    if (method === 'STRIPE') {
-      if (!document.getElementById('checkoutPaymentMethodId')) {
-        notify('Bitte zuerst eine Karte in den Settings hinterlegen.', 'info');
-        closeCheckoutModal();
-        openPaymentSettings();
-        return;
-      }
-    }
-    if (method === 'PAYPAL' && !document.getElementById('checkoutPaypalEmail').value.trim()) {
-      notify('Bitte PayPal E-Mail eingeben.', 'error');
+    if (!method) {
+      notify('Keine Zahlungsart verfügbar.', 'error');
       return;
     }
-    if (method === 'SEPA') {
-      const iban = document.getElementById('checkoutIban').value.replace(/\s/g, '');
-      if (!isValidIbanBasic(iban) || !document.getElementById('checkoutSepaHolder').value.trim()) {
-        notify('Bitte SEPA-Daten vollständig eingeben.', 'error');
-        return;
+    const checkout = await fetchAPI(`/bookings/${bookingId}/checkout`, 'POST', { provider: method }, 'customer_jwt');
+    if (method === 'PAYPAL') {
+      if (!checkout.checkoutUrl) {
+        throw new Error('PayPal hat keine Checkout-URL geliefert.');
       }
+      notify('Weiterleitung zu PayPal...', 'info');
+      window.location.href = checkout.checkoutUrl;
+      return;
     }
-    await fetchAPI(`/bookings/${bookingId}/checkout`, 'POST', { provider: method }, 'customer_jwt');
-    await fetchAPI(`/bookings/${bookingId}/mark-paid`, 'POST', null, 'customer_jwt');
-    notify('Zahlung wurde bestätigt.', 'success');
+    notify(method === 'BANK_TRANSFER'
+      ? 'Überweisung wurde vorgemerkt. Bitte zahle direkt an den Anbieter.'
+      : 'Barzahlung wurde vorgemerkt. Bitte zahle direkt beim Anbieter.', 'success');
     closeCheckoutModal();
     loadCustomerBookings();
   } catch (e) {
     notify(e.message || 'Zahlung konnte nicht gestartet werden.', 'error');
+  }
+}
+
+function renderCheckoutOptions() {
+  const select = document.getElementById('checkoutMethod');
+  const booking = customerBookings.find(b => b.id === activeCheckoutBookingId);
+  const options = [];
+  if (booking?.providerPaypalAvailable) {
+    options.push({ value: 'PAYPAL', label: 'PayPal' });
+  }
+  options.push({ value: 'BANK_TRANSFER', label: 'Banküberweisung an Anbieter' });
+  options.push({ value: 'CASH', label: 'Barzahlung vor Ort' });
+
+  select.innerHTML = options.map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('');
+}
+
+async function capturePayPalPayment(bookingId, orderId) {
+  if (!localStorage.getItem('customer_jwt')) {
+    notify('Bitte melde dich an, um die PayPal-Zahlung abzuschließen.', 'info');
+    return;
+  }
+
+  try {
+    await fetchAPI(`/bookings/${bookingId}/paypal/capture`, 'POST', { orderId }, 'customer_jwt');
+    notify('PayPal-Zahlung wurde bestätigt.', 'success');
+    switchCustomerTab('bookings');
+  } catch (e) {
+    notify(e.message || 'PayPal-Zahlung konnte nicht bestätigt werden.', 'error');
   }
 }
 

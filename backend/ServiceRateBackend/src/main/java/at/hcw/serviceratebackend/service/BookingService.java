@@ -20,9 +20,12 @@ import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.TimeEntryRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +45,13 @@ public class BookingService {
     private final ReviewService reviewService;
     private final TimeEntryRepository timeEntryRepository;
     private final MailService mailService;
+    private final PayPalService payPalService;
+
+    @Value("${app.platform-fee-percent:10}")
+    private double platformFeePercent;
+
+    @Value("${app.platform-fee-fixed:0}")
+    private double platformFeeFixed;
 
     public BookingResponse createBooking(CreateBookingRequest request, String customerEmail) {
         User customer = userRepository.findByEmail(customerEmail)
@@ -188,10 +198,65 @@ public class BookingService {
         String provider = request.provider() == null || request.provider().isBlank()
                 ? "MANUAL"
                 : request.provider().trim().toUpperCase();
+        applyMarketplaceAmounts(booking);
         booking.setPaymentProvider(provider);
-        booking.setPaymentStatus("CHECKOUT_CREATED");
-        booking.setCheckoutUrl("/checkout.html?bookingId=" + booking.getId());
+        if ("PAYPAL".equals(provider)) {
+            requireProviderPayPalAccount(booking);
+            booking.setPaymentStatus("CHECKOUT_CREATED");
+            PayPalService.PayPalOrder order = payPalService.createOrder(booking);
+            booking.setPaypalOrderId(order.orderId());
+            booking.setPaypalCaptureId(null);
+            booking.setCheckoutUrl(order.approveUrl());
+            booking.setSettlementStatus("PAYPAL_PLATFORM_FEE_PENDING");
+            booking.setPaymentNote("PayPal Marketplace Order wurde erstellt. Provider ist Payee, Plattformgebühr wird separat ausgewiesen.");
+        } else if ("CASH".equals(provider) || "BANK_TRANSFER".equals(provider)) {
+            booking.setPaymentStatus("AWAITING_OFFLINE_PAYMENT");
+            booking.setCheckoutUrl(null);
+            booking.setSettlementStatus("NOT_READY");
+            booking.setPaymentNote("Kunde zahlt direkt an den Provider. Provider muss Zahlungseingang danach im Dashboard verbuchen.");
+            booking.setSettlementNote("Nach Zahlungseingang schuldet der Provider die Plattformprovision.");
+        } else {
+            booking.setPaymentStatus("CHECKOUT_CREATED");
+            booking.setCheckoutUrl("/checkout.html?bookingId=" + booking.getId());
+            booking.setSettlementStatus("PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT");
+            booking.setSettlementNote("Demo-Zahlungsart: Plattform kassiert und muss Provider-Netto auszahlen.");
+        }
         return toResponse(bookingRepository.save(booking), providerName(booking.getServiceOffering()), findReviewResponse(booking));
+    }
+
+    public BookingResponse capturePayPalPayment(UUID bookingId, String orderId, String customerEmail) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
+        User customer = userRepository.findByEmail(customerEmail)
+                .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
+        requireAccountType(customer, "CUSTOMER");
+        if (!booking.getCustomer().getId().equals(customer.getId())) {
+            throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
+        }
+        if (!"PAYPAL".equals(booking.getPaymentProvider())) {
+            throw new IllegalArgumentException("Diese Buchung wurde nicht mit PayPal gestartet.");
+        }
+        if (booking.getPaypalOrderId() == null || !booking.getPaypalOrderId().equals(orderId)) {
+            throw new IllegalArgumentException("PayPal Order passt nicht zu dieser Buchung.");
+        }
+        if ("PAID".equals(booking.getPaymentStatus())) {
+            return toResponse(booking, null, findReviewResponse(booking));
+        }
+
+        PayPalService.PayPalCapture capture = payPalService.captureOrder(orderId);
+        if (!"COMPLETED".equalsIgnoreCase(capture.status())) {
+            throw new IllegalStateException("PayPal Zahlung wurde nicht abgeschlossen. Status: " + capture.status());
+        }
+
+        booking.setPaymentStatus("PAID");
+        booking.setPaymentNote("PayPal-Zahlung erfolgreich abgeschlossen.");
+        booking.setPaypalCaptureId(capture.captureId());
+        booking.setSettlementStatus("PAYPAL_SPLIT_COMPLETED");
+        booking.setSettlementNote("PayPal hat die Zahlung beim Provider gecaptured; Plattformgebühr wurde im PayPal-Order-Request angegeben.");
+        booking.setPaidAt(OffsetDateTime.now());
+        Booking saved = bookingRepository.save(booking);
+        mailService.sendPaymentRecordedMail(saved);
+        return toResponse(saved, null, findReviewResponse(saved));
     }
 
     public BookingResponse markPaid(UUID bookingId, String customerEmail) {
@@ -205,6 +270,9 @@ public class BookingService {
         }
         booking.setPaymentStatus("PAID");
         booking.setPaymentNote("Online-Zahlung durch Kunden bestätigt.");
+        applyMarketplaceAmounts(booking);
+        booking.setSettlementStatus("PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT");
+        booking.setSettlementNote("Plattform hat die Zahlung erfasst und muss den Provider-Netto-Betrag auszahlen.");
         booking.setPaidAt(OffsetDateTime.now());
         Booking saved = bookingRepository.save(booking);
         mailService.sendPaymentRecordedMail(saved);
@@ -228,7 +296,15 @@ public class BookingService {
 
         booking.setPaymentProvider(method);
         booking.setPaymentStatus("PAID");
+        applyMarketplaceAmounts(booking);
         booking.setPaymentNote(trimOrNull(request.note()));
+        if (method.equals("CASH") || method.equals("BANK_TRANSFER") || method.equals("MANUAL")) {
+            booking.setSettlementStatus("PLATFORM_FEE_DUE_FROM_PROVIDER");
+            booking.setSettlementNote("Provider hat die Zahlung direkt erhalten und muss die Plattformprovision begleichen.");
+        } else {
+            booking.setSettlementStatus("PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT");
+            booking.setSettlementNote("Zahlung wurde verbucht; Auszahlung/Abrechnung muss administrativ abgeschlossen werden.");
+        }
         booking.setPaidAt(OffsetDateTime.now());
         Booking saved = bookingRepository.save(booking);
         mailService.sendPaymentRecordedMail(saved);
@@ -305,6 +381,15 @@ public class BookingService {
                 booking.getPaymentProvider(),
                 booking.getPaymentNote(),
                 booking.getPaidAt(),
+                booking.getPaypalOrderId(),
+                booking.getPaypalCaptureId(),
+                booking.getGrossAmount(),
+                booking.getPlatformFeeAmount(),
+                booking.getProviderReceivableAmount(),
+                booking.getSettlementStatus(),
+                booking.getSettlementNote(),
+                isProviderPaypalAvailable(provider),
+                true,
                 loadTimeEntries(booking.getId()),
                 review
         );
@@ -362,6 +447,31 @@ public class BookingService {
         return offering == null ? 0.0 : offering.getPrice();
     }
 
+    private void applyMarketplaceAmounts(Booking booking) {
+        double gross = calculateGrossAmount(booking);
+        double fee = roundMoney(gross * (platformFeePercent / 100.0) + platformFeeFixed);
+        if (fee > gross) {
+            fee = gross;
+        }
+        booking.setGrossAmount(gross);
+        booking.setPlatformFeeAmount(fee);
+        booking.setProviderReceivableAmount(roundMoney(gross - fee));
+    }
+
+    private double calculateGrossAmount(Booking booking) {
+        double price = booking.getServiceOffering() == null || booking.getServiceOffering().getPrice() == null
+                ? 0.0
+                : booking.getServiceOffering().getPrice();
+        double hours = booking.getActualHours() != null && booking.getActualHours() > 0
+                ? booking.getActualHours()
+                : 1.0;
+        return roundMoney(price * hours);
+    }
+
+    private double roundMoney(double value) {
+        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
     private BookingStatus parseStatus(String status) {
         try {
             return BookingStatus.valueOf(status);
@@ -387,6 +497,24 @@ public class BookingService {
         if (owner == null || !owner.getId().equals(provider.getId())) {
             throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Anbieter.");
         }
+    }
+
+    private void requireProviderPayPalAccount(Booking booking) {
+        User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
+        if (!isProviderPaypalAvailable(provider)) {
+            throw new IllegalArgumentException("Dieser Anbieter hat noch kein PayPal-Konto fuer Marketplace-Zahlungen hinterlegt.");
+        }
+    }
+
+    private boolean isProviderPaypalAvailable(User provider) {
+        if (provider == null) {
+            return false;
+        }
+        boolean hasReceiver = (provider.getPaypalMerchantId() != null && !provider.getPaypalMerchantId().isBlank())
+                || (provider.getPaypalEmail() != null && !provider.getPaypalEmail().isBlank());
+        boolean connected = "CONNECTED".equals(provider.getPaypalOnboardingStatus())
+                || "ACTION_REQUIRED".equals(provider.getPaypalOnboardingStatus());
+        return hasReceiver && connected;
     }
 
     private String trimOrNull(String value) {

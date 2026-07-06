@@ -6,6 +6,7 @@ import at.hcw.serviceratebackend.dto.AdminReviewResponse;
 import at.hcw.serviceratebackend.dto.ReportResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
 import at.hcw.serviceratebackend.dto.UpdateReportStatusRequest;
+import at.hcw.serviceratebackend.dto.UpdateSettlementStatusRequest;
 import at.hcw.serviceratebackend.dto.UpdateUserStatusRequest;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.service.AdminService;
@@ -69,5 +70,10 @@ public class AdminController {
     @PatchMapping("/reports/{id}/status")
     public ReportResponse setReportStatus(@PathVariable java.util.UUID id, @RequestBody UpdateReportStatusRequest request) {
         return adminService.setReportStatus(id, request.status());
+    }
+
+    @PatchMapping("/bookings/{id}/settlement")
+    public AdminBookingResponse setBookingSettlementStatus(@PathVariable java.util.UUID id, @RequestBody UpdateSettlementStatusRequest request) {
+        return adminService.setBookingSettlementStatus(id, request);
     }
 }

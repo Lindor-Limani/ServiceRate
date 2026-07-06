@@ -94,6 +94,22 @@ header {
 .btn-primary:hover { background: var(--primary-dark); }
 .btn-ghost  { background: transparent; color: var(--text); border: 1px solid var(--border); }
 .btn-ghost:hover { background: var(--bg); }
+.btn-paypal {
+  background: #0070ba;
+  color: #fff;
+  border: 1px solid #0070ba;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+.btn-paypal:hover { background: #005ea6; }
+.btn-paypal img {
+  height: 18px;
+  width: auto;
+  display: block;
+  background: #fff;
+  border-radius: 3px;
+  padding: 2px 4px;
+}
 .btn-sm  { padding: .35rem .85rem; font-size: .8rem; }
 .btn-lg  { padding: .75rem 1.75rem; font-size: 1rem; }
 .btn-full { width: 100%; justify-content: center; padding: .75rem; }

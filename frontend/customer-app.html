@@ -267,17 +267,13 @@
     </div>
     <div class="form-group">
       <label class="form-label">Zahlungsart</label>
-      <select class="form-input" id="checkoutMethod" onchange="renderCheckoutFields()">
-        <option value="STRIPE">Karte / Stripe</option>
-        <option value="PAYPAL">PayPal</option>
-        <option value="SEPA">SEPA-Lastschrift</option>
-      </select>
+      <select class="form-input" id="checkoutMethod" onchange="renderCheckoutFields()"></select>
     </div>
     <div id="checkoutFields"></div>
     <p style="color:var(--muted);font-size:.82rem;margin:1rem 0">
-      Demo-Checkout: Kartendaten bleiben tokenisiert, SEPA/PayPal werden hier nur als Zahlungsart vorgemerkt.
+      Online-Zahlungen werden nur angezeigt, wenn der Anbieter sie verbunden hat. Bei Barzahlung oder Ueberweisung wird die Plattformprovision nach Zahlungseingang mit dem Anbieter abgerechnet.
     </p>
-    <button class="btn btn-primary btn-full" onclick="confirmBookingPayment()">Zahlung bestätigen</button>
+    <button class="btn btn-primary btn-full" id="checkoutConfirmButton" onclick="confirmBookingPayment()">Zahlung starten</button>
   </div>
 </div>
 

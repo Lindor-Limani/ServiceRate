@@ -4,6 +4,7 @@ import at.hcw.serviceratebackend.dto.BookingResponse;
 import at.hcw.serviceratebackend.dto.CreateCheckoutRequest;
 import at.hcw.serviceratebackend.dto.CreateBookingRequest;
 import at.hcw.serviceratebackend.dto.CreateTimeEntryRequest;
+import at.hcw.serviceratebackend.dto.PayPalCaptureRequest;
 import at.hcw.serviceratebackend.dto.PublishDeliveryRequest;
 import at.hcw.serviceratebackend.dto.RecordPaymentRequest;
 import at.hcw.serviceratebackend.dto.UpdateBookingWorkRequest;
@@ -101,6 +102,14 @@ public class BookingController {
             @PathVariable("id") java.util.UUID id,
             Authentication authentication) {
         return ResponseEntity.ok(bookingService.markPaid(id, (String) authentication.getPrincipal()));
+    }
+
+    @PostMapping("/{id}/paypal/capture")
+    public ResponseEntity<BookingResponse> capturePayPalPayment(
+            @PathVariable("id") java.util.UUID id,
+            @RequestBody PayPalCaptureRequest request,
+            Authentication authentication) {
+        return ResponseEntity.ok(bookingService.capturePayPalPayment(id, request.orderId(), (String) authentication.getPrincipal()));
     }
 
     @PostMapping("/{id}/record-payment")

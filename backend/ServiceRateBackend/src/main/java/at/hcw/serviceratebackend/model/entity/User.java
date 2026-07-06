@@ -34,6 +34,24 @@ public class User extends AuditableEntity {
     @Column(name = "payout_iban")
     private String payoutIban;
 
+    @Column(name = "paypal_merchant_id")
+    private String paypalMerchantId;
+
+    @Column(name = "paypal_email")
+    private String paypalEmail;
+
+    @Column(name = "paypal_onboarding_status")
+    private String paypalOnboardingStatus = "NOT_CONNECTED";
+
+    @Column(name = "paypal_permissions_granted")
+    private Boolean paypalPermissionsGranted;
+
+    @Column(name = "paypal_email_confirmed")
+    private Boolean paypalEmailConfirmed;
+
+    @Column(name = "paypal_referral_self_url", length = 1000)
+    private String paypalReferralSelfUrl;
+
     @Column(nullable = false)
     private String status = "ACTIVE";
 

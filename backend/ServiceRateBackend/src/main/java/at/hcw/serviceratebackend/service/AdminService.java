@@ -5,6 +5,7 @@ import at.hcw.serviceratebackend.dto.AdminBookingResponse;
 import at.hcw.serviceratebackend.dto.AdminReviewResponse;
 import at.hcw.serviceratebackend.dto.ReportResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
+import at.hcw.serviceratebackend.dto.UpdateSettlementStatusRequest;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.Report;
@@ -70,7 +71,7 @@ public class AdminService {
 
     public List<UserResponse> users() {
         return userRepository.findAll().stream()
-                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getProfileImageUrl(), u.getPayoutIban(), u.getAccountType(), u.getStatus()))
+                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getProfileImageUrl(), u.getPayoutIban(), u.getPaypalMerchantId(), u.getPaypalEmail(), u.getPaypalOnboardingStatus(), u.getPaypalPermissionsGranted(), u.getPaypalEmailConfirmed(), u.getAccountType(), u.getStatus()))
                 .toList();
     }
 
@@ -103,7 +104,7 @@ public class AdminService {
                 .orElseThrow(() -> new IllegalArgumentException("User nicht gefunden"));
         user.setStatus(active ? "ACTIVE" : "INACTIVE");
         User saved = userRepository.save(user);
-        return new UserResponse(saved.getId(), saved.getEmail(), saved.getFirstName(), saved.getLastName(), saved.getProfileImageUrl(), saved.getPayoutIban(), saved.getAccountType(), saved.getStatus());
+        return new UserResponse(saved.getId(), saved.getEmail(), saved.getFirstName(), saved.getLastName(), saved.getProfileImageUrl(), saved.getPayoutIban(), saved.getPaypalMerchantId(), saved.getPaypalEmail(), saved.getPaypalOnboardingStatus(), saved.getPaypalPermissionsGranted(), saved.getPaypalEmailConfirmed(), saved.getAccountType(), saved.getStatus());
     }
 
     public ServiceOfferingResponse setServiceStatus(java.util.UUID id, String status) {
@@ -132,6 +133,27 @@ public class AdminService {
         return toReportResponse(saved);
     }
 
+    public AdminBookingResponse setBookingSettlementStatus(java.util.UUID id, UpdateSettlementStatusRequest request) {
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Buchung nicht gefunden"));
+        String normalized = request.status() == null ? "" : request.status().trim().toUpperCase();
+        if (!List.of(
+                "NOT_READY",
+                "PAYPAL_PLATFORM_FEE_PENDING",
+                "PAYPAL_SPLIT_COMPLETED",
+                "PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT",
+                "PROVIDER_PAYOUT_SENT",
+                "PLATFORM_FEE_DUE_FROM_PROVIDER",
+                "PLATFORM_FEE_SETTLED",
+                "DISPUTED"
+        ).contains(normalized)) {
+            throw new IllegalArgumentException("Ungueltiger Settlement-Status.");
+        }
+        booking.setSettlementStatus(normalized);
+        booking.setSettlementNote(request.note());
+        return toBookingResponse(bookingRepository.save(booking));
+    }
+
     private AdminBookingResponse toBookingResponse(Booking booking) {
         return new AdminBookingResponse(
                 booking.getId(),
@@ -140,6 +162,12 @@ public class AdminService {
                 booking.getServiceOffering() == null ? "Unbekannter Service" : booking.getServiceOffering().getTitle(),
                 booking.getStatus(),
                 booking.getPaymentStatus(),
+                booking.getPaymentProvider(),
+                booking.getGrossAmount(),
+                booking.getPlatformFeeAmount(),
+                booking.getProviderReceivableAmount(),
+                booking.getSettlementStatus(),
+                booking.getSettlementNote(),
                 booking.getBookingDate(),
                 booking.getPaidAt()
         );

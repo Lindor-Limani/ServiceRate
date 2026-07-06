@@ -16,6 +16,13 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP WITH TIME ZONE");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url TEXT");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS payout_iban VARCHAR(64)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_merchant_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_email VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_onboarding_status VARCHAR(255) DEFAULT 'NOT_CONNECTED'");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_permissions_granted BOOLEAN");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_email_confirmed BOOLEAN");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_referral_self_url VARCHAR(1000)");
+        jdbcTemplate.execute("UPDATE users SET paypal_onboarding_status = 'NOT_CONNECTED' WHERE paypal_onboarding_status IS NULL");
         tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url TYPE TEXT");
         tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url SET DATA TYPE TEXT");
 
@@ -38,8 +45,16 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(255) DEFAULT 'MANUAL'");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_note TEXT");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_order_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_capture_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gross_amount DOUBLE PRECISION");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_amount DOUBLE PRECISION");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_receivable_amount DOUBLE PRECISION");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS settlement_status VARCHAR(255) DEFAULT 'NOT_READY'");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS settlement_note TEXT");
         jdbcTemplate.execute("UPDATE bookings SET payment_status = 'UNPAID' WHERE payment_status IS NULL");
         jdbcTemplate.execute("UPDATE bookings SET payment_provider = 'MANUAL' WHERE payment_provider IS NULL");
+        jdbcTemplate.execute("UPDATE bookings SET settlement_status = 'NOT_READY' WHERE settlement_status IS NULL");
 
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS time_entries (

@@ -63,4 +63,25 @@ public class Booking extends AuditableEntity {
 
     @Column(name = "paid_at")
     private OffsetDateTime paidAt;
+
+    @Column(name = "paypal_order_id")
+    private String paypalOrderId;
+
+    @Column(name = "paypal_capture_id")
+    private String paypalCaptureId;
+
+    @Column(name = "gross_amount")
+    private Double grossAmount;
+
+    @Column(name = "platform_fee_amount")
+    private Double platformFeeAmount;
+
+    @Column(name = "provider_receivable_amount")
+    private Double providerReceivableAmount;
+
+    @Column(name = "settlement_status")
+    private String settlementStatus = "NOT_READY";
+
+    @Column(name = "settlement_note", columnDefinition = "text")
+    private String settlementNote;
 }

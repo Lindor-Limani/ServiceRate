@@ -9,6 +9,8 @@ public record UpdateUserRequest(
         String lastName,
         String profileImageUrl,
         String payoutIban,
+        String paypalMerchantId,
+        String paypalEmail,
         String accountType,
         String status
 ) {

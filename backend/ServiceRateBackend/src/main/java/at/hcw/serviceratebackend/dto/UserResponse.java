@@ -9,6 +9,11 @@ public record UserResponse(
         String lastName,
         String profileImageUrl,
         String payoutIban,
+        String paypalMerchantId,
+        String paypalEmail,
+        String paypalOnboardingStatus,
+        Boolean paypalPermissionsGranted,
+        Boolean paypalEmailConfirmed,
         String accountType,
         String status
 ) {

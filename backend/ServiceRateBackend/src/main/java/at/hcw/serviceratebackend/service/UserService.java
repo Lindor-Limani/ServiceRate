@@ -127,6 +127,8 @@ public class UserService {
         if (request.lastName() != null) user.setLastName(request.lastName());
         if (request.profileImageUrl() != null) user.setProfileImageUrl(trimOrNull(request.profileImageUrl()));
         if (request.payoutIban() != null) user.setPayoutIban(trimOrNull(request.payoutIban()));
+        if (request.paypalMerchantId() != null) user.setPaypalMerchantId(trimOrNull(request.paypalMerchantId()));
+        if (request.paypalEmail() != null) user.setPaypalEmail(trimOrNull(request.paypalEmail()));
         if (request.accountType() != null && !request.accountType().isBlank()) {
             user.setAccountType(normalizeAllowedPublicAccountType(request.accountType()));
         }
@@ -184,6 +186,11 @@ public class UserService {
                 user.getLastName(),
                 user.getProfileImageUrl(),
                 user.getPayoutIban(),
+                user.getPaypalMerchantId(),
+                user.getPaypalEmail(),
+                user.getPaypalOnboardingStatus(),
+                user.getPaypalPermissionsGranted(),
+                user.getPaypalEmailConfirmed(),
                 user.getAccountType(),
                 user.getStatus()
         );

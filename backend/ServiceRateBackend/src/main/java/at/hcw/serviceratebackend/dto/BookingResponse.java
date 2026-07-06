@@ -27,6 +27,15 @@ public record BookingResponse(
         String paymentProvider,
         String paymentNote,
         OffsetDateTime paidAt,
+        String paypalOrderId,
+        String paypalCaptureId,
+        Double grossAmount,
+        Double platformFeeAmount,
+        Double providerReceivableAmount,
+        String settlementStatus,
+        String settlementNote,
+        boolean providerPaypalAvailable,
+        boolean providerOfflinePaymentAvailable,
         List<TimeEntryResponse> timeEntries,
         ReviewResponse review
 ) {}

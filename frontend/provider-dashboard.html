@@ -131,6 +131,22 @@
     .btn-primary:hover { background: var(--primary-dark); }
     .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
     .btn-ghost:hover { background: var(--bg); }
+    .btn-paypal {
+      background: #0070ba;
+      color: #fff;
+      border: 1px solid #0070ba;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+    .btn-paypal:hover { background: #005ea6; }
+    .btn-paypal img {
+      height: 18px;
+      width: auto;
+      display: block;
+      background: #fff;
+      border-radius: 3px;
+      padding: 2px 4px;
+    }
     .btn-danger { background: var(--danger-tint); color: var(--danger); }
     .btn-danger:hover { background: #fca5a5; }
     .btn-sm { padding: .32rem .75rem; font-size: .78rem; }
@@ -889,6 +905,16 @@
       <div class="image-preview-strip" id="providerSettingsProfilePreview"></div>
     </div>
     <h3 style="font-size:1rem;margin:1.2rem 0 .8rem">Zahlungs- und Auszahlungsinfos</h3>
+    <div class="drawer-section" style="margin-top:0">
+      <h3>PayPal Marketplace</h3>
+      <p class="muted-text" id="providerPaypalStatus">PayPal-Status wird geladen...</p>
+      <button class="btn btn-paypal btn-full" style="margin-top:.75rem" id="providerPaypalConnectBtn">
+        <img src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-color.svg" alt="PayPal" />
+        Continue with PayPal
+      </button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.55rem" id="providerPaypalRefreshBtn">Status bei PayPal prüfen</button>
+      <button class="btn btn-ghost btn-full" style="margin-top:.55rem" id="providerPaypalConfirmBtn">Verbindung speichern</button>
+    </div>
     <div id="providerPaymentMethodsList" class="service-reviews-list"></div>
     <div class="form-group">
       <label class="form-label">Name auf der Karte</label>
@@ -916,8 +942,16 @@
       <label class="form-label">Auszahlungs-IBAN</label>
       <input class="form-input" id="providerPayoutIban" placeholder="AT00 0000 0000 0000 0000" />
     </div>
+    <div class="form-group">
+      <label class="form-label">PayPal Merchant ID</label>
+      <input class="form-input" id="providerPaypalMerchantId" placeholder="Wird nach PayPal-Verbindung automatisch gesetzt" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">PayPal E-Mail</label>
+      <input class="form-input" id="providerPaypalEmail" type="email" placeholder="Optionaler Fallback" />
+    </div>
     <p class="muted-text" style="margin-bottom:1rem">
-      Bank- und Kartendaten werden hier nicht im Klartext gespeichert. Für echte Auszahlungen sollte Stripe Connect oder ein vergleichbarer Anbieter angebunden werden.
+      Bei PayPal-Marketplace-Zahlungen wird der Anbieter als Zahlungsempfänger verwendet. Bei Barzahlung oder Überweisung wird die Plattformprovision nachträglich abgerechnet.
     </p>
     <button class="btn btn-ghost btn-full" style="margin-bottom:.75rem" onclick="saveProviderPaymentMethod()">Zahlungsinfo speichern</button>
     <button class="btn btn-primary btn-full" onclick="saveProviderProfile()">Profil speichern</button>
