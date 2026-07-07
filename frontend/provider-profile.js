@@ -1,8 +1,23 @@
+const GLOBAL_VIEW_MODE_KEY = 'servicerate_view_mode';
+ensureGlobalViewMode();
+let providerProfileViewMode = preferredProviderProfileViewMode();
+let currentProviderProfile = null;
+
 (function initProviderProfile() {
   loadProviderProfile();
+  window.addEventListener('pageshow', refreshProviderProfileViewFromStoredMode);
 })();
 
-let providerProfileViewMode = localStorage.getItem('servicerate_provider_profile_services_view') || 'grid';
+function ensureGlobalViewMode() {
+  if (!localStorage.getItem(GLOBAL_VIEW_MODE_KEY)) {
+    localStorage.setItem(GLOBAL_VIEW_MODE_KEY, 'list');
+  }
+}
+
+function preferredProviderProfileViewMode() {
+  const globalMode = localStorage.getItem(GLOBAL_VIEW_MODE_KEY);
+  return globalMode === 'grid' ? 'grid' : 'list';
+}
 
 async function loadProviderProfile() {
   const root = document.getElementById('providerProfileRoot');
@@ -22,6 +37,7 @@ async function loadProviderProfile() {
 }
 
 function renderProviderProfile(profile) {
+  currentProviderProfile = profile;
   document.title = `${profile.name} - ServiceRate`;
   const root = document.getElementById('providerProfileRoot');
   root.innerHTML = `
@@ -44,8 +60,8 @@ function renderProviderProfile(profile) {
         </div>
       </div>
     </div>
-    <div class="cards-grid" id="providerProfileServicesGrid">
-      ${(profile.services || []).map(renderProviderServiceCard).join('') || `<div class="empty-state"><p>Keine aktiven Services.</p></div>`}
+    <div class="cards-grid is-list-view" id="providerProfileServicesGrid">
+      ${(profile.services || []).map(s => preferredProviderProfileViewMode() === 'list' ? renderProviderServiceListCard(s) : renderProviderServiceCard(s)).join('') || `<div class="empty-state"><p>Keine aktiven Services.</p></div>`}
     </div>
   `;
   applyProviderProfileViewMode();
@@ -53,31 +69,81 @@ function renderProviderProfile(profile) {
 
 function setProviderProfileViewMode(mode) {
   providerProfileViewMode = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem(GLOBAL_VIEW_MODE_KEY, providerProfileViewMode);
+  localStorage.setItem('servicerate_customer_market_view', providerProfileViewMode);
+  localStorage.setItem('servicerate_customer_bookings_view', providerProfileViewMode);
+  localStorage.setItem('servicerate_provider_services_view', providerProfileViewMode);
+  localStorage.setItem('servicerate_provider_bookings_view', providerProfileViewMode);
   localStorage.setItem('servicerate_provider_profile_services_view', providerProfileViewMode);
-  applyProviderProfileViewMode();
+  if (currentProviderProfile) renderProviderProfile(currentProviderProfile);
+  else applyProviderProfileViewMode();
 }
 
 function applyProviderProfileViewMode() {
-  const mode = providerProfileViewMode === 'list' ? 'list' : 'grid';
+  providerProfileViewMode = preferredProviderProfileViewMode();
+  const mode = providerProfileViewMode;
   document.getElementById('providerProfileServicesGrid')?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById('providerProfileServicesGrid')?.classList.toggle('is-grid-view', mode === 'grid');
   document.getElementById('providerProfileGridViewBtn')?.classList.toggle('active', mode === 'grid');
   document.getElementById('providerProfileListViewBtn')?.classList.toggle('active', mode === 'list');
 }
 
+function refreshProviderProfileViewFromStoredMode() {
+  if (currentProviderProfile) renderProviderProfile(currentProviderProfile);
+  else applyProviderProfileViewMode();
+}
+
 function renderProviderServiceCard(s) {
   return `
-    <article class="service-card" onclick="window.location.href='service-detail.html?id=${encodeURIComponent(s.id)}'">
+    <article class="service-card list-layout-card" onclick="window.location.href='service-detail.html?id=${encodeURIComponent(s.id)}'">
       ${catImage(s.category, s.imageUrl)}
-      <div class="card-top">
-        <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
-        <span class="card-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
+      <div class="list-card-body">
+        <div class="card-top">
+          <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+          <span class="card-price">
+            €${parseFloat(s.price).toFixed(2)}<small>/Std</small>
+            <span class="list-rating-inline">${ratingHtml(s)}</span>
+          </span>
+        </div>
+        <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
+        <div class="card-title">${esc(s.title)}</div>
+        <div class="card-desc">${esc(s.description)}</div>
+        <div class="card-rating">${ratingHtml(s)}</div>
       </div>
-      <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
-      <div class="card-title">${esc(s.title)}</div>
-      <div class="card-desc">${esc(s.description)}</div>
-      <div class="card-rating">${ratingHtml(s)}</div>
     </article>
   `;
+}
+
+function renderProviderServiceListCard(s) {
+  return `
+    <article class="sr-list-card" onclick="window.location.href='service-detail.html?id=${encodeURIComponent(s.id)}'">
+      ${listMedia(s.category, s.imageUrl)}
+      <div class="sr-list-body">
+        <div class="sr-list-top">
+          <div class="sr-list-main">
+            <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+            <div class="sr-list-title">${esc(s.title)}</div>
+            <div class="sr-list-desc">${esc(s.description)}</div>
+          </div>
+          <div>
+            <div class="sr-list-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></div>
+            <div class="sr-list-rating">${ratingHtml(s)}</div>
+          </div>
+        </div>
+        <div class="sr-list-pills">
+          <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function listMedia(category, imageUrl = '') {
+  if (imageUrl) {
+    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+  }
+  const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
+  return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
 }
 
 function initials(name) {

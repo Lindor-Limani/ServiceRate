@@ -11,9 +11,11 @@ let servicePageSize = 24;
 let serviceTotalPages = 0;
 let serviceTotalElements = 0;
 let serviceSearchTimer = null;
+const GLOBAL_VIEW_MODE_KEY = 'servicerate_view_mode';
+ensureGlobalViewMode();
 let customerViewModes = {
-  market: localStorage.getItem('servicerate_customer_market_view') || 'grid',
-  bookings: localStorage.getItem('servicerate_customer_bookings_view') || 'grid'
+  market: preferredViewMode('market'),
+  bookings: preferredViewMode('bookings')
 };
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -21,9 +23,10 @@ let customerViewModes = {
   handleAuthLinks();
   updateNavUI();
   loadWeather();
-  loadServices();
   applyCustomerViewMode('market');
   applyCustomerViewMode('bookings');
+  loadServices();
+  window.addEventListener('pageshow', refreshCustomerViewsFromStoredMode);
 
   document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') applyFilters();
@@ -43,18 +46,64 @@ let customerViewModes = {
   });
 })();
 
+function ensureGlobalViewMode() {
+  if (!localStorage.getItem(GLOBAL_VIEW_MODE_KEY)) {
+    localStorage.setItem(GLOBAL_VIEW_MODE_KEY, 'list');
+  }
+}
+
+function preferredViewMode(area) {
+  const globalMode = localStorage.getItem(GLOBAL_VIEW_MODE_KEY);
+  return globalMode === 'grid' ? 'grid' : 'list';
+}
+
 function setCustomerViewMode(area, mode) {
-  customerViewModes[area] = mode === 'list' ? 'list' : 'grid';
-  localStorage.setItem(`servicerate_customer_${area}_view`, customerViewModes[area]);
-  applyCustomerViewMode(area);
+  setGlobalViewMode(mode);
+  rerenderCustomerView(area);
+  applyAllCustomerViewModes();
 }
 
 function applyCustomerViewMode(area) {
-  const mode = customerViewModes[area] === 'list' ? 'list' : 'grid';
+  customerViewModes[area] = preferredViewMode(area);
+  const mode = customerViewModes[area];
   const gridId = area === 'bookings' ? 'customerBookingsGrid' : 'servicesGrid';
   document.getElementById(gridId)?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById(gridId)?.classList.toggle('is-grid-view', mode === 'grid');
   document.getElementById(`${area === 'bookings' ? 'customerBookings' : 'market'}GridViewBtn`)?.classList.toggle('active', mode === 'grid');
   document.getElementById(`${area === 'bookings' ? 'customerBookings' : 'market'}ListViewBtn`)?.classList.toggle('active', mode === 'list');
+  document.getElementById('customerDefaultGridViewBtn')?.classList.toggle('active', mode === 'grid');
+  document.getElementById('customerDefaultListViewBtn')?.classList.toggle('active', mode === 'list');
+}
+
+function applyAllCustomerViewModes() {
+  applyCustomerViewMode('market');
+  applyCustomerViewMode('bookings');
+}
+
+function rerenderCustomerView(area) {
+  if (area === 'market') {
+    if (allServices.length || serviceTotalElements > 0) renderServices();
+    return;
+  }
+  if (area === 'bookings') {
+    if (customerBookings.length) loadCustomerBookings();
+  }
+}
+
+function refreshCustomerViewsFromStoredMode() {
+  if (allServices.length || serviceTotalElements > 0) renderServices();
+  if (customerBookings.length) loadCustomerBookings();
+  applyAllCustomerViewModes();
+}
+
+function setGlobalViewMode(mode) {
+  const normalized = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem(GLOBAL_VIEW_MODE_KEY, normalized);
+  localStorage.setItem('servicerate_customer_market_view', normalized);
+  localStorage.setItem('servicerate_customer_bookings_view', normalized);
+  localStorage.setItem('servicerate_provider_services_view', normalized);
+  localStorage.setItem('servicerate_provider_bookings_view', normalized);
+  localStorage.setItem('servicerate_provider_profile_services_view', normalized);
 }
 
 // ── Wetter-Widget ─────────────────────────────────────────────────────────────
@@ -186,29 +235,83 @@ function renderServices() {
     return;
   }
 
+  if (preferredViewMode('market') === 'list') {
+    grid.innerHTML = allServices.map(renderCustomerServiceListCard).join('');
+    applyCustomerViewMode('market');
+    renderServicePagination();
+    return;
+  }
+
   grid.innerHTML = allServices.map(s => `
-    <article class="service-card" onclick="openServicePage('${s.id}')">
+    <article class="service-card list-layout-card" onclick="openServicePage('${s.id}')">
       ${catImage(s.category, s.imageUrl)}
-      <div class="card-top">
-        <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
-        <span class="card-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
-      </div>
-      ${trustBadge(s.trustScore)}
-      <div class="card-title">${esc(s.title)}</div>
-      <div class="card-desc">${esc(s.description)}</div>
-      <div class="card-desc">${serviceMetaLine(s)}</div>
-      ${paymentBadgesForAvailability(s)}
-      ${serviceRatingPanel(s)}
-      <div class="card-footer">
-        <div class="provider-row">
-          ${avatarHtml(s.providerName, s.providerProfileImageUrl)}
-          <span class="provider-name">${esc(s.providerName || 'Unbekannt')}</span>
+      <div class="list-card-body">
+        <div class="card-top">
+          <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+          <span class="card-price">
+            €${parseFloat(s.price).toFixed(2)}<small>/Std</small>
+            <span class="list-rating-inline">${ratingHtml(s)}</span>
+          </span>
         </div>
-        <span class="avail-dot">● Verfügbar</span>
+        ${trustBadge(s.trustScore)}
+        <div class="card-title">${esc(s.title)}</div>
+        <div class="card-desc">${esc(s.description)}</div>
+        <div class="card-desc">${serviceMetaLine(s)}</div>
+        ${paymentBadgesForAvailability(s)}
+        ${serviceRatingPanel(s)}
+        <div class="card-footer">
+          <div class="provider-row">
+            ${avatarHtml(s.providerName, s.providerProfileImageUrl)}
+            <span class="provider-name">${esc(s.providerName || 'Unbekannt')}</span>
+          </div>
+          <span class="avail-dot">● Verfügbar</span>
+        </div>
       </div>
     </article>
   `).join('');
+  applyCustomerViewMode('market');
   renderServicePagination();
+}
+
+function renderCustomerServiceListCard(s) {
+  return `
+    <article class="sr-list-card" onclick="openServicePage('${s.id}')">
+      ${listMedia(s.category, s.imageUrl)}
+      <div class="sr-list-body">
+        <div class="sr-list-top">
+          <div class="sr-list-main">
+            <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+            <div class="sr-list-title">${esc(s.title)}</div>
+            <div class="sr-list-desc">${esc(s.description)}</div>
+            <div class="sr-list-meta">${serviceMetaLine(s)}</div>
+          </div>
+          <div>
+            <div class="sr-list-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></div>
+            <div class="sr-list-rating">${ratingHtml(s)}</div>
+          </div>
+        </div>
+        <div class="sr-list-pills">
+          ${trustBadge(s.trustScore)}
+          ${paymentBadgesForAvailability(s)}
+        </div>
+        <div class="sr-list-footer">
+          <div class="provider-row">
+            ${avatarHtml(s.providerName, s.providerProfileImageUrl)}
+            <span class="provider-name">${esc(s.providerName || 'Unbekannt')}</span>
+          </div>
+          <span class="avail-dot">● Verfügbar</span>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function listMedia(category, imageUrl = '') {
+  if (imageUrl) {
+    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+  }
+  const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
+  return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
 }
 
 function renderServicePagination() {
@@ -233,7 +336,7 @@ function goToServicePage(page) {
 
 function serviceMetaLine(s) {
   const parts = [];
-  if (s.estimatedHours) parts.push(`ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
+  if (s.estimatedHours) parts.push(`Geschätzter Aufwand: ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
   if (s.deliverableType === 'DIGITAL') parts.push('Digital lieferbar');
   if (s.deliverableType === 'HYBRID') parts.push('Digital & vor Ort');
   return parts.length ? parts.map(esc).join(' · ') : 'Flexible Abwicklung';
@@ -656,6 +759,12 @@ async function loadCustomerBookings() {
       return;
     }
 
+    if (preferredViewMode('bookings') === 'list') {
+      grid.innerHTML = customerBookings.map(renderCustomerBookingListCard).join('');
+      applyCustomerViewMode('bookings');
+      return;
+    }
+
     grid.innerHTML = customerBookings.map(b => {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
@@ -666,44 +775,99 @@ async function loadCustomerBookings() {
         && b.paymentStatus !== 'AWAITING_OFFLINE_PAYMENT';
 
       return `
-      <div class="service-card booking-card ${statusClass}" style="cursor: default;">
+      <div class="service-card booking-card list-layout-card ${statusClass}" style="cursor: default;">
         ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
-        <div class="card-top">
-          <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
-        </div>
-        <div class="card-title" style="margin-top: 10px; font-size: 1.1rem;">${esc(b.serviceTitle || '–')}</div>
-      <div class="provider-row" style="margin-top:.45rem">
-        ${avatarHtml(b.providerName, b.providerProfileImageUrl)}
-        <span class="provider-name">Angeboten von: <strong>${esc(b.providerName || '–')}</strong></span>
-      </div>
-        <div class="booking-date-line">${dateLabel}</div>
-        <div class="payment-summary-card">
-          <div class="payment-badges">
-            ${b.paymentProvider ? paymentPill(b.paymentProvider) : paymentPill('', 'Noch nicht gewählt')}
-            <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+        <div class="list-card-body">
+          <div class="card-top">
+            <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
           </div>
-          <p>${paymentStatusCopy(b)}${b.actualHours ? ` Aufwand: ${Number(b.actualHours).toFixed(2)} Std.` : ''}</p>
+          <div class="card-title" style="font-size: 1.1rem;">${esc(b.serviceTitle || '–')}</div>
+          <div class="provider-row">
+            ${avatarHtml(b.providerName, b.providerProfileImageUrl)}
+            <span class="provider-name">Angeboten von: <strong>${esc(b.providerName || '–')}</strong></span>
+          </div>
+          <div class="booking-date-line">${dateLabel}</div>
+          <div class="payment-summary-card">
+            <div class="payment-badges">
+              ${b.paymentProvider ? paymentPill(b.paymentProvider) : paymentPill('', 'Noch nicht gewählt')}
+              <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+            </div>
+            <p>${paymentStatusCopy(b)}${b.actualHours ? ` Aufwand: ${Number(b.actualHours).toFixed(2)} Std.` : ''}</p>
+          </div>
+          ${review ? renderBookingReview(review) : renderBookingReviewEmpty(b.status)}
+          ${b.deliveryAvailable && b.deliveryUrl ? `<div class="booking-date-line">Lieferung: <button class="btn btn-ghost btn-sm" onclick="openDelivery('${b.id}')">${esc(b.deliveryLabel || 'Download öffnen')}</button>${b.deliveryExpiresAt ? ` · gültig bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : b.deliveryUrl ? `<div class="booking-date-line">Lieferung: nach Zahlung verfügbar</div>` : ''}
+          ${b.providerNotes ? `<div class="booking-date-line">Notiz: ${esc(b.providerNotes)}</div>` : ''}
+          <div class="booking-actions">
+            <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
+            ${canPay ? `<button class="btn btn-primary btn-sm" onclick="payBooking('${b.id}')">Sicher bezahlen</button>` : ''}
+          </div>
+          ${b.status === 'COMPLETED' && !review ? `
+          <div class="booking-actions">
+            <button class="btn btn-primary btn-sm"
+                    onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">⭐ Bewerten</button>
+          </div>
+          ` : ''}
         </div>
-        ${b.deliveryAvailable && b.deliveryUrl ? `<div class="booking-date-line">Lieferung: <button class="btn btn-ghost btn-sm" onclick="openDelivery('${b.id}')">${esc(b.deliveryLabel || 'Download öffnen')}</button>${b.deliveryExpiresAt ? ` · gültig bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : b.deliveryUrl ? `<div class="booking-date-line">Lieferung: nach Zahlung verfügbar</div>` : ''}
-        ${b.providerNotes ? `<div class="booking-date-line">Notiz: ${esc(b.providerNotes)}</div>` : ''}
-        ${review ? renderBookingReview(review) : renderBookingReviewEmpty(b.status)}
-        <div class="booking-actions">
-          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
-          ${canPay ? `<button class="btn btn-primary btn-sm" onclick="payBooking('${b.id}')">Sicher bezahlen</button>` : ''}
-        </div>
-        ${b.status === 'COMPLETED' && !review ? `
-        <div class="booking-actions">
-          <button class="btn btn-primary btn-sm"
-                  onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">⭐ Bewerten</button>
-        </div>
-        ` : ''}
       </div>`;
     }).join('');
+    applyCustomerViewMode('bookings');
   } catch (e) {
     console.error('Fehler beim Laden der Kunden-Buchungen:', e);
     grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
     notify('Fehler beim Laden der Buchungen.', 'error');
   }
+}
+
+function renderCustomerBookingListCard(b) {
+  const statusClass = bookingStatusClass(b.status);
+  const statusText = bookingStatusText(b.status);
+  const review = b.review;
+  const canPay = (b.status === 'ACCEPTED' || b.status === 'COMPLETED')
+    && b.paymentStatus !== 'PAID'
+    && b.paymentStatus !== 'AWAITING_OFFLINE_PAYMENT';
+  const dateLabel = b.bookingDate ? `Wunschtermin: ${b.bookingDate}` : 'Kein Termin angegeben';
+
+  return `
+    <article class="sr-list-card ${statusClass}">
+      ${listMedia(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+      <div class="sr-list-body">
+        <div class="sr-list-top">
+          <div class="sr-list-main">
+            <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
+            <div class="sr-list-title">${esc(b.serviceTitle || '–')}</div>
+            <div class="provider-row">
+              ${avatarHtml(b.providerName, b.providerProfileImageUrl)}
+              <span class="provider-name">Angeboten von: <strong>${esc(b.providerName || '–')}</strong></span>
+            </div>
+          </div>
+          <div class="sr-list-meta">${esc(dateLabel)}</div>
+        </div>
+        <div class="sr-list-split">
+          <div class="sr-mini-panel">
+            <div class="payment-badges">
+              ${b.paymentProvider ? paymentPill(b.paymentProvider) : paymentPill('', 'Noch nicht gewählt')}
+              <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+            </div>
+            <p>${paymentStatusCopy(b)}${b.actualHours ? ` Aufwand: ${Number(b.actualHours).toFixed(2)} Std.` : ''}</p>
+          </div>
+          <div class="sr-mini-panel">
+            <div class="sr-mini-panel-head">
+              <span>${review ? 'Deine Bewertung' : (b.status === 'COMPLETED' ? 'Bewertung offen' : 'Bewertung')}</span>
+              <span class="booking-review-stars">${review ? starString(review.rating || 0) : '☆☆☆☆☆'}</span>
+            </div>
+            <p>${review?.comment ? esc(review.comment) : (b.status === 'COMPLETED' ? 'Du kannst diese Buchung jetzt bewerten.' : 'Bewertung nach Abschluss möglich.')}</p>
+          </div>
+        </div>
+        ${b.deliveryAvailable && b.deliveryUrl ? `<div class="sr-list-meta">Lieferung: <button class="btn btn-ghost btn-sm" onclick="openDelivery('${b.id}')">${esc(b.deliveryLabel || 'Download öffnen')}</button>${b.deliveryExpiresAt ? ` · gültig bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : b.deliveryUrl ? `<div class="sr-list-meta">Lieferung: nach Zahlung verfügbar</div>` : ''}
+        ${b.providerNotes ? `<div class="sr-list-meta">Notiz: ${esc(b.providerNotes)}</div>` : ''}
+        <div class="sr-list-actions">
+          <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
+          ${canPay ? `<button class="btn btn-primary btn-sm" onclick="payBooking('${b.id}')">Sicher bezahlen</button>` : ''}
+          ${b.status === 'COMPLETED' && !review ? `<button class="btn btn-primary btn-sm" onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">Bewerten</button>` : ''}
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function renderServiceReviews(reviews) {
@@ -714,6 +878,7 @@ function renderServiceReviews(reviews) {
 
 async function openPaymentSettings() {
   document.getElementById('paymentModal').classList.add('open');
+  applyAllCustomerViewModes();
   await loadCustomerProfile();
   loadPaymentMethods();
 }

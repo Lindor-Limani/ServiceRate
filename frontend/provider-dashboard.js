@@ -9,9 +9,11 @@ let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalend
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
 let activeBookingId = null;
 let serviceImageUrls = [];
+const GLOBAL_VIEW_MODE_KEY = 'servicerate_view_mode';
+ensureGlobalViewMode();
 let providerViewModes = {
-  services: localStorage.getItem('servicerate_provider_services_view') || 'grid',
-  bookings: localStorage.getItem('servicerate_provider_bookings_view') || 'grid'
+  services: preferredViewMode('services'),
+  bookings: preferredViewMode('bookings')
 };
 
 document.addEventListener('click', event => {
@@ -73,27 +75,74 @@ function showApp() {
 
   updateProviderVerifyBanner();
   wireProviderFormatting();
-  loadServices();
-  loadProviderOverview();
   applyProviderViewMode('services');
   applyProviderViewMode('bookings');
+  loadServices();
+  loadProviderOverview();
+  window.addEventListener('pageshow', refreshProviderViewsFromStoredMode);
   notifyPendingPayPalOnboardingWithoutParams();
   notifyPendingStripeOnboardingWithoutParams();
 }
 
+function preferredViewMode(area) {
+  const globalMode = localStorage.getItem(GLOBAL_VIEW_MODE_KEY);
+  return globalMode === 'grid' ? 'grid' : 'list';
+}
+
+function ensureGlobalViewMode() {
+  if (!localStorage.getItem(GLOBAL_VIEW_MODE_KEY)) {
+    localStorage.setItem(GLOBAL_VIEW_MODE_KEY, 'list');
+  }
+}
+
 function setProviderViewMode(area, mode) {
-  providerViewModes[area] = mode === 'list' ? 'list' : 'grid';
-  localStorage.setItem(`servicerate_provider_${area}_view`, providerViewModes[area]);
-  applyProviderViewMode(area);
+  setGlobalViewMode(mode);
+  rerenderProviderView(area);
+  applyAllProviderViewModes();
 }
 
 function applyProviderViewMode(area) {
-  const mode = providerViewModes[area] === 'list' ? 'list' : 'grid';
+  providerViewModes[area] = preferredViewMode(area);
+  const mode = providerViewModes[area];
   const gridId = area === 'bookings' ? 'bookingsGrid' : 'servicesGrid';
   const prefix = area === 'bookings' ? 'providerBookings' : 'providerServices';
   document.getElementById(gridId)?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById(gridId)?.classList.toggle('is-grid-view', mode === 'grid');
   document.getElementById(`${prefix}GridViewBtn`)?.classList.toggle('active', mode === 'grid');
   document.getElementById(`${prefix}ListViewBtn`)?.classList.toggle('active', mode === 'list');
+  document.getElementById('providerDefaultGridViewBtn')?.classList.toggle('active', mode === 'grid');
+  document.getElementById('providerDefaultListViewBtn')?.classList.toggle('active', mode === 'list');
+}
+
+function applyAllProviderViewModes() {
+  applyProviderViewMode('services');
+  applyProviderViewMode('bookings');
+}
+
+function rerenderProviderView(area) {
+  if (area === 'services') {
+    if (allServices.length) renderServices();
+    return;
+  }
+  if (area === 'bookings') {
+    if (providerBookings.length) renderBookings();
+  }
+}
+
+function refreshProviderViewsFromStoredMode() {
+  if (allServices.length) renderServices();
+  if (providerBookings.length) renderBookings();
+  applyAllProviderViewModes();
+}
+
+function setGlobalViewMode(mode) {
+  const normalized = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem(GLOBAL_VIEW_MODE_KEY, normalized);
+  localStorage.setItem('servicerate_customer_market_view', normalized);
+  localStorage.setItem('servicerate_customer_bookings_view', normalized);
+  localStorage.setItem('servicerate_provider_services_view', normalized);
+  localStorage.setItem('servicerate_provider_bookings_view', normalized);
+  localStorage.setItem('servicerate_provider_profile_services_view', normalized);
 }
 
 async function startPayPalOnboarding() {
@@ -287,6 +336,7 @@ function doLogout() {
 
 async function openProviderSettings() {
   document.getElementById('providerSettingsModal').classList.add('open');
+  applyAllProviderViewModes();
   await loadProviderProfileSettings();
 }
 
@@ -635,28 +685,80 @@ function renderServices() {
     return;
   }
 
+  if (preferredViewMode('services') === 'list') {
+    grid.innerHTML = allServices.map(renderProviderServiceListCard).join('');
+    applyProviderViewMode('services');
+    return;
+  }
+
   grid.innerHTML = allServices.map(s => `
-    <div class="svc-card">
+    <div class="svc-card list-layout-card">
       ${catImage(s.category, s.imageUrl)}
-      <div class="svc-top">
-        <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
-        <span class="svc-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></span>
-      </div>
-      <div class="svc-title">${esc(s.title)}</div>
-      <div class="svc-desc">${esc(s.description)}</div>
-      <div class="svc-desc">${serviceMetaLine(s)}</div>
-      <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
-      ${serviceRatingPanel(s)}
-      <div style="font-size:.78rem;color:var(--muted)">
-        Anbieter: <strong>${esc(s.providerName || '–')}</strong>
-        &nbsp;·&nbsp; Status: <strong>${esc(s.status || 'ACTIVE')}</strong>
-      </div>
-      <div class="svc-footer">
-        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${s.id}')">✎ Bearbeiten</button>
-        <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${s.id}')">🗑 Löschen</button>
+      <div class="list-card-body">
+        <div class="svc-top">
+          <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+          <span class="svc-price">
+            €${parseFloat(s.price).toFixed(2)}<small>/Std</small>
+            <span class="list-rating-inline">${serviceRatingInline(s)}</span>
+          </span>
+        </div>
+        <div class="svc-title">${esc(s.title)}</div>
+        <div class="svc-desc">${esc(s.description)}</div>
+        <div class="svc-desc">${serviceMetaLine(s)}</div>
+        <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
+        ${serviceRatingPanel(s)}
+        <div style="font-size:.78rem;color:var(--muted)">
+          Anbieter: <strong>${esc(s.providerName || '–')}</strong>
+          &nbsp;·&nbsp; Status: <strong>${esc(s.status || 'ACTIVE')}</strong>
+        </div>
+        <div class="svc-footer">
+          <button class="btn btn-ghost btn-sm" onclick="openEditModal('${s.id}')">✎ Bearbeiten</button>
+          <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${s.id}')">🗑 Löschen</button>
+        </div>
       </div>
     </div>
   `).join('');
+  applyProviderViewMode('services');
+}
+
+function renderProviderServiceListCard(s) {
+  return `
+    <article class="sr-list-card">
+      ${listMedia(s.category, s.imageUrl)}
+      <div class="sr-list-body">
+        <div class="sr-list-top">
+          <div class="sr-list-main">
+            <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+            <div class="sr-list-title">${esc(s.title)}</div>
+            <div class="sr-list-desc">${esc(s.description)}</div>
+            <div class="sr-list-meta">${serviceMetaLine(s)}</div>
+          </div>
+          <div>
+            <div class="sr-list-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></div>
+            <div class="sr-list-rating">${serviceRatingInline(s)}</div>
+          </div>
+        </div>
+        <div class="sr-list-pills">
+          <div class="trust-badge"><span>Trust Score</span><strong>${Number(s.trustScore || 0)}</strong></div>
+        </div>
+        <div class="sr-list-footer">
+          <div class="sr-list-meta">Anbieter: <strong>${esc(s.providerName || '–')}</strong> · Status: <strong>${esc(s.status || 'ACTIVE')}</strong></div>
+          <div class="sr-list-actions" style="border-top:0;padding-top:0">
+            <button class="btn btn-ghost btn-sm" onclick="openEditModal('${s.id}')">✎ Bearbeiten</button>
+            <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${s.id}')">🗑 Löschen</button>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function listMedia(category, imageUrl = '') {
+  if (imageUrl) {
+    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+  }
+  const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
+  return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
 }
 
 function updateStats() {
@@ -832,7 +934,7 @@ async function loadBookings() {
 
 function serviceMetaLine(s) {
   const parts = [];
-  if (s.estimatedHours) parts.push(`ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
+  if (s.estimatedHours) parts.push(`Geschätzter Aufwand: ca. ${Number(s.estimatedHours).toFixed(1)} Std`);
   if (s.deliverableType === 'DIGITAL') parts.push('digitale Lieferung');
   if (s.deliverableType === 'HYBRID') parts.push('hybrid');
   return parts.length ? parts.map(esc).join(' · ') : 'nach Vereinbarung';
@@ -878,13 +980,71 @@ function renderBookings() {
           <small>${filteredBookings.length} von ${providerBookings.length} Aufträgen angezeigt.</small>
         </div>
       </div>
-      ${filteredBookings.length ? filteredBookings.map(b => renderProviderBookingCard(b)).join('') : `
+      ${filteredBookings.length ? filteredBookings.map(b => preferredViewMode('bookings') === 'list' ? renderProviderBookingListCard(b) : renderProviderBookingCard(b)).join('') : `
         <div class="appointment-empty-card">
           <div class="empty-icon">📭</div>
           <p>Keine Aufträge passen zu den aktuellen Filtern.</p>
         </div>
       `}
     </section>
+  `;
+  applyProviderViewMode('bookings');
+}
+
+function renderProviderBookingListCard(b) {
+  const statusClass = statusToClass(b.status);
+  const review = b.review;
+  return `
+    <article class="sr-list-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
+      ${listMedia(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+      <div class="sr-list-body">
+        <div class="sr-list-top">
+          <div class="sr-list-main">
+            <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
+            <div class="sr-list-title">${esc(b.serviceTitle)}</div>
+            <div class="provider-row">
+              ${avatarHtml(b.customerName, b.customerProfileImageUrl)}
+              <span class="provider-name">Angefragt von: <strong>${esc(b.customerName)}</strong></span>
+            </div>
+          </div>
+          <div class="sr-list-meta">${formatDateShort(b.bookingDate)}</div>
+        </div>
+        <div class="sr-list-split">
+          <div class="sr-mini-panel">
+            <div class="payment-badges">
+              ${providerPaymentPill(b.paymentProvider, b.paymentProvider ? '' : 'Noch nicht gewählt')}
+              <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+            </div>
+            <p>${b.actualHours ? `Aufwand: ${Number(b.actualHours).toFixed(2)} Std` : 'Zahlungsstatus und Aufwand auf einen Blick.'}</p>
+          </div>
+          <div class="sr-mini-panel">
+            <div class="sr-mini-panel-head">
+              <span>${review ? 'Kundenbewertung' : 'Kundenbewertung'}</span>
+              <span class="booking-review-stars">${review ? starString(review.rating || 0) : '☆☆☆☆☆'}</span>
+            </div>
+            <p>${review?.comment ? esc(review.comment) : 'Bewertungen erscheinen hier nach abgeschlossenen Buchungen.'}</p>
+          </div>
+        </div>
+        ${b.deliveryUrl ? `<div class="sr-list-meta">Lieferung bereitgestellt${b.deliveryExpiresAt ? ` · bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : ''}
+        ${b.status === 'PENDING' ? `
+          <div class="sr-list-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">Akzeptieren</button>
+            <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">Ablehnen</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        ` : b.status === 'ACCEPTED' ? `
+          <div class="sr-list-actions" onclick="event.stopPropagation()">
+            <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'COMPLETED')">✓ Abschließen</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        ` : `
+          <div class="sr-list-actions" onclick="event.stopPropagation()">
+            <span class="muted-text">Buchung ist abgeschlossen/abgelehnt.</span>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        `}
+      </div>
+    </article>
   `;
 }
 
@@ -1053,42 +1213,44 @@ function renderProviderBookingCard(b) {
   const review = b.review;
 
   return `
-    <div class="svc-card appointment-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
+    <div class="svc-card appointment-card list-layout-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
       ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
-      <div class="svc-top">
-        <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
-        <span class="appointment-date">${formatDateShort(b.bookingDate)}</span>
-      </div>
-      <div class="svc-title">${esc(b.serviceTitle)}</div>
-      <div class="svc-desc" style="display:flex;align-items:center;gap:.5rem">
-        ${avatarHtml(b.customerName, b.customerProfileImageUrl)}
-        <span>Angefragt von: <strong>${esc(b.customerName)}</strong></span>
-      </div>
-      <div class="svc-desc">
-        Zahlung: ${providerPaymentPill(b.paymentProvider, b.paymentProvider ? '' : 'Noch nicht gewählt')}
-        <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
-        ${b.actualHours ? ` · Aufwand: <strong>${Number(b.actualHours).toFixed(2)} Std</strong>` : ''}
-      </div>
-      ${b.deliveryUrl ? `<div class="svc-desc">Lieferung bereitgestellt${b.deliveryExpiresAt ? ` · bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : ''}
-      ${review ? renderProviderReview(review) : renderProviderReviewEmpty(b.status)}
+      <div class="list-card-body">
+        <div class="svc-top">
+          <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
+          <span class="appointment-date">${formatDateShort(b.bookingDate)}</span>
+        </div>
+        <div class="svc-title">${esc(b.serviceTitle)}</div>
+        <div class="svc-desc booking-person-line" style="display:flex;align-items:center;gap:.5rem">
+          ${avatarHtml(b.customerName, b.customerProfileImageUrl)}
+          <span>Angefragt von: <strong>${esc(b.customerName)}</strong></span>
+        </div>
+        <div class="svc-desc booking-payment-line">
+          Zahlung: ${providerPaymentPill(b.paymentProvider, b.paymentProvider ? '' : 'Noch nicht gewählt')}
+          <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+          ${b.actualHours ? ` · Aufwand: <strong>${Number(b.actualHours).toFixed(2)} Std</strong>` : ''}
+        </div>
+        ${review ? renderProviderReview(review) : renderProviderReviewEmpty(b.status)}
+        ${b.deliveryUrl ? `<div class="svc-desc">Lieferung bereitgestellt${b.deliveryExpiresAt ? ` · bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : ''}
 
-      ${b.status === 'PENDING' ? `
-        <div class="svc-footer" onclick="event.stopPropagation()">
-          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">Akzeptieren</button>
-          <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">Ablehnen</button>
-          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
-        </div>
-      ` : b.status === 'ACCEPTED' ? `
-        <div class="svc-footer" onclick="event.stopPropagation()">
-          <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'COMPLETED')">✓ Abschließen</button>
-          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
-        </div>
-      ` : `
-        <div class="svc-footer" onclick="event.stopPropagation()">
-          <span class="muted-text">Buchung ist abgeschlossen/abgelehnt.</span>
-          <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
-        </div>
-      `}
+        ${b.status === 'PENDING' ? `
+          <div class="svc-footer" onclick="event.stopPropagation()">
+            <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'ACCEPTED')">Akzeptieren</button>
+            <button class="btn btn-danger btn-sm" onclick="updateBookingStatus('${b.id}', 'REJECTED')">Ablehnen</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        ` : b.status === 'ACCEPTED' ? `
+          <div class="svc-footer" onclick="event.stopPropagation()">
+            <button class="btn btn-primary btn-sm" onclick="updateBookingStatus('${b.id}', 'COMPLETED')">✓ Abschließen</button>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        ` : `
+          <div class="svc-footer" onclick="event.stopPropagation()">
+            <span class="muted-text">Buchung ist abgeschlossen/abgelehnt.</span>
+            <button class="btn btn-ghost btn-sm" onclick="openBookingDrawer('${b.id}')">Details</button>
+          </div>
+        `}
+      </div>
     </div>
   `;
 }
@@ -1356,6 +1518,13 @@ function serviceRatingPanel(s) {
       </div>
     </div>
   `;
+}
+
+function serviceRatingInline(s) {
+  const count = s.reviewCount || 0;
+  const avg = s.averageRating || 0;
+  if (!count) return `<span class="stars">☆☆☆☆☆</span> <span>Noch keine Bewertungen</span>`;
+  return `<span class="stars">${starString(avg)}</span> <span>${avg.toFixed(1)} (${count})</span>`;
 }
 
 function renderProviderReview(review) {

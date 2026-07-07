@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <title>ServiceRate – Provider Dashboard</title>
   <style>
     :root {
@@ -250,6 +252,136 @@
     .services-grid.is-list-view {
       grid-template-columns: 1fr;
     }
+    .sr-list-card {
+      display: grid;
+      grid-template-columns: 148px minmax(0, 1fr);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      min-height: 148px;
+    }
+    .sr-list-media {
+      min-height: 148px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.7rem;
+      background: #e0f2f1;
+      background-size: cover;
+      background-position: center;
+    }
+    .sr-list-body {
+      padding: 1rem 1.1rem;
+      display: grid;
+      gap: .65rem;
+      min-width: 0;
+    }
+    .sr-list-top,
+    .sr-list-footer,
+    .sr-list-meta,
+    .sr-list-actions,
+    .sr-list-pills {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .55rem;
+    }
+    .sr-list-top {
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .sr-list-main {
+      display: grid;
+      gap: .28rem;
+      min-width: 0;
+    }
+    .sr-list-title {
+      color: var(--text);
+      font-size: 1.02rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .sr-list-desc,
+    .sr-list-meta {
+      color: var(--muted);
+      font-size: .83rem;
+      line-height: 1.4;
+    }
+    .sr-list-price {
+      color: var(--text);
+      font-size: 1.08rem;
+      font-weight: 900;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .sr-list-price small {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 500;
+    }
+    .sr-list-rating {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 700;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .sr-list-rating .stars {
+      color: #f5a623;
+      letter-spacing: 0;
+    }
+    .sr-list-footer {
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding-top: .7rem;
+    }
+    .sr-list-actions {
+      padding-top: .65rem;
+      border-top: 1px solid var(--border);
+    }
+    .sr-list-actions .btn-sm {
+      min-height: 40px;
+      min-width: 128px;
+      justify-content: center;
+      padding: .65rem 1.15rem;
+      font-size: .86rem;
+    }
+    .sr-list-card.status-pending { border-top: 4px solid #f59e0b; }
+    .sr-list-card.status-accepted { border-top: 4px solid #10b981; }
+    .sr-list-card.status-rejected { border-top: 4px solid #ef4444; }
+    .sr-list-card.status-completed { border-top: 4px solid #64748b; }
+    .sr-list-split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .65rem;
+    }
+    .sr-mini-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: #f8fbfb;
+      padding: .65rem .75rem;
+      display: grid;
+      gap: .45rem;
+      min-width: 0;
+    }
+    .sr-mini-panel p {
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.35;
+    }
+    .sr-mini-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+      color: var(--text);
+      font-size: .78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
     .view-toggle {
       display: inline-flex;
       align-items: center;
@@ -328,36 +460,129 @@
       transition: box-shadow .2s;
     }
     .svc-card:hover { box-shadow: var(--shadow-md); }
+    .list-card-body {
+      display: contents;
+    }
+    .list-rating-inline {
+      display: none;
+    }
     .services-grid.is-list-view .svc-card {
-      display: grid;
-      grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+      display: flex;
       align-items: stretch;
       padding: 0;
       overflow: hidden;
-      gap: .75rem;
-    }
-    .services-grid.is-list-view .svc-card > :not(.card-image) {
-      margin-left: .5rem;
-      margin-right: 1.25rem;
-    }
-    .services-grid.is-list-view .svc-card > :not(.card-image):last-child {
-      margin-bottom: 1.25rem;
+      gap: 0;
     }
     .services-grid.is-list-view .card-image {
-      grid-row: 1 / span 20;
       margin: 0;
-      height: 100%;
-      min-height: 190px;
+      flex: 0 0 132px;
+      width: 132px;
+      min-height: 126px;
       border-radius: 0;
+      font-size: 2.4rem;
+    }
+    .services-grid.is-list-view .list-card-body {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      flex-direction: column;
+      gap: .55rem;
+      padding: .9rem 1.05rem .85rem 1.05rem;
     }
     .services-grid.is-list-view .svc-top {
-      margin-top: 1.25rem;
+      margin-top: 0;
+      align-items: center;
+    }
+    .services-grid.is-list-view .svc-price {
+      display: grid;
+      justify-items: end;
+      gap: .12rem;
+    }
+    .services-grid.is-list-view .list-rating-inline {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .25rem;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 600;
+    }
+    .services-grid.is-list-view .list-rating-inline .stars {
+      color: #f5a623;
+      letter-spacing: 0;
     }
     .services-grid.is-list-view .svc-title {
-      font-size: 1.08rem;
+      font-size: 1.02rem;
+      line-height: 1.2;
     }
     .services-grid.is-list-view .svc-desc {
       max-width: 760px;
+      line-height: 1.42;
+      font-size: .8rem;
+    }
+    .services-grid.is-list-view .svc-desc + .svc-desc {
+      margin-top: -.15rem;
+    }
+    .services-grid.is-list-view .svc-footer {
+      margin-top: .25rem;
+      padding-top: .7rem;
+      flex-wrap: wrap;
+      gap: .55rem;
+    }
+    .services-grid.is-list-view .service-rating-panel,
+    .services-grid.is-list-view .booking-review {
+      padding: .45rem .6rem;
+      margin-top: .05rem;
+    }
+    .services-grid.is-list-view .service-rating-panel {
+      display: none;
+    }
+    .services-grid.is-list-view .service-rating-score {
+      min-width: 38px;
+    }
+    .services-grid.is-list-view .service-rating-score strong {
+      font-size: .95rem;
+    }
+    .services-grid.is-list-view .service-rating-score span {
+      font-size: .64rem;
+    }
+    .services-grid.is-list-view .service-rating-copy small,
+    .services-grid.is-list-view .booking-review-comment,
+    .services-grid.is-list-view .booking-review-meta {
+      display: none;
+    }
+    .services-grid.is-list-view .booking-review {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+    }
+    .services-grid.is-list-view .booking-review-head {
+      margin: 0;
+      flex: 1;
+    }
+    .services-grid.is-list-view .btn-sm {
+      min-height: 40px;
+      min-width: 128px;
+      justify-content: center;
+      padding: .65rem 1.25rem;
+      font-size: .86rem;
+    }
+    .services-grid.is-list-view .appointment-card .list-card-body {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-content: start;
+      gap: .55rem .75rem;
+    }
+    .services-grid.is-list-view .appointment-card .svc-top,
+    .services-grid.is-list-view .appointment-card .svc-title,
+    .services-grid.is-list-view .appointment-card .booking-person-line,
+    .services-grid.is-list-view .appointment-card .svc-footer {
+      grid-column: 1 / -1;
+    }
+    .services-grid.is-list-view .appointment-card .booking-review,
+    .services-grid.is-list-view .appointment-card .booking-payment-line {
+      min-width: 0;
     }
 
     .svc-top {
@@ -685,6 +910,23 @@
     .drawer-section { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-top: 1rem; }
     .drawer-section:last-child { margin-bottom: 3rem; }
     .drawer-section h3 { font-size: 1rem; margin-bottom: .75rem; }
+    .settings-section {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      margin: 0 0 1rem;
+      background: #f8fbfb;
+    }
+    .settings-section h3 {
+      font-size: 1rem;
+      margin-bottom: .35rem;
+    }
+    .settings-section p {
+      color: var(--muted);
+      font-size: .84rem;
+      line-height: 1.45;
+      margin-bottom: .75rem;
+    }
     .time-entry-row {
       display: grid; grid-template-columns: 105px 70px 1fr; gap: .6rem;
       padding: .55rem 0; border-bottom: 1px solid var(--border); font-size: .84rem;
@@ -770,15 +1012,49 @@
       .main-wrap { padding: 0 1rem; }
       /* Karten und Stats einspaltig, kein horizontales Scrollen */
       .services-grid { grid-template-columns: 1fr; }
+      .sr-list-card {
+        grid-template-columns: 1fr;
+      }
+      .sr-list-media {
+        min-height: 150px;
+      }
+      .sr-list-top,
+      .sr-list-footer {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .sr-list-price,
+      .sr-list-rating {
+        text-align: left;
+      }
+      .sr-list-split {
+        grid-template-columns: 1fr;
+      }
       .services-grid.is-list-view .svc-card { grid-template-columns: 1fr; }
+      .services-grid.is-list-view .svc-card { flex-direction: column; }
       .services-grid.is-list-view .card-image {
-        grid-row: auto;
+        width: 100%;
+        flex-basis: auto;
         height: 150px;
         min-height: 150px;
       }
       .services-grid.is-list-view .svc-card > :not(.card-image) {
         margin-left: 1rem;
         margin-right: 1rem;
+      }
+      .services-grid.is-list-view .list-card-body {
+        margin-left: 0;
+        margin-right: 0;
+      }
+      .services-grid.is-list-view .svc-card {
+        gap: .55rem;
+      }
+      .services-grid.is-list-view .appointment-card .list-card-body {
+        grid-template-columns: 1fr;
+      }
+      .services-grid.is-list-view .appointment-card .booking-review,
+      .services-grid.is-list-view .appointment-card .booking-payment-line {
+        grid-column: 1;
       }
       .stats-row { grid-template-columns: 1fr; }
       .booking-filters { grid-template-columns: 1fr; }
@@ -1003,6 +1279,55 @@
       line-height: 1.55;
     }
     .booking-review-comment.muted { color: var(--muted); }
+    /* Robust list fallback: marked cards render as list unless grid view is explicit. */
+    .services-grid:not(.is-grid-view) .list-layout-card {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      padding: 0;
+      overflow: hidden;
+      gap: 0;
+    }
+    .services-grid:not(.is-grid-view) .list-layout-card > .card-image {
+      margin: 0;
+      flex: 0 0 132px;
+      width: 132px;
+      min-height: 126px;
+      border-radius: 0;
+      font-size: 2.4rem;
+    }
+    .services-grid:not(.is-grid-view) .list-layout-card > .list-card-body {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+      flex-direction: column;
+      gap: .55rem;
+      padding: .9rem 1.05rem .85rem;
+    }
+    .services-grid:not(.is-grid-view) .list-layout-card .service-rating-panel {
+      display: none;
+    }
+    .services-grid:not(.is-grid-view) .list-layout-card .list-rating-inline {
+      display: inline-flex;
+    }
+    .services-grid:not(.is-grid-view) .list-layout-card .btn-sm {
+      min-height: 40px;
+      min-width: 128px;
+      justify-content: center;
+      padding: .65rem 1.25rem;
+      font-size: .86rem;
+    }
+    @media (max-width: 700px) {
+      .services-grid:not(.is-grid-view) .list-layout-card {
+        flex-direction: column;
+      }
+      .services-grid:not(.is-grid-view) .list-layout-card > .card-image {
+        width: 100%;
+        flex-basis: auto;
+        height: 150px;
+        min-height: 150px;
+      }
+    }
     .chat-thread {
       display: grid; gap: .6rem; max-height: 340px; overflow-y: auto;
       background: var(--bg); border: 1px solid var(--border);
@@ -1170,7 +1495,7 @@
         </div>
       </div>
 
-      <div class="services-grid" id="servicesGrid">
+      <div class="services-grid is-list-view" id="servicesGrid">
         <div class="empty-state">
           <div class="empty-icon">⏳</div>
           <p>Services werden geladen…</p>
@@ -1185,7 +1510,7 @@
           <button type="button" id="providerBookingsListViewBtn" onclick="setProviderViewMode('bookings', 'list')">Liste</button>
         </div>
       </div>
-      <div class="services-grid" id="bookingsGrid">
+      <div class="services-grid is-list-view" id="bookingsGrid">
         <div class="empty-state">
           <div class="empty-icon">⏳</div>
           <p>Lade Anfragen...</p>
@@ -1364,6 +1689,14 @@
       <input type="hidden" id="providerSettingsProfileImage" />
       <div class="image-preview-strip" id="providerSettingsProfilePreview"></div>
     </div>
+    <section class="settings-section">
+      <h3>Darstellung</h3>
+      <p>Wähle, ob Services und Aufträge standardmäßig als Kacheln oder als kompakte Liste angezeigt werden.</p>
+      <div class="view-toggle" aria-label="Standard-Darstellung wählen">
+        <button type="button" id="providerDefaultGridViewBtn" onclick="setProviderViewMode('services', 'grid')">Kacheln</button>
+        <button type="button" id="providerDefaultListViewBtn" onclick="setProviderViewMode('services', 'list')">Liste</button>
+      </div>
+    </section>
     <h3 style="font-size:1rem;margin:1.2rem 0 .8rem">Zahlungs- und Auszahlungsinfos</h3>
     <div class="drawer-section" style="margin-top:0">
       <h3>PayPal Marketplace</h3>
@@ -1508,8 +1841,8 @@
   </div>
 </div>
 
-<script src="utils.js"></script>
-<script src="api.js"></script>
-<script src="provider-dashboard.js"></script>
+<script src="utils.js?v=20260707-view-rerender1"></script>
+<script src="api.js?v=20260707-view-rerender1"></script>
+<script src="provider-dashboard.js?v=20260707-view-rerender1"></script>
 </body>
 </html>

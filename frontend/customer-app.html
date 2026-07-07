@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <title>ServiceRate – Handwerker finden</title>
-  <link rel="stylesheet" href="customer-style.css" />
+  <link rel="stylesheet" href="customer-style.css?v=20260707-view-rerender1" />
 </head>
 <body>
 
@@ -91,7 +93,7 @@
       </div>
     </div>
 
-    <div class="cards-grid" id="servicesGrid">
+    <div class="cards-grid is-list-view" id="servicesGrid">
       <div class="empty-state">
         <div class="empty-icon">⏳</div>
         <p>Services werden geladen…</p>
@@ -110,7 +112,7 @@
         </div>
       </div>
     </div>
-    <div class="cards-grid" id="customerBookingsGrid"></div>
+    <div class="cards-grid is-list-view" id="customerBookingsGrid"></div>
   </div>
 
 </main>
@@ -237,6 +239,14 @@
       <div class="image-preview-strip" id="settingsProfilePreview"></div>
     </div>
     <button class="btn btn-ghost btn-full" style="margin-bottom:1.2rem" onclick="saveCustomerProfile()">Profil speichern</button>
+    <section class="settings-section">
+      <h3>Darstellung</h3>
+      <p>Wähle, ob Services und Buchungen standardmäßig als Kacheln oder als kompakte Liste angezeigt werden.</p>
+      <div class="view-toggle" aria-label="Standard-Darstellung wählen">
+        <button type="button" id="customerDefaultGridViewBtn" onclick="setCustomerViewMode('market', 'grid')">Kacheln</button>
+        <button type="button" id="customerDefaultListViewBtn" onclick="setCustomerViewMode('market', 'list')">Liste</button>
+      </div>
+    </section>
     <h3 style="font-size:1rem;margin-bottom:.8rem">Zahlungsarten</h3>
     <div id="paymentMethodsList" class="service-reviews-list">
       <div class="review-empty">Kartendaten werden direkt bei Stripe eingegeben und nicht in ServiceRate gespeichert.</div>
@@ -316,8 +326,8 @@
   </div>
 </div>
 
-<script src="utils.js"></script>
-<script src="api.js"></script>
-<script src="customer-app.js"></script>
+<script src="utils.js?v=20260707-view-rerender1"></script>
+<script src="api.js?v=20260707-view-rerender1"></script>
+<script src="customer-app.js?v=20260707-view-rerender1"></script>
 </body>
 </html>
