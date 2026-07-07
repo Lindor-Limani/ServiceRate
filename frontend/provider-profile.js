@@ -9,14 +9,11 @@ let currentProviderProfile = null;
 })();
 
 function ensureGlobalViewMode() {
-  if (!localStorage.getItem(GLOBAL_VIEW_MODE_KEY)) {
-    localStorage.setItem(GLOBAL_VIEW_MODE_KEY, 'list');
-  }
+  ensureServiceRateViewMode();
 }
 
 function preferredProviderProfileViewMode() {
-  const globalMode = localStorage.getItem(GLOBAL_VIEW_MODE_KEY);
-  return globalMode === 'grid' ? 'grid' : 'list';
+  return readServiceRateViewMode();
 }
 
 async function loadProviderProfile() {
@@ -68,13 +65,7 @@ function renderProviderProfile(profile) {
 }
 
 function setProviderProfileViewMode(mode) {
-  providerProfileViewMode = mode === 'list' ? 'list' : 'grid';
-  localStorage.setItem(GLOBAL_VIEW_MODE_KEY, providerProfileViewMode);
-  localStorage.setItem('servicerate_customer_market_view', providerProfileViewMode);
-  localStorage.setItem('servicerate_customer_bookings_view', providerProfileViewMode);
-  localStorage.setItem('servicerate_provider_services_view', providerProfileViewMode);
-  localStorage.setItem('servicerate_provider_bookings_view', providerProfileViewMode);
-  localStorage.setItem('servicerate_provider_profile_services_view', providerProfileViewMode);
+  providerProfileViewMode = writeServiceRateViewMode(mode);
   if (currentProviderProfile) renderProviderProfile(currentProviderProfile);
   else applyProviderProfileViewMode();
 }

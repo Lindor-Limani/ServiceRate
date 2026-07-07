@@ -6,7 +6,13 @@
   <meta http-equiv="Cache-Control" content="no-store" />
   <meta http-equiv="Pragma" content="no-cache" />
   <title>ServiceRate - Admin</title>
-  <link rel="stylesheet" href="customer-style.css?v=20260707-view-rerender1" />
+  <script>
+    try {
+      const mode = localStorage.getItem('servicerate_view_mode');
+      if (mode !== 'grid' && mode !== 'list') localStorage.setItem('servicerate_view_mode', 'list');
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="customer-style.css?v=20260707-first-list-boot1" />
 </head>
 <body>
 <header>
@@ -39,8 +45,8 @@
     <section class="admin-panel" id="adminMainPanel"></section>
   </section>
 </main>
-<script src="utils.js?v=20260707-view-rerender1"></script>
-<script src="api.js?v=20260707-view-rerender1"></script>
+<script src="utils.js?v=20260707-first-list-boot1"></script>
+<script src="api.js?v=20260707-first-list-boot1"></script>
 <script src="admin-dashboard.js"></script>
 </body>
 </html>

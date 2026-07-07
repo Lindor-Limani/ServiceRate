@@ -113,6 +113,40 @@ function paymentBadgesForAvailability(source) {
   return `<div class="payment-badges" aria-label="Verfügbare Zahlungsarten">${badges.join('')}</div>`;
 }
 
+function ensureServiceRateViewMode() {
+  try {
+    const mode = localStorage.getItem('servicerate_view_mode');
+    if (mode === 'grid' || mode === 'list') return mode;
+    localStorage.setItem('servicerate_view_mode', 'list');
+  } catch {
+    return 'list';
+  }
+  return 'list';
+}
+
+function readServiceRateViewMode() {
+  try {
+    return localStorage.getItem('servicerate_view_mode') === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+function writeServiceRateViewMode(mode) {
+  const normalized = mode === 'grid' ? 'grid' : 'list';
+  try {
+    localStorage.setItem('servicerate_view_mode', normalized);
+    localStorage.setItem('servicerate_customer_market_view', normalized);
+    localStorage.setItem('servicerate_customer_bookings_view', normalized);
+    localStorage.setItem('servicerate_provider_services_view', normalized);
+    localStorage.setItem('servicerate_provider_bookings_view', normalized);
+    localStorage.setItem('servicerate_provider_profile_services_view', normalized);
+  } catch {
+    /* Storage kann in privaten/gesperrten Browserkontexten blockiert sein. */
+  }
+  return normalized;
+}
+
 // Escaped Nutzereingaben, bevor sie ins DOM geschrieben werden (XSS-Schutz)
 function esc(str) {
   return String(str || '')
