@@ -45,6 +45,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Login und Registrierung ist für alle offen
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/stripe/webhook").permitAll()
                         // Kunden dürfen den Marktplatz ohne Login durchstöbern
                         .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/*", "/api/providers/**").permitAll()
@@ -66,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/paypal/capture").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/mark-paid").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/**").hasRole("PROVIDER")
+                        .requestMatchers(HttpMethod.POST, "/api/providers/me/stripe/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/services").hasRole("PROVIDER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Alles andere (Services anlegen/ändern/löschen, Buchungen, ...) braucht ein gültiges Token

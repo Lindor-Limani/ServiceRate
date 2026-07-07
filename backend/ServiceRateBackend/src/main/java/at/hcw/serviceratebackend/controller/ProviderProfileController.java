@@ -4,9 +4,11 @@ import at.hcw.serviceratebackend.dto.ProviderProfileResponse;
 import at.hcw.serviceratebackend.dto.PayPalOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.PayPalIdentityReturnRequest;
 import at.hcw.serviceratebackend.dto.PayPalOnboardingReturnRequest;
+import at.hcw.serviceratebackend.dto.StripeOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.service.ProviderPayPalOnboardingService;
 import at.hcw.serviceratebackend.service.ProviderProfileService;
+import at.hcw.serviceratebackend.service.StripeConnectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +27,7 @@ public class ProviderProfileController {
 
     private final ProviderProfileService providerProfileService;
     private final ProviderPayPalOnboardingService payPalOnboardingService;
+    private final StripeConnectService stripeConnectService;
 
     @GetMapping("/{providerId}")
     public ProviderProfileResponse getProviderProfile(@PathVariable UUID providerId) {
@@ -49,5 +52,15 @@ public class ProviderProfileController {
     @PostMapping("/me/paypal/onboarding-status")
     public UserResponse refreshPayPalOnboardingStatus(Authentication authentication) {
         return payPalOnboardingService.refreshOnboardingStatus((String) authentication.getPrincipal());
+    }
+
+    @PostMapping("/me/stripe/onboarding-link")
+    public StripeOnboardingLinkResponse createStripeOnboardingLink(Authentication authentication) {
+        return stripeConnectService.createOnboardingLink((String) authentication.getPrincipal());
+    }
+
+    @PostMapping("/me/stripe/onboarding-status")
+    public UserResponse refreshStripeOnboardingStatus(Authentication authentication) {
+        return stripeConnectService.refreshOnboardingStatus((String) authentication.getPrincipal());
     }
 }

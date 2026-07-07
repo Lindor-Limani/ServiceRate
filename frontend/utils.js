@@ -68,27 +68,6 @@ function readImageFiles(input, maxFiles = 1) {
   })));
 }
 
-function formatCardNumberValue(value) {
-  return String(value || '').replace(/\D/g, '').slice(0, 19).replace(/(.{4})/g, '$1 ').trim();
-}
-
-function isValidCardNumber(number) {
-  const digits = String(number || '').replace(/\D/g, '');
-  if (digits.length < 12 || digits.length > 19) return false;
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let digit = Number(digits[i]);
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-}
-
 function formatIbanValue(value) {
   return String(value || '').replace(/\s/g, '').toUpperCase().slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
 }
@@ -96,6 +75,42 @@ function formatIbanValue(value) {
 function isValidIbanBasic(value) {
   const iban = String(value || '').replace(/\s/g, '').toUpperCase();
   return /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban);
+}
+
+function paymentMethodConfig(method) {
+  const key = String(method || '').toUpperCase();
+  const map = {
+    PAYPAL: { key: 'paypal', mark: 'P', label: 'PayPal', title: 'PayPal', hint: 'Online zahlen und automatisch zur Buchung zurückkehren.' },
+    CARD: { key: 'stripe', mark: 'S', label: 'Stripe Karte', title: 'Kredit-/Debitkarte', hint: 'Sichere Kartenzahlung über Stripe Checkout.' },
+    STRIPE: { key: 'stripe', mark: 'S', label: 'Stripe Karte', title: 'Kredit-/Debitkarte', hint: 'Sichere Kartenzahlung über Stripe Checkout.' },
+    BANK_TRANSFER: { key: 'bank', mark: 'B', label: 'Überweisung', title: 'Banküberweisung', hint: 'Direkt an den Anbieter zahlen.' },
+    CASH: { key: 'cash', mark: 'C', label: 'Barzahlung', title: 'Barzahlung vor Ort', hint: 'Beim Termin direkt beim Anbieter zahlen.' },
+    MANUAL: { key: 'muted', mark: 'M', label: 'Manuell', title: 'Manuell geprüft', hint: 'Zahlung wurde manuell im Dashboard verbucht.' },
+    SEPA: { key: 'bank', mark: 'S', label: 'SEPA', title: 'SEPA', hint: 'Zahlung per SEPA.' }
+  };
+  return map[key] || { key: 'muted', mark: '?', label: key || 'Offen', title: key || 'Offen', hint: 'Zahlungsstatus wird aktualisiert.' };
+}
+
+function paymentBadge(method, labelOverride = '') {
+  const cfg = paymentMethodConfig(method);
+  return `<span class="payment-badge ${cfg.key}"><span class="payment-mark">${esc(cfg.mark)}</span>${esc(labelOverride || cfg.label)}</span>`;
+}
+
+function paymentPill(method, labelOverride = '') {
+  const cfg = paymentMethodConfig(method);
+  return `<span class="payment-pill ${cfg.key}"><span class="payment-mark">${esc(cfg.mark)}</span>${esc(labelOverride || cfg.label)}</span>`;
+}
+
+function paymentBadgesForAvailability(source) {
+  const badges = [];
+  if (source?.providerPaypalAvailable) badges.push(paymentBadge('PAYPAL'));
+  if (source?.providerStripeAvailable) badges.push(paymentBadge('CARD'));
+  if (source?.providerOfflinePaymentAvailable !== false) {
+    badges.push(paymentBadge('BANK_TRANSFER'));
+    badges.push(paymentBadge('CASH'));
+  }
+  if (!badges.length) badges.push(paymentBadge('', 'Zahlung nach Absprache'));
+  return `<div class="payment-badges" aria-label="Verfügbare Zahlungsarten">${badges.join('')}</div>`;
 }
 
 // Escaped Nutzereingaben, bevor sie ins DOM geschrieben werden (XSS-Schutz)

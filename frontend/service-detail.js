@@ -61,6 +61,10 @@ function renderServiceDetail() {
         <div class="detail-price">€${parseFloat(s.price).toFixed(2)}<small>/Std</small></div>
         <div class="booking-date-line">Ort: <strong>${esc(s.location || '-')}</strong></div>
         <div class="booking-date-line">Umfang: <strong>${esc(serviceMetaLine(s))}</strong></div>
+        <div style="margin:.85rem 0">
+          <label class="form-label">Zahlungsarten</label>
+          ${paymentBadgesForAvailability(s)}
+        </div>
         <div class="form-group">
           <label class="form-label">Wunschtermin</label>
           <input class="form-input" type="date" id="detailBookingDate" min="${todayISO()}" />
@@ -152,7 +156,7 @@ async function bookDetailService() {
 
   const bookingDate = document.getElementById('detailBookingDate').value;
   if (!bookingDate) {
-    notify('Bitte waehle einen Wunschtermin.', 'error');
+    notify('Bitte wähle einen Wunschtermin.', 'error');
     return;
   }
 

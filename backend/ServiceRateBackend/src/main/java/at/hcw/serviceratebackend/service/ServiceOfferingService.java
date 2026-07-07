@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
+import at.hcw.serviceratebackend.dto.PageResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
 import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
@@ -9,6 +10,10 @@ import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -25,6 +30,7 @@ public class ServiceOfferingService {
     private final ReviewRepository reviewRepository;
     private final ReviewService reviewService;
     private final LocationValidationService locationValidationService;
+    private final StripeConnectService stripeConnectService;
 
     public ServiceOfferingResponse create(CreateServiceRequest request) {
         User provider = userRepository.findById(request.providerId())
@@ -72,6 +78,36 @@ public class ServiceOfferingService {
                 .filter(service -> "ACTIVE".equals(service.getStatus()))
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    public PageResponse<ServiceOfferingResponse> search(
+            int page,
+            int size,
+            String q,
+            String category,
+            String location,
+            Double maxPrice,
+            Double minRating,
+            String sort
+    ) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 48));
+        Pageable pageable = PageRequest.of(safePage, safeSize, sortFor(sort));
+        Page<ServiceOfferingResponse> results = serviceRepository.searchActive(
+                blankToEmpty(q),
+                blankToEmpty(category),
+                blankToEmpty(location),
+                maxPrice,
+                minRating == null ? 0.0 : Math.max(0.0, minRating),
+                pageable
+        ).map(this::mapToResponse);
+        return new PageResponse<>(
+                results.getContent(),
+                results.getTotalElements(),
+                results.getTotalPages(),
+                results.getNumber(),
+                results.getSize()
+        );
     }
 
     public ServiceOfferingResponse getById(UUID id) {
@@ -146,8 +182,22 @@ public class ServiceOfferingService {
                 averageRating,
                 reviewCount,
                 trustScore,
+                isProviderPaypalAvailable(service.getProvider()),
+                stripeConnectService.isProviderStripeAvailable(service.getProvider()),
+                true,
                 reviews
         );
+    }
+
+    private boolean isProviderPaypalAvailable(User provider) {
+        if (provider == null) {
+            return false;
+        }
+        boolean hasReceiver = (provider.getPaypalMerchantId() != null && !provider.getPaypalMerchantId().isBlank())
+                || (provider.getPaypalEmail() != null && !provider.getPaypalEmail().isBlank());
+        boolean connected = "CONNECTED".equals(provider.getPaypalOnboardingStatus())
+                || "ACTION_REQUIRED".equals(provider.getPaypalOnboardingStatus());
+        return hasReceiver && connected;
     }
 
     private int calculateTrustScore(double averageRating, long reviewCount, String status) {
@@ -155,6 +205,16 @@ public class ServiceOfferingService {
         double volumePoints = (Math.min(reviewCount, 20) / 20.0) * 20.0;
         double statusPoints = "ACTIVE".equals(status) ? 10.0 : 0.0;
         return (int) Math.round(Math.min(100.0, ratingPoints + volumePoints + statusPoints));
+    }
+
+    private Sort sortFor(String sort) {
+        if ("priceAsc".equals(sort)) {
+            return Sort.by(Sort.Direction.ASC, "price", "title");
+        }
+        if ("priceDesc".equals(sort)) {
+            return Sort.by(Sort.Direction.DESC, "price").and(Sort.by(Sort.Direction.ASC, "title"));
+        }
+        return Sort.by(Sort.Direction.ASC, "title");
     }
 
     private String normalizeDeliverableType(String deliverableType) {
@@ -169,6 +229,10 @@ public class ServiceOfferingService {
 
     private String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String blankToEmpty(String value) {
+        return value == null || value.isBlank() ? "" : value.trim();
     }
 
     private List<String> normalizeImageUrls(List<String> imageUrls, String fallbackImageUrl) {

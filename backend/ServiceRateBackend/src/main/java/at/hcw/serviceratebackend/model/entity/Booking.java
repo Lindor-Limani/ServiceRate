@@ -70,6 +70,21 @@ public class Booking extends AuditableEntity {
     @Column(name = "paypal_capture_id")
     private String paypalCaptureId;
 
+    @Column(name = "stripe_checkout_session_id")
+    private String stripeCheckoutSessionId;
+
+    @Column(name = "stripe_payment_intent_id")
+    private String stripePaymentIntentId;
+
+    @Column(name = "stripe_payment_method_id")
+    private String stripePaymentMethodId;
+
+    @Column(name = "stripe_customer_id")
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_connected_account_id")
+    private String stripeConnectedAccountId;
+
     @Column(name = "gross_amount")
     private Double grossAmount;
 

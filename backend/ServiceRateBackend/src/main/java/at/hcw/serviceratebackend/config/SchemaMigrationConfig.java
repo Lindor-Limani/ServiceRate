@@ -22,7 +22,12 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_permissions_granted BOOLEAN");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_email_confirmed BOOLEAN");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_referral_self_url VARCHAR(1000)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_default_payment_method_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_connected_account_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_onboarding_status VARCHAR(255) DEFAULT 'NOT_CONNECTED'");
         jdbcTemplate.execute("UPDATE users SET paypal_onboarding_status = 'NOT_CONNECTED' WHERE paypal_onboarding_status IS NULL");
+        jdbcTemplate.execute("UPDATE users SET stripe_onboarding_status = 'NOT_CONNECTED' WHERE stripe_onboarding_status IS NULL");
         tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url TYPE TEXT");
         tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url SET DATA TYPE TEXT");
 
@@ -47,6 +52,11 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_order_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_capture_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_checkout_session_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_method_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_connected_account_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gross_amount DOUBLE PRECISION");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_amount DOUBLE PRECISION");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_receivable_amount DOUBLE PRECISION");
@@ -64,22 +74,6 @@ public class SchemaMigrationConfig {
                     work_date DATE NOT NULL,
                     hours DOUBLE PRECISION NOT NULL,
                     note TEXT,
-                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    updated_at TIMESTAMP WITH TIME ZONE
-                )
-                """);
-
-        jdbcTemplate.execute("""
-                CREATE TABLE IF NOT EXISTS payment_methods (
-                    id UUID PRIMARY KEY,
-                    user_id UUID NOT NULL REFERENCES users(id),
-                    brand VARCHAR(255) NOT NULL,
-                    last4 VARCHAR(4) NOT NULL,
-                    holder_name VARCHAR(255),
-                    expiry_month INTEGER,
-                    expiry_year INTEGER,
-                    provider_token VARCHAR(255) NOT NULL,
-                    default_method BOOLEAN NOT NULL DEFAULT false,
                     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
                     updated_at TIMESTAMP WITH TIME ZONE
                 )

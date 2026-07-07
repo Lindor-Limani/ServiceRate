@@ -116,6 +116,146 @@ header {
 .btn-danger { background: #fee2e2; color: #991b1b; border: none; }
 .btn-danger:hover { background: #fca5a5; }
 
+/* ── PAYMENT PROVIDERS ──────────────────────────────────────────────────── */
+.payment-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  align-items: center;
+}
+.payment-badge,
+.payment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  width: fit-content;
+  border-radius: 999px;
+  padding: .32rem .68rem;
+  font-size: .72rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+  line-height: 1;
+  white-space: nowrap;
+}
+.payment-badge .payment-mark,
+.payment-pill .payment-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .68rem;
+  font-weight: 900;
+  background: rgba(255,255,255,.72);
+}
+.payment-badge.paypal,
+.payment-pill.paypal {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #bae6fd;
+}
+.payment-badge.stripe,
+.payment-pill.stripe {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+.payment-badge.bank,
+.payment-pill.bank {
+  background: #ecfdf5;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+.payment-badge.cash,
+.payment-pill.cash {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fde68a;
+}
+.payment-badge.muted,
+.payment-pill.muted {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.payment-summary-card {
+  background: #f8fbfb;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .85rem;
+  display: grid;
+  gap: .55rem;
+}
+.payment-summary-card strong {
+  display: block;
+  font-size: .84rem;
+  color: var(--text);
+}
+.payment-summary-card p {
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.checkout-option-grid {
+  display: grid;
+  gap: .65rem;
+  margin-bottom: 1rem;
+}
+.checkout-option {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: .85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.checkout-option:hover,
+.checkout-option.active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0,135,124,.12);
+}
+.checkout-option-main {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-width: 0;
+}
+.checkout-option-copy {
+  min-width: 0;
+}
+.checkout-option-copy strong {
+  display: block;
+  font-size: .9rem;
+}
+.checkout-option-copy span {
+  display: block;
+  margin-top: .15rem;
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.3;
+}
+.checkout-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #cbd5d8;
+  flex-shrink: 0;
+}
+.checkout-option.active .checkout-radio {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 4px #fff;
+  background: var(--primary);
+}
+
 /* ── HERO ────────────────────────────────────────────────────────────────── */
 .hero {
   background: linear-gradient(135deg, var(--primary) 0%, #004d47 100%);
@@ -173,9 +313,17 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 1.25rem;
 }
 .section-title { font-size: 1.4rem; font-weight: 700; letter-spacing: -.2px; }
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .count-pill {
   background: var(--primary-tint);
   color: var(--primary);
@@ -218,6 +366,91 @@ header {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
   gap: 1.25rem;
+}
+.cards-grid.is-list-view {
+  grid-template-columns: 1fr;
+}
+.view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: .2rem;
+  box-shadow: var(--shadow);
+}
+.view-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  min-width: 38px;
+  height: 32px;
+  padding: 0 .65rem;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.view-toggle button.active {
+  background: var(--primary);
+  color: #fff;
+}
+.cards-grid.is-list-view .service-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 260px) minmax(0, 1fr);
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.cards-grid.is-list-view .service-card > :not(.card-image) {
+  margin-left: 1.25rem;
+  margin-right: 1.25rem;
+}
+.cards-grid.is-list-view .service-card > :not(.card-image):first-child {
+  margin-top: 1.25rem;
+}
+.cards-grid.is-list-view .service-card > :not(.card-image):last-child {
+  margin-bottom: 1.25rem;
+}
+.cards-grid.is-list-view .card-image {
+  grid-row: 1 / span 20;
+  margin: 0;
+  height: 100%;
+  min-height: 190px;
+  border-radius: 0;
+}
+.cards-grid.is-list-view .card-top {
+  margin-top: 1.25rem;
+}
+.cards-grid.is-list-view .card-title {
+  font-size: 1.08rem;
+}
+.cards-grid.is-list-view .card-desc {
+  max-width: 760px;
+}
+.cards-grid.is-list-view .booking-actions {
+  margin-left: 1.25rem;
+  margin-right: 1.25rem;
+}
+
+.pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin: 1.5rem 0 0;
+}
+.pagination-row .page-info {
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 700;
+}
+.pagination-row:empty {
+  display: none;
 }
 
 #customerBookingsGrid { padding-bottom: 4rem; }
@@ -1030,6 +1263,33 @@ header {
   }
   .admin-row-card > div:first-child {
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 700px) {
+  .section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .section-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .cards-grid.is-list-view .service-card {
+    grid-template-columns: 1fr;
+  }
+  .cards-grid.is-list-view .card-image {
+    grid-row: auto;
+    height: 150px;
+    min-height: 150px;
+  }
+  .cards-grid.is-list-view .card-top {
+    margin-top: 1rem;
+  }
+  .cards-grid.is-list-view .service-card > :not(.card-image),
+  .cards-grid.is-list-view .booking-actions {
+    margin-left: 1rem;
+    margin-right: 1rem;
   }
 }
 

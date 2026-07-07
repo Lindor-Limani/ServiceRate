@@ -191,6 +191,8 @@ public class UserService {
                 user.getPaypalOnboardingStatus(),
                 user.getPaypalPermissionsGranted(),
                 user.getPaypalEmailConfirmed(),
+                user.getStripeConnectedAccountId(),
+                user.getStripeOnboardingStatus(),
                 user.getAccountType(),
                 user.getStatus()
         );

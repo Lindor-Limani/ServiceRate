@@ -52,6 +52,18 @@ public class User extends AuditableEntity {
     @Column(name = "paypal_referral_self_url", length = 1000)
     private String paypalReferralSelfUrl;
 
+    @Column(name = "stripe_customer_id")
+    private String stripeCustomerId;
+
+    @Column(name = "stripe_default_payment_method_id")
+    private String stripeDefaultPaymentMethodId;
+
+    @Column(name = "stripe_connected_account_id")
+    private String stripeConnectedAccountId;
+
+    @Column(name = "stripe_onboarding_status")
+    private String stripeOnboardingStatus = "NOT_CONNECTED";
+
     @Column(nullable = false)
     private String status = "ACTIVE";
 

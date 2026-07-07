@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.controller;
 
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
+import at.hcw.serviceratebackend.dto.PageResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
 import at.hcw.serviceratebackend.service.ServiceOfferingService;
 import lombok.RequiredArgsConstructor;
@@ -29,8 +30,16 @@ public class ServiceOfferingController {
 
     // M6: GET Endpunkt (Read)
     @GetMapping
-    public ResponseEntity<List<ServiceOfferingResponse>> getAll() {
-        return ResponseEntity.ok(service.getAll());
+    public ResponseEntity<PageResponse<ServiceOfferingResponse>> getAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "24") int size,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(defaultValue = "0") Double minRating,
+            @RequestParam(defaultValue = "recommended") String sort) {
+        return ResponseEntity.ok(service.search(page, size, q, category, location, maxPrice, minRating, sort));
     }
 
     @GetMapping("/{id}")

@@ -46,6 +46,7 @@ public class BookingService {
     private final TimeEntryRepository timeEntryRepository;
     private final MailService mailService;
     private final PayPalService payPalService;
+    private final StripeConnectService stripeConnectService;
 
     @Value("${app.platform-fee-percent:10}")
     private double platformFeePercent;
@@ -209,6 +210,8 @@ public class BookingService {
             booking.setCheckoutUrl(order.approveUrl());
             booking.setSettlementStatus("PAYPAL_PLATFORM_FEE_PENDING");
             booking.setPaymentNote("PayPal Marketplace Order wurde erstellt. Provider ist Payee, Plattformgebühr wird separat ausgewiesen.");
+        } else if ("CARD".equals(provider)) {
+            stripeConnectService.createCheckoutSession(booking, Boolean.TRUE.equals(request.savePaymentMethod()));
         } else if ("CASH".equals(provider) || "BANK_TRANSFER".equals(provider)) {
             booking.setPaymentStatus("AWAITING_OFFLINE_PAYMENT");
             booking.setCheckoutUrl(null);
@@ -290,7 +293,7 @@ public class BookingService {
         String method = request.provider() == null || request.provider().isBlank()
                 ? "CASH"
                 : request.provider().trim().toUpperCase();
-        if (!method.equals("CASH") && !method.equals("BANK_TRANSFER") && !method.equals("MANUAL") && !method.equals("PAYPAL") && !method.equals("STRIPE") && !method.equals("SEPA")) {
+        if (!method.equals("CASH") && !method.equals("BANK_TRANSFER") && !method.equals("MANUAL") && !method.equals("PAYPAL") && !method.equals("CARD") && !method.equals("STRIPE") && !method.equals("SEPA")) {
             throw new IllegalArgumentException("Ungültige Zahlungsart.");
         }
 
@@ -367,6 +370,8 @@ public class BookingService {
                 provider != null ? provider.getProfileImageUrl() : null,
                 serviceTitle(booking.getServiceOffering()),
                 servicePrice(booking.getServiceOffering()),
+                serviceCategory(booking.getServiceOffering()),
+                serviceImageUrl(booking.getServiceOffering()),
                 booking.getStatus(),
                 booking.getBookingDate(),
                 booking.getActualHours(),
@@ -383,16 +388,27 @@ public class BookingService {
                 booking.getPaidAt(),
                 booking.getPaypalOrderId(),
                 booking.getPaypalCaptureId(),
+                booking.getStripeCheckoutSessionId(),
+                booking.getStripePaymentIntentId(),
                 booking.getGrossAmount(),
                 booking.getPlatformFeeAmount(),
                 booking.getProviderReceivableAmount(),
                 booking.getSettlementStatus(),
                 booking.getSettlementNote(),
                 isProviderPaypalAvailable(provider),
+                stripeConnectService.isProviderStripeAvailable(provider),
                 true,
                 loadTimeEntries(booking.getId()),
                 review
         );
+    }
+
+    private String serviceCategory(ServiceOffering service) {
+        return service == null ? null : service.getCategory();
+    }
+
+    private String serviceImageUrl(ServiceOffering service) {
+        return service == null ? null : service.getImageUrl();
     }
 
     private ReviewResponse findReviewResponse(Booking booking) {

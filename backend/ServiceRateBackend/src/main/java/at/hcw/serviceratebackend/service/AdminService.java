@@ -71,7 +71,7 @@ public class AdminService {
 
     public List<UserResponse> users() {
         return userRepository.findAll().stream()
-                .map(u -> new UserResponse(u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(), u.getProfileImageUrl(), u.getPayoutIban(), u.getPaypalMerchantId(), u.getPaypalEmail(), u.getPaypalOnboardingStatus(), u.getPaypalPermissionsGranted(), u.getPaypalEmailConfirmed(), u.getAccountType(), u.getStatus()))
+                .map(this::toUserResponse)
                 .toList();
     }
 
@@ -104,7 +104,7 @@ public class AdminService {
                 .orElseThrow(() -> new IllegalArgumentException("User nicht gefunden"));
         user.setStatus(active ? "ACTIVE" : "INACTIVE");
         User saved = userRepository.save(user);
-        return new UserResponse(saved.getId(), saved.getEmail(), saved.getFirstName(), saved.getLastName(), saved.getProfileImageUrl(), saved.getPayoutIban(), saved.getPaypalMerchantId(), saved.getPaypalEmail(), saved.getPaypalOnboardingStatus(), saved.getPaypalPermissionsGranted(), saved.getPaypalEmailConfirmed(), saved.getAccountType(), saved.getStatus());
+        return toUserResponse(saved);
     }
 
     public ServiceOfferingResponse setServiceStatus(java.util.UUID id, String status) {
@@ -141,6 +141,8 @@ public class AdminService {
                 "NOT_READY",
                 "PAYPAL_PLATFORM_FEE_PENDING",
                 "PAYPAL_SPLIT_COMPLETED",
+                "STRIPE_DESTINATION_CHARGE_PENDING",
+                "STRIPE_DESTINATION_CHARGE_COMPLETED",
                 "PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT",
                 "PROVIDER_PAYOUT_SENT",
                 "PLATFORM_FEE_DUE_FROM_PROVIDER",
@@ -170,6 +172,26 @@ public class AdminService {
                 booking.getSettlementNote(),
                 booking.getBookingDate(),
                 booking.getPaidAt()
+        );
+    }
+
+    private UserResponse toUserResponse(User user) {
+        return new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getProfileImageUrl(),
+                user.getPayoutIban(),
+                user.getPaypalMerchantId(),
+                user.getPaypalEmail(),
+                user.getPaypalOnboardingStatus(),
+                user.getPaypalPermissionsGranted(),
+                user.getPaypalEmailConfirmed(),
+                user.getStripeConnectedAccountId(),
+                user.getStripeOnboardingStatus(),
+                user.getAccountType(),
+                user.getStatus()
         );
     }
 

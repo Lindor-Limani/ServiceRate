@@ -21,5 +21,8 @@ public record ServiceOfferingResponse(
         Double averageRating,   // Durchschnitt der Sterne (0.0 wenn noch keine Reviews)
         Long reviewCount,       // Anzahl der Bewertungen
         Integer trustScore,
+        boolean providerPaypalAvailable,
+        boolean providerStripeAvailable,
+        boolean providerOfflinePaymentAvailable,
         List<ReviewResponse> reviews
 ) {}

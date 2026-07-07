@@ -104,6 +104,14 @@ Die wichtigsten Umgebungsvariablen:
 | `PAYPAL_SELLER_RETURN_URL` | Frontend-URL nach Provider-Onboarding | `APP_FRONTEND_BASE_URL/provider-dashboard.html` |
 | `PAYPAL_PARTNER_ATTRIBUTION_ID` | Optionaler PayPal BN-Code fuer Partner Attribution | leer |
 | `PAYPAL_PARTNER_MERCHANT_ID` | PayPal Merchant ID des Plattform-/Partnerkontos fuer Seller-Status-Abfragen | leer |
+| `STRIPE_SECRET_KEY` | Stripe Secret Key der Plattform | leer |
+| `STRIPE_WEBHOOK_SECRET` | Signatur-Secret fuer `/api/stripe/webhook` | leer |
+| `STRIPE_CURRENCY` | Checkout-Waehrung | `eur` |
+| `STRIPE_CONNECT_COUNTRY` | Land fuer neue Express Connected Accounts | `AT` |
+| `STRIPE_REFRESH_URL` | Ruecksprung bei erneutem Stripe-Onboarding | `APP_FRONTEND_BASE_URL/provider-dashboard.html?stripe=refresh` |
+| `STRIPE_RETURN_URL` | Ruecksprung nach Stripe-Onboarding | `APP_FRONTEND_BASE_URL/provider-dashboard.html?stripe=return` |
+| `STRIPE_CHECKOUT_SUCCESS_URL` | Ruecksprung nach erfolgreichem Stripe Checkout | `APP_FRONTEND_BASE_URL/customer-app.html?stripe=success&session_id={CHECKOUT_SESSION_ID}` |
+| `STRIPE_CHECKOUT_CANCEL_URL` | Ruecksprung nach abgebrochenem Stripe Checkout | `APP_FRONTEND_BASE_URL/customer-app.html?stripe=cancel` |
 | `APP_FRONTEND_BASE_URL` | Ziel fuer Mail-Redirects | `http://localhost:5500` |
 | `APP_BACKEND_BASE_URL` | Backend-Basis-URL fuer Links | `http://localhost:8081` |
 | `APP_MAIL_MODE` | `console` oder `smtp` | `console` |
@@ -142,11 +150,33 @@ PAYPAL_PARTNER_MERCHANT_ID=deine_plattform_merchant_id
 
 Beim Checkout erstellt `POST /api/bookings/{id}/checkout` mit `provider=PAYPAL` eine PayPal Order und gibt eine `checkoutUrl` zurueck. Nach der PayPal-Bestaetigung landet der Kunde wieder im Frontend; dort wird `POST /api/bookings/{id}/paypal/capture` aufgerufen und die Buchung bei erfolgreichem Capture auf `PAID` gesetzt.
 
+### Stripe Connect Checkout
+
+Kartenzahlungen laufen ueber Stripe Connect Express und Stripe Checkout. Provider verbinden Stripe im Provider-Dashboard ueber **Stripe verbinden**. Das Backend erstellt dabei einen Express Connected Account und leitet den Provider in das Stripe-hosted Onboarding weiter.
+
+Fuer lokale Tests:
+
+```powershell
+$env:STRIPE_SECRET_KEY="sk_test_..."
+$env:STRIPE_WEBHOOK_SECRET="whsec_..."
+$env:STRIPE_RETURN_URL="http://localhost:5500/provider-dashboard.html?stripe=return"
+$env:STRIPE_REFRESH_URL="http://localhost:5500/provider-dashboard.html?stripe=refresh"
+$env:STRIPE_CHECKOUT_SUCCESS_URL="http://localhost:5500/customer-app.html?stripe=success&session_id={CHECKOUT_SESSION_ID}"
+$env:STRIPE_CHECKOUT_CANCEL_URL="http://localhost:5500/customer-app.html?stripe=cancel"
+.\gradlew.bat bootRun
+```
+
+Der Checkout wird mit `POST /api/bookings/{id}/checkout` und `provider=CARD` gestartet. ServiceRate erstellt eine Stripe Checkout Session mit Destination Charge, `application_fee_amount` und `transfer_data.destination`. Der Kunde gibt Kartendaten nur bei Stripe ein. Optional kann der Kunde beim Checkout zustimmen, dass Stripe die Zahlungsmethode fuer spaetere Buchungen speichert; ServiceRate speichert dafuer nur Stripe-IDs.
+
+Der Webhook `/api/stripe/webhook` verarbeitet mindestens `checkout.session.completed`, `payment_intent.payment_failed` und `account.updated`. Lokal kann die Stripe CLI Events weiterleiten, z. B. an `http://localhost:8081/api/stripe/webhook`.
+
 ### Marketplace-Abrechnung
 
 ServiceRate ist als Marketplace-Modell ausgelegt: Der Kunde zahlt fuer eine Buchung, die Plattform berechnet eine Provision und der Provider erhaelt den Restbetrag. Die Provisionshoehe wird ueber `APP_PLATFORM_FEE_PERCENT` und `APP_PLATFORM_FEE_FIXED` konfiguriert.
 
 Bei PayPal wird der Provider als Payee verwendet, wenn im Provider-Profil eine PayPal Merchant ID hinterlegt ist. Die Plattformgebuehr wird im PayPal-Order-Request als `platform_fees` ausgewiesen. Fuer echte Live-Zahlungen braucht das Plattformkonto eine PayPal Commerce-Platform-/Multiparty-Freischaltung.
+
+Bei Stripe wird der Provider als Connected Account verwendet, wenn `stripe_connected_account_id` hinterlegt und der Onboarding-Status `CONNECTED` ist. Die Plattformgebuehr wird beim Checkout als Application Fee angegeben; Kartendaten, CVC und vollstaendige Ablaufdaten werden nicht in ServiceRate gespeichert.
 
 Provider muessen die Merchant ID nicht manuell suchen: Im Provider-Dashboard gibt es den Button **PayPal verbinden**. ServiceRate erzeugt dafuer einen PayPal Partner-Referrals-Link. Der Provider meldet sich bei PayPal an oder erstellt ein Konto, gibt der Plattform die noetigen Berechtigungen und wird danach zurueck zu `PAYPAL_SELLER_RETURN_URL` geleitet. PayPal haengt dabei unter anderem `merchantIdInPayPal`, `permissionsGranted` und `isEmailConfirmed` an die URL; diese Werte werden im Provider-Profil gespeichert.
 
@@ -159,7 +189,8 @@ Wenn der Provider nach PayPal nicht sauber zur App zurueckkommt, muss in der Pay
 
 Fuer nicht direkt gesplittete Zahlungsarten gilt:
 
-* **Karte/SEPA-Demo:** Plattform kassiert, Settlement-Status wird `PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT`. Danach muss die Plattform den Provider-Netto-Betrag auszahlen.
+* **Karte ueber Stripe:** Stripe kassiert, behaelt die Plattformgebuehr ein und transferiert den Provider-Anteil an den Connected Account. Settlement-Status wird `STRIPE_DESTINATION_CHARGE_COMPLETED`.
+* **SEPA-Demo:** Plattform kassiert, Settlement-Status wird `PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT`. Danach muss die Plattform den Provider-Netto-Betrag auszahlen.
 * **Barzahlung/Bankueberweisung an Provider:** Provider kassiert direkt, Settlement-Status wird `PLATFORM_FEE_DUE_FROM_PROVIDER`. Danach muss der Provider die Plattformprovision begleichen.
 * **Admin-Abschluss:** Admins koennen den Settlement-Status ueber `PATCH /api/admin/bookings/{id}/settlement` auf z. B. `PROVIDER_PAYOUT_SENT`, `PLATFORM_FEE_SETTLED` oder `DISPUTED` setzen.
 
@@ -259,10 +290,6 @@ Authorization: Bearer <token>
 
 | Methode | Endpoint | Zugriff | Beschreibung |
 | --- | --- | --- | --- |
-| `GET` | `/api/payment-methods` | authentifiziert | Eigene Zahlungsmethoden abrufen |
-| `POST` | `/api/payment-methods` | authentifiziert | Zahlungsmethode anlegen |
-| `PUT` | `/api/payment-methods/{id}` | authentifiziert | Zahlungsmethode aktualisieren |
-| `DELETE` | `/api/payment-methods/{id}` | authentifiziert | Zahlungsmethode loeschen |
 
 ### Wetter
 

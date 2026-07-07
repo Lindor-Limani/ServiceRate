@@ -9,7 +9,10 @@ let providerBookings        = []; // zuletzt geladene Buchungen (für die Kalend
 let providerCalendarCursor  = new Date(); // aktuell im Kalender angezeigter Monat
 let activeBookingId = null;
 let serviceImageUrls = [];
-let providerPaymentMethods = [];
+let providerViewModes = {
+  services: localStorage.getItem('servicerate_provider_services_view') || 'grid',
+  bookings: localStorage.getItem('servicerate_provider_bookings_view') || 'grid'
+};
 
 document.addEventListener('click', event => {
   const button = event.target.closest('#providerPaypalConnectBtn');
@@ -30,6 +33,20 @@ document.addEventListener('click', event => {
   if (!button) return;
   event.preventDefault();
   refreshPayPalOnboardingStatus();
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('#providerStripeConnectBtn');
+  if (!button) return;
+  event.preventDefault();
+  startStripeOnboarding();
+});
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('#providerStripeRefreshBtn');
+  if (!button) return;
+  event.preventDefault();
+  refreshStripeOnboardingStatus();
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -58,7 +75,25 @@ function showApp() {
   wireProviderFormatting();
   loadServices();
   loadProviderOverview();
+  applyProviderViewMode('services');
+  applyProviderViewMode('bookings');
   notifyPendingPayPalOnboardingWithoutParams();
+  notifyPendingStripeOnboardingWithoutParams();
+}
+
+function setProviderViewMode(area, mode) {
+  providerViewModes[area] = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem(`servicerate_provider_${area}_view`, providerViewModes[area]);
+  applyProviderViewMode(area);
+}
+
+function applyProviderViewMode(area) {
+  const mode = providerViewModes[area] === 'list' ? 'list' : 'grid';
+  const gridId = area === 'bookings' ? 'bookingsGrid' : 'servicesGrid';
+  const prefix = area === 'bookings' ? 'providerBookings' : 'providerServices';
+  document.getElementById(gridId)?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById(`${prefix}GridViewBtn`)?.classList.toggle('active', mode === 'grid');
+  document.getElementById(`${prefix}ListViewBtn`)?.classList.toggle('active', mode === 'list');
 }
 
 async function startPayPalOnboarding() {
@@ -88,6 +123,56 @@ async function startPayPalOnboarding() {
   }
 }
 window.startPayPalOnboarding = startPayPalOnboarding;
+
+async function startStripeOnboarding() {
+  const button = document.getElementById('providerStripeConnectBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Stripe wird geöffnet...';
+  }
+
+  try {
+    if (!localStorage.getItem('provider_jwt')) {
+      throw new Error('Bitte zuerst als Handwerker anmelden.');
+    }
+    const data = await fetchAPI('/providers/me/stripe/onboarding-link', 'POST', null, 'provider_jwt');
+    if (!data || !data.onboardingUrl) {
+      throw new Error('Stripe hat keinen Onboarding-Link geliefert.');
+    }
+    notify('Weiterleitung zu Stripe...', 'info');
+    localStorage.setItem('provider_stripe_onboarding_started', 'true');
+    window.location.href = data.onboardingUrl;
+  } catch (e) {
+    notify(e.message || 'Stripe-Verbindung konnte nicht gestartet werden.', 'error');
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Stripe verbinden';
+    }
+  }
+}
+window.startStripeOnboarding = startStripeOnboarding;
+
+async function refreshStripeOnboardingStatus() {
+  const button = document.getElementById('providerStripeRefreshBtn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Status wird geprüft...';
+  }
+  try {
+    const user = await fetchAPI('/providers/me/stripe/onboarding-status', 'POST', null, 'provider_jwt');
+    renderProviderStripeStatus(user);
+    notify(user.stripeOnboardingStatus === 'CONNECTED'
+      ? 'Stripe-Verbindung wurde erkannt.'
+      : 'Stripe-Status wurde aktualisiert. Eventuell ist noch ein Schritt bei Stripe offen.', 'success');
+  } catch (e) {
+    notify(e.message || 'Stripe-Status konnte nicht geprüft werden.', 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Status bei Stripe prüfen';
+    }
+  }
+}
 
 async function confirmPayPalOnboardingManually() {
   const merchantId = document.getElementById('providerPaypalMerchantId')?.value.trim() || '';
@@ -137,12 +222,6 @@ async function refreshPayPalOnboardingStatus() {
 }
 
 function wireProviderFormatting() {
-  document.getElementById('providerCardNumber')?.addEventListener('input', e => {
-    e.target.value = formatCardNumberValue(e.target.value);
-  });
-  document.getElementById('providerCardCvc')?.addEventListener('input', e => {
-    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
-  });
   document.getElementById('providerPayoutIban')?.addEventListener('input', e => {
     e.target.value = formatIbanValue(e.target.value);
   });
@@ -209,7 +288,6 @@ function doLogout() {
 async function openProviderSettings() {
   document.getElementById('providerSettingsModal').classList.add('open');
   await loadProviderProfileSettings();
-  await loadProviderPaymentMethods();
 }
 
 function closeProviderSettings() {
@@ -232,6 +310,7 @@ async function loadProviderProfileSettings() {
     document.getElementById('providerPaypalMerchantId').value = user.paypalMerchantId || '';
     document.getElementById('providerPaypalEmail').value = user.paypalEmail || '';
     renderProviderPayPalStatus(user);
+    renderProviderStripeStatus(user);
   } catch (e) {
     notify(e.message || 'Profil konnte nicht geladen werden.', 'error');
   }
@@ -242,17 +321,59 @@ function renderProviderPayPalStatus(user) {
   if (!host) return;
   const status = user.paypalOnboardingStatus || 'NOT_CONNECTED';
   const labels = {
-    NOT_CONNECTED: 'Nicht verbunden. Verbinde PayPal, damit Kunden online direkt an dich zahlen koennen.',
+    NOT_CONNECTED: 'Verbinde PayPal, damit Kunden online direkt an dich zahlen können.',
     LINK_CREATED: 'Onboarding-Link erstellt. Bitte PayPal-Verbindung abschliessen.',
-    CONNECTED: 'Verbunden. Online-Zahlungen koennen an dein PayPal-Konto geleitet werden.',
-    ACTION_REQUIRED: 'PayPal-Konto erkannt, aber es fehlen noch Berechtigungen oder E-Mail-Bestaetigung.',
-    RETURNED_INCOMPLETE: 'PayPal-Onboarding wurde nicht vollstaendig abgeschlossen.'
+    CONNECTED: 'Online-Zahlungen können an dein PayPal-Konto geleitet werden.',
+    ACTION_REQUIRED: 'PayPal-Konto erkannt, aber es fehlen noch Berechtigungen oder E-Mail-Bestätigung.',
+    RETURNED_INCOMPLETE: 'PayPal-Onboarding wurde nicht vollständig abgeschlossen.'
   };
-  const parts = [labels[status] || status];
-  if (user.paypalMerchantId) parts.push(`Merchant ID: ${user.paypalMerchantId}`);
-  if (user.paypalPermissionsGranted === false) parts.push('Berechtigungen fehlen');
-  if (user.paypalEmailConfirmed === false) parts.push('PayPal-E-Mail nicht bestaetigt');
-  host.textContent = parts.join(' · ');
+  const meta = [];
+  if (user.paypalMerchantId) meta.push(`Merchant ID: ${user.paypalMerchantId}`);
+  if (user.paypalPermissionsGranted === false) meta.push('Berechtigungen fehlen');
+  if (user.paypalEmailConfirmed === false) meta.push('PayPal-E-Mail nicht bestätigt');
+  host.innerHTML = providerPaymentCard('paypal', 'PayPal Marketplace', status, labels[status] || status, meta);
+}
+
+function renderProviderStripeStatus(user) {
+  const host = document.getElementById('providerStripeStatus');
+  if (!host) return;
+  const status = user.stripeOnboardingStatus || 'NOT_CONNECTED';
+  const labels = {
+    NOT_CONNECTED: 'Verbinde Stripe, damit Kunden per Karte zahlen können.',
+    ONBOARDING_STARTED: 'Onboarding gestartet. Bitte Stripe-Verbindung abschliessen.',
+    CONNECTED: 'Kartenzahlungen können direkt über Stripe Connect verteilt werden.',
+    ACTION_REQUIRED: 'Stripe-Konto erkannt, aber es fehlen noch Angaben.'
+  };
+  const meta = [];
+  if (user.stripeConnectedAccountId) meta.push(`Account: ${user.stripeConnectedAccountId}`);
+  host.innerHTML = providerPaymentCard('stripe', 'Stripe Connect', status, labels[status] || status, meta);
+}
+
+function providerPaymentCard(kind, title, status, copy, meta = []) {
+  const statusClass = status === 'CONNECTED'
+    ? 'connected'
+    : (status === 'ACTION_REQUIRED' || status === 'RETURNED_INCOMPLETE' ? 'action' : 'pending');
+  const statusLabel = {
+    NOT_CONNECTED: 'Nicht verbunden',
+    LINK_CREATED: 'Gestartet',
+    ONBOARDING_STARTED: 'Gestartet',
+    CONNECTED: 'Verbunden',
+    ACTION_REQUIRED: 'Aktion nötig',
+    RETURNED_INCOMPLETE: 'Unvollstaendig'
+  }[status] || status;
+  return `
+    <div class="payment-provider-card">
+      <div class="payment-provider-head">
+        <div class="payment-provider-brand">
+          <span class="payment-provider-mark ${kind}">${kind === 'paypal' ? 'P' : 'S'}</span>
+          <span>${esc(title)}</span>
+        </div>
+        <span class="payment-status-badge ${statusClass}">${esc(statusLabel)}</span>
+      </div>
+      <p>${esc(copy)}</p>
+      ${meta.length ? `<div class="payment-meta-list">${meta.map(item => `<span>${esc(item)}</span>`).join('')}</div>` : ''}
+    </div>
+  `;
 }
 
 async function handleProviderProfileFile() {
@@ -288,65 +409,6 @@ async function saveProviderProfile() {
     loadProviderOverview();
   } catch (e) {
     notify(e.message || 'Profil konnte nicht gespeichert werden.', 'error');
-  }
-}
-
-async function loadProviderPaymentMethods() {
-  const host = document.getElementById('providerPaymentMethodsList');
-  host.innerHTML = `<div class="muted-text">Zahlungsinfos werden geladen...</div>`;
-  try {
-    providerPaymentMethods = await fetchAPI('/payment-methods', 'GET', null, 'provider_jwt');
-    host.innerHTML = providerPaymentMethods.length ? providerPaymentMethods.map(m => `
-      <div class="drawer-section" style="margin-top:0;margin-bottom:.6rem">
-        <strong>${esc(m.brand)} •••• ${esc(m.last4)}</strong>
-        <p class="muted-text">${esc(m.holderName || '')} · gültig bis ${String(m.expiryMonth).padStart(2, '0')}/${m.expiryYear}</p>
-      </div>
-    `).join('') : `<div class="muted-text">Noch keine Zahlungsinfo gespeichert.</div>`;
-  } catch {
-    host.innerHTML = `<div class="muted-text">Zahlungsinfos konnten nicht geladen werden.</div>`;
-  }
-}
-
-async function saveProviderPaymentMethod() {
-  const rawNumber = document.getElementById('providerCardNumber').value.replace(/\D/g, '');
-  const holderName = document.getElementById('providerCardHolder').value.trim();
-  const expiryMonth = parseInt(document.getElementById('providerCardMonth').value, 10);
-  const expiryYear = parseInt(document.getElementById('providerCardYear').value, 10);
-  const cvc = document.getElementById('providerCardCvc').value.trim();
-  const payoutIban = document.getElementById('providerPayoutIban').value;
-  if (!isValidIbanBasic(payoutIban)) {
-    notify('Bitte gültige Auszahlungs-IBAN eingeben.', 'error');
-    return;
-  }
-  if (!isValidCardNumber(rawNumber)) {
-    notify('Kartennummer ist ungültig.', 'error');
-    return;
-  }
-  if (!/^\d{3,4}$/.test(cvc)) {
-    notify('Bitte gültige Prüfziffer eingeben.', 'error');
-    return;
-  }
-  if (!holderName || !expiryMonth || !expiryYear) {
-    notify('Bitte Zahlungsinfos vollständig eingeben.', 'error');
-    return;
-  }
-  const payload = {
-    brand: detectCardBrand(rawNumber),
-    last4: rawNumber.slice(-4),
-    holderName,
-    expiryMonth,
-    expiryYear,
-    providerToken: `tok_provider_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`,
-    defaultMethod: true
-  };
-  try {
-    await fetchAPI('/payment-methods', 'POST', payload, 'provider_jwt');
-    document.getElementById('providerCardNumber').value = '';
-    document.getElementById('providerCardCvc').value = '';
-    notify('Zahlungsinfo gespeichert.', 'success');
-    loadProviderPaymentMethods();
-  } catch (e) {
-    notify(e.message || 'Zahlungsinfo konnte nicht gespeichert werden.', 'error');
   }
 }
 
@@ -428,6 +490,13 @@ function handleAuthLinks() {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
+  const stripeStatus = params.get('stripe');
+  if (stripeStatus === 'return' || stripeStatus === 'refresh') {
+    refreshStripeOnboardingStatus();
+    localStorage.removeItem('provider_stripe_onboarding_started');
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
   if (resetToken) {
     document.getElementById('resetToken').value = resetToken;
     document.getElementById('loginScreen').style.display = 'flex';
@@ -482,7 +551,7 @@ async function completePayPalOnboardingFromReturn(params) {
     localStorage.removeItem('provider_paypal_onboarding_started');
     notify(user.paypalOnboardingStatus === 'CONNECTED'
       ? 'PayPal wurde verbunden.'
-      : 'PayPal-Verbindung gespeichert. Bitte pruefe, ob noch Schritte bei PayPal offen sind.', 'success');
+      : 'PayPal-Verbindung gespeichert. Bitte prüfe, ob noch Schritte bei PayPal offen sind.', 'success');
     if (document.getElementById('providerSettingsModal')?.classList.contains('open')) {
       renderProviderPayPalStatus(user);
     }
@@ -490,15 +559,23 @@ async function completePayPalOnboardingFromReturn(params) {
       await refreshPayPalOnboardingStatus();
     }
   } catch (e) {
-    notify(e.message || 'PayPal-Rueckkehr konnte nicht gespeichert werden.', 'error');
+    notify(e.message || 'PayPal-Rückkehr konnte nicht gespeichert werden.', 'error');
   }
 }
 
 async function notifyPendingPayPalOnboardingWithoutParams() {
   const params = new URLSearchParams(window.location.search);
   if (params.toString() || localStorage.getItem('provider_paypal_onboarding_started') !== 'true') return;
-  notify('PayPal wurde geoeffnet, hat aber keine verwertbaren Onboarding-Daten zurueckgegeben. Der Status wird jetzt direkt bei PayPal geprueft.', 'info');
+  notify('PayPal wurde geöffnet, hat aber keine verwertbaren Onboarding-Daten zurückgegeben. Der Status wird jetzt direkt bei PayPal geprüft.', 'info');
   await refreshPayPalOnboardingStatus();
+}
+
+async function notifyPendingStripeOnboardingWithoutParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.toString() || localStorage.getItem('provider_stripe_onboarding_started') !== 'true') return;
+  notify('Stripe wurde geöffnet. Der Status wird jetzt geprüft.', 'info');
+  localStorage.removeItem('provider_stripe_onboarding_started');
+  await refreshStripeOnboardingStatus();
 }
 
 function hasPayPalReturnParams(params) {
@@ -699,13 +776,6 @@ function renderServiceImagePreview() {
     : `<span class="muted-text">Noch keine Bilder ausgewählt.</span>`;
 }
 
-function detectCardBrand(number) {
-  if (number.startsWith('4')) return 'Visa';
-  if (/^5[1-5]/.test(number)) return 'Mastercard';
-  if (/^3[47]/.test(number)) return 'Amex';
-  return 'Card';
-}
-
 // ── Löschen ───────────────────────────────────────────────────────────────────
 function openDeleteModal(id) {
   pendingDelete = id;
@@ -732,11 +802,13 @@ async function confirmDelete() {
 function switchDashboardTab(tab) {
   document.getElementById('servicesView').style.display = tab === 'services' ? 'block' : 'none';
   document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+  document.getElementById('guideView').style.display = tab === 'guide' ? 'block' : 'none';
   document.getElementById('tabMyServices').classList.toggle('active', tab === 'services');
   document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+  document.getElementById('tabProviderGuide').classList.toggle('active', tab === 'guide');
 
   if (tab === 'bookings') loadBookings();
-  else loadServices();
+  else if (tab === 'services') loadServices();
 }
 
 // ── Buchungen laden & anzeigen ────────────────────────────────────────────────
@@ -769,6 +841,7 @@ function serviceMetaLine(s) {
 // Zeichnet Übersichtskarte + Kalender + Anfragenliste aus dem State providerBookings
 function renderBookings() {
   const grid = document.getElementById('bookingsGrid');
+  const filteredBookings = filteredProviderBookings();
 
   const pendingCount  = providerBookings.filter(b => b.status === 'PENDING').length;
   const acceptedCount = providerBookings.filter(b => b.status === 'ACCEPTED').length;
@@ -796,21 +869,83 @@ function renderBookings() {
       ${renderProviderCalendar()}
     </section>
 
+    ${renderBookingFilters()}
+
     <section class="appointments-list">
       <div class="section-row-title">
         <div>
           <span>Alle Anfragen & Termine</span>
-          <small>Akzeptiere oder lehne offene Buchungen direkt im Postfach ab.</small>
+          <small>${filteredBookings.length} von ${providerBookings.length} Aufträgen angezeigt.</small>
         </div>
       </div>
-      ${providerBookings.length ? providerBookings.map(b => renderProviderBookingCard(b)).join('') : `
+      ${filteredBookings.length ? filteredBookings.map(b => renderProviderBookingCard(b)).join('') : `
         <div class="appointment-empty-card">
           <div class="empty-icon">📭</div>
-          <p>Du hast aktuell keine Anfragen. Der Kalender bleibt bereit, sobald neue Buchungen eintreffen.</p>
+          <p>Keine Aufträge passen zu den aktuellen Filtern.</p>
         </div>
       `}
     </section>
   `;
+}
+
+function renderBookingFilters() {
+  const q = esc(document.getElementById('bookingSearchFilter')?.value || '');
+  const status = document.getElementById('bookingStatusFilter')?.value || '';
+  const payment = document.getElementById('bookingPaymentFilter')?.value || '';
+  const from = document.getElementById('bookingFromFilter')?.value || '';
+  const to = document.getElementById('bookingToFilter')?.value || '';
+  return `
+    <div class="booking-filters">
+      <div class="booking-filters-head">
+        <div>
+          <strong>Aufträge filtern</strong>
+          <span>Suche nach Auftrag, Kunde, Zahlungsstatus oder Zeitraum.</span>
+        </div>
+      </div>
+      <input class="form-input" id="bookingSearchFilter" placeholder="Auftrag, Kunde oder Notiz suchen" value="${q}" oninput="renderBookings()" />
+      <select class="form-input" id="bookingStatusFilter" onchange="renderBookings()">
+        <option value="" ${status === '' ? 'selected' : ''}>Alle Status</option>
+        <option value="PENDING" ${status === 'PENDING' ? 'selected' : ''}>Offen</option>
+        <option value="ACCEPTED" ${status === 'ACCEPTED' ? 'selected' : ''}>Akzeptiert</option>
+        <option value="COMPLETED" ${status === 'COMPLETED' ? 'selected' : ''}>Abgeschlossen</option>
+        <option value="REJECTED" ${status === 'REJECTED' ? 'selected' : ''}>Abgelehnt</option>
+      </select>
+      <select class="form-input" id="bookingPaymentFilter" onchange="renderBookings()">
+        <option value="" ${payment === '' ? 'selected' : ''}>Alle Zahlungen</option>
+        <option value="UNPAID" ${payment === 'UNPAID' ? 'selected' : ''}>Unbezahlt</option>
+        <option value="CHECKOUT_CREATED" ${payment === 'CHECKOUT_CREATED' ? 'selected' : ''}>Checkout gestartet</option>
+        <option value="AWAITING_OFFLINE_PAYMENT" ${payment === 'AWAITING_OFFLINE_PAYMENT' ? 'selected' : ''}>Offline vorgemerkt</option>
+        <option value="PAID" ${payment === 'PAID' ? 'selected' : ''}>Bezahlt</option>
+      </select>
+      <input class="form-input" type="date" id="bookingFromFilter" value="${esc(from)}" onchange="renderBookings()" />
+      <input class="form-input" type="date" id="bookingToFilter" value="${esc(to)}" onchange="renderBookings()" />
+    </div>
+  `;
+}
+
+function filteredProviderBookings() {
+  const q = (document.getElementById('bookingSearchFilter')?.value || '').toLowerCase().trim();
+  const status = document.getElementById('bookingStatusFilter')?.value || '';
+  const payment = document.getElementById('bookingPaymentFilter')?.value || '';
+  const from = document.getElementById('bookingFromFilter')?.value || '';
+  const to = document.getElementById('bookingToFilter')?.value || '';
+
+  return providerBookings.filter(booking => {
+    const text = [
+      booking.serviceTitle,
+      booking.customerName,
+      booking.providerNotes,
+      booking.customerNotes,
+      booking.paymentProvider,
+      booking.paymentStatus
+    ].join(' ').toLowerCase();
+    const date = booking.bookingDate || '';
+    return (!q || text.includes(q))
+      && (!status || booking.status === status)
+      && (!payment || booking.paymentStatus === payment)
+      && (!from || date >= from)
+      && (!to || date <= to);
+  });
 }
 
 // Reine Optik: Monatskalender mit Status-Pillen je Wunschtermin (bookingDate)
@@ -919,6 +1054,7 @@ function renderProviderBookingCard(b) {
 
   return `
     <div class="svc-card appointment-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
+      ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
       <div class="svc-top">
         <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>
         <span class="appointment-date">${formatDateShort(b.bookingDate)}</span>
@@ -929,7 +1065,8 @@ function renderProviderBookingCard(b) {
         <span>Angefragt von: <strong>${esc(b.customerName)}</strong></span>
       </div>
       <div class="svc-desc">
-        Zahlung: <strong>${esc(b.paymentStatus || 'UNPAID')}</strong>
+        Zahlung: ${providerPaymentPill(b.paymentProvider, b.paymentProvider ? '' : 'Noch nicht gewählt')}
+        <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
         ${b.actualHours ? ` · Aufwand: <strong>${Number(b.actualHours).toFixed(2)} Std</strong>` : ''}
       </div>
       ${b.deliveryUrl ? `<div class="svc-desc">Lieferung bereitgestellt${b.deliveryExpiresAt ? ` · bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : ''}
@@ -1023,9 +1160,12 @@ function renderBookingDrawer() {
       </div>
       <div class="drawer-section">
         <h3>Payment</h3>
-        <p><span class="payment-pill ${b.paymentStatus === 'PAID' ? 'is-paid' : ''}">${esc(b.paymentStatus || 'UNPAID')}</span></p>
+        <p>
+          ${providerPaymentPill(b.paymentProvider, b.paymentProvider ? '' : 'Noch nicht gewählt')}
+          <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'is-paid' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+        </p>
         <p><strong>Bezahlt am:</strong> ${b.paidAt ? formatDateTimeShort(b.paidAt) : '-'}</p>
-        <p><strong>Zahlungsart:</strong> ${esc(b.paymentProvider || '-')}</p>
+        <p><strong>Zahlungsart:</strong> ${esc(providerPaymentLabel(b.paymentProvider))}</p>
         ${b.paymentNote ? `<p><strong>Notiz:</strong> ${esc(b.paymentNote)}</p>` : ''}
         <p><strong>Umsatz:</strong> €${revenue.toFixed(2)}</p>
         <p><strong>Brutto:</strong> €${Number(b.grossAmount || revenue).toFixed(2)}</p>
@@ -1039,6 +1179,7 @@ function renderBookingDrawer() {
             <option value="BANK_TRANSFER">Banküberweisung</option>
             <option value="MANUAL">Manuell geprüft</option>
             <option value="PAYPAL">PayPal</option>
+            <option value="CARD">Kredit-/Debitkarte</option>
             <option value="SEPA">SEPA</option>
           </select>
           <input class="form-input" id="drawerPaymentNote" style="margin-top:.6rem" placeholder="Zahlungsnotiz, z.B. vor Ort bar erhalten" />
@@ -1073,7 +1214,7 @@ function renderBookingDrawer() {
 
     <section class="drawer-section">
       <h3>Digitale Lieferung</h3>
-      <p class="muted-text">Der echte Link wird Kunden erst nach Zahlung ueber einen geschützten Backend-Link freigegeben.</p>
+      <p class="muted-text">Der echte Link wird Kunden erst nach Zahlung über einen geschützten Backend-Link freigegeben.</p>
       <input class="form-input" type="url" id="drawerDeliveryUrl" placeholder="Privater Download-Link" />
       <div class="drawer-grid" style="margin-top:.6rem">
         <input class="form-input" id="drawerDeliveryLabel" value="${esc(b.deliveryLabel || '')}" placeholder="Label, z.B. Finale Dateien" />
@@ -1099,6 +1240,8 @@ function settlementLabel(status) {
     NOT_READY: 'Noch nicht abrechnungsbereit',
     PAYPAL_PLATFORM_FEE_PENDING: 'PayPal Split vorbereitet',
     PAYPAL_SPLIT_COMPLETED: 'PayPal Split abgeschlossen',
+    STRIPE_DESTINATION_CHARGE_PENDING: 'Stripe Connect vorbereitet',
+    STRIPE_DESTINATION_CHARGE_COMPLETED: 'Stripe Connect abgeschlossen',
     PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT: 'Provider-Auszahlung offen',
     PROVIDER_PAYOUT_SENT: 'Provider-Auszahlung gesendet',
     PLATFORM_FEE_DUE_FROM_PROVIDER: 'Provision vom Provider offen',
@@ -1106,6 +1249,33 @@ function settlementLabel(status) {
     DISPUTED: 'In Klärung'
   };
   return labels[status] || status;
+}
+
+function providerPaymentLabel(provider) {
+  const labels = {
+    PAYPAL: 'PayPal',
+    CARD: 'Stripe Karte',
+    STRIPE: 'Stripe Karte',
+    BANK_TRANSFER: 'Banküberweisung',
+    CASH: 'Barzahlung',
+    MANUAL: 'Manuell geprüft',
+    SEPA: 'SEPA'
+  };
+  return labels[String(provider || '').toUpperCase()] || provider || '-';
+}
+
+function providerPaymentPill(provider, fallback = '') {
+  const normalized = String(provider || '').toUpperCase();
+  const classes = {
+    PAYPAL: 'paypal',
+    CARD: 'stripe',
+    STRIPE: 'stripe',
+    BANK_TRANSFER: 'bank',
+    CASH: 'cash',
+    MANUAL: 'muted',
+    SEPA: 'bank'
+  };
+  return `<span class="payment-pill ${classes[normalized] || 'muted'}">${esc(fallback || providerPaymentLabel(normalized))}</span>`;
 }
 
 async function recordProviderPayment(bookingId) {

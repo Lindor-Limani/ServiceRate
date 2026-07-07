@@ -2,6 +2,8 @@
   loadProviderProfile();
 })();
 
+let providerProfileViewMode = localStorage.getItem('servicerate_provider_profile_services_view') || 'grid';
+
 async function loadProviderProfile() {
   const root = document.getElementById('providerProfileRoot');
   const id = new URLSearchParams(window.location.search).get('id');
@@ -34,12 +36,32 @@ function renderProviderProfile(profile) {
     </section>
     <div class="section-header">
       <h2 class="section-title">Services dieses Anbieters</h2>
-      <span class="count-pill">${profile.serviceCount}</span>
+      <div class="section-actions">
+        <span class="count-pill">${profile.serviceCount}</span>
+        <div class="view-toggle" aria-label="Darstellung wählen">
+          <button type="button" id="providerProfileGridViewBtn" onclick="setProviderProfileViewMode('grid')">Kacheln</button>
+          <button type="button" id="providerProfileListViewBtn" onclick="setProviderProfileViewMode('list')">Liste</button>
+        </div>
+      </div>
     </div>
-    <div class="cards-grid">
+    <div class="cards-grid" id="providerProfileServicesGrid">
       ${(profile.services || []).map(renderProviderServiceCard).join('') || `<div class="empty-state"><p>Keine aktiven Services.</p></div>`}
     </div>
   `;
+  applyProviderProfileViewMode();
+}
+
+function setProviderProfileViewMode(mode) {
+  providerProfileViewMode = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem('servicerate_provider_profile_services_view', providerProfileViewMode);
+  applyProviderProfileViewMode();
+}
+
+function applyProviderProfileViewMode() {
+  const mode = providerProfileViewMode === 'list' ? 'list' : 'grid';
+  document.getElementById('providerProfileServicesGrid')?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById('providerProfileGridViewBtn')?.classList.toggle('active', mode === 'grid');
+  document.getElementById('providerProfileListViewBtn')?.classList.toggle('active', mode === 'list');
 }
 
 function renderProviderServiceCard(s) {

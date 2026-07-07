@@ -14,5 +14,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByPasswordResetToken(String token);
 
+    Optional<User> findByStripeConnectedAccountId(String stripeConnectedAccountId);
+
     List<User> findByAccountType(String accountType);
 }

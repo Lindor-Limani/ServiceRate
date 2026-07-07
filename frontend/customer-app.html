@@ -64,15 +64,15 @@
     </div>
 
     <div class="advanced-filters">
-      <input class="form-input" type="text" id="locationFilter" placeholder="Ort, z.B. Wien" oninput="renderServices()" />
-      <input class="form-input" type="number" id="maxPriceFilter" placeholder="Max. Preis / Std" min="0" oninput="renderServices()" />
-      <select class="form-input" id="minRatingFilter" onchange="renderServices()">
+      <input class="form-input" type="text" id="locationFilter" placeholder="Ort, z.B. Wien" oninput="scheduleServiceSearch()" />
+      <input class="form-input" type="number" id="maxPriceFilter" placeholder="Max. Preis / Std" min="0" oninput="scheduleServiceSearch()" />
+      <select class="form-input" id="minRatingFilter" onchange="resetAndLoadServices()">
         <option value="0">Alle Bewertungen</option>
         <option value="3">Ab 3 Sternen</option>
         <option value="4">Ab 4 Sternen</option>
         <option value="5">5 Sterne</option>
       </select>
-      <select class="form-input" id="sortFilter" onchange="renderServices()">
+      <select class="form-input" id="sortFilter" onchange="resetAndLoadServices()">
         <option value="recommended">Empfohlen</option>
         <option value="rating">Beste Bewertung</option>
         <option value="priceAsc">Preis aufsteigend</option>
@@ -82,7 +82,13 @@
 
     <div class="section-header">
       <h2 class="section-title">Verfügbare Services</h2>
-      <span class="count-pill" id="countPill">–</span>
+      <div class="section-actions">
+        <span class="count-pill" id="countPill">–</span>
+        <div class="view-toggle" aria-label="Darstellung wählen">
+          <button type="button" id="marketGridViewBtn" onclick="setCustomerViewMode('market', 'grid')">Kacheln</button>
+          <button type="button" id="marketListViewBtn" onclick="setCustomerViewMode('market', 'list')">Liste</button>
+        </div>
+      </div>
     </div>
 
     <div class="cards-grid" id="servicesGrid">
@@ -91,11 +97,18 @@
         <p>Services werden geladen…</p>
       </div>
     </div>
+    <div class="pagination-row" id="servicePagination"></div>
   </div>
 
   <div id="bookingsView" style="display: none;">
     <div class="section-header">
       <h2 class="section-title">Meine Anfragen & Buchungen</h2>
+      <div class="section-actions">
+        <div class="view-toggle" aria-label="Darstellung wählen">
+          <button type="button" id="customerBookingsGridViewBtn" onclick="setCustomerViewMode('bookings', 'grid')">Kacheln</button>
+          <button type="button" id="customerBookingsListViewBtn" onclick="setCustomerViewMode('bookings', 'list')">Liste</button>
+        </div>
+      </div>
     </div>
     <div class="cards-grid" id="customerBookingsGrid"></div>
   </div>
@@ -225,33 +238,9 @@
     </div>
     <button class="btn btn-ghost btn-full" style="margin-bottom:1.2rem" onclick="saveCustomerProfile()">Profil speichern</button>
     <h3 style="font-size:1rem;margin-bottom:.8rem">Zahlungsarten</h3>
-    <div id="paymentMethodsList" class="service-reviews-list"></div>
-    <div class="form-group">
-      <label class="form-label">Name auf der Karte</label>
-      <input class="form-input" id="cardHolder" placeholder="Max Muster" />
+    <div id="paymentMethodsList" class="service-reviews-list">
+      <div class="review-empty">Kartendaten werden direkt bei Stripe eingegeben und nicht in ServiceRate gespeichert.</div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Kartennummer</label>
-      <input class="form-input" id="cardNumber" inputmode="numeric" placeholder="4242 4242 4242 4242" />
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Monat</label>
-        <input class="form-input" id="cardMonth" type="number" min="1" max="12" placeholder="12" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Jahr</label>
-        <input class="form-input" id="cardYear" type="number" min="2026" placeholder="2028" />
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Prüfziffer</label>
-      <input class="form-input" id="cardCvc" inputmode="numeric" maxlength="4" placeholder="123" />
-    </div>
-    <p style="color:var(--muted);font-size:.82rem;margin-bottom:1rem">
-      Kartennummer und Prüfziffer werden nur lokal geprüft und nicht im Backend gespeichert. In Produktion muss hier Stripe/PayPal tokenisieren.
-    </p>
-    <button class="btn btn-primary btn-full" onclick="savePaymentMethod()">Zahlungsart hinzufügen</button>
     <div class="settings-danger-zone">
       <button class="btn btn-danger btn-full" onclick="logout();closePaymentSettings()">Abmelden</button>
     </div>
@@ -267,11 +256,16 @@
     </div>
     <div class="form-group">
       <label class="form-label">Zahlungsart</label>
-      <select class="form-input" id="checkoutMethod" onchange="renderCheckoutFields()"></select>
+      <select class="form-input" id="checkoutMethod" onchange="renderCheckoutFields()" style="display:none"></select>
+      <div id="checkoutOptionsGrid" class="checkout-option-grid"></div>
     </div>
     <div id="checkoutFields"></div>
+    <label class="form-checkbox" id="saveCardRow" style="margin:.9rem 0 1rem;display:none">
+      <input type="checkbox" id="checkoutSavePaymentMethod" />
+      <span>Karte für spaetere Buchungen bei Stripe speichern</span>
+    </label>
     <p style="color:var(--muted);font-size:.82rem;margin:1rem 0">
-      Online-Zahlungen werden nur angezeigt, wenn der Anbieter sie verbunden hat. Bei Barzahlung oder Ueberweisung wird die Plattformprovision nach Zahlungseingang mit dem Anbieter abgerechnet.
+      Online-Zahlungen werden nur angezeigt, wenn der Anbieter sie verbunden hat. Bei Barzahlung oder Überweisung wird die Plattformprovision nach Zahlungseingang mit dem Anbieter abgerechnet.
     </p>
     <button class="btn btn-primary btn-full" id="checkoutConfirmButton" onclick="confirmBookingPayment()">Zahlung starten</button>
   </div>

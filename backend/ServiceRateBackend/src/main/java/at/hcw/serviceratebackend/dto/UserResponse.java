@@ -14,6 +14,8 @@ public record UserResponse(
         String paypalOnboardingStatus,
         Boolean paypalPermissionsGranted,
         Boolean paypalEmailConfirmed,
+        String stripeConnectedAccountId,
+        String stripeOnboardingStatus,
         String accountType,
         String status
 ) {

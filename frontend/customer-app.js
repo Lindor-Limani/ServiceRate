@@ -4,10 +4,17 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let allServices    = [];
 let activeCategory = '';
-let editingPaymentMethodId = null;
-let cachedPaymentMethods = [];
 let activeCheckoutBookingId = null;
 let customerBookings = [];
+let servicePage = 0;
+let servicePageSize = 24;
+let serviceTotalPages = 0;
+let serviceTotalElements = 0;
+let serviceSearchTimer = null;
+let customerViewModes = {
+  market: localStorage.getItem('servicerate_customer_market_view') || 'grid',
+  bookings: localStorage.getItem('servicerate_customer_bookings_view') || 'grid'
+};
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
@@ -15,15 +22,11 @@ let customerBookings = [];
   updateNavUI();
   loadWeather();
   loadServices();
+  applyCustomerViewMode('market');
+  applyCustomerViewMode('bookings');
 
   document.getElementById('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') applyFilters();
-  });
-  document.getElementById('cardNumber')?.addEventListener('input', e => {
-    e.target.value = formatCardNumberValue(e.target.value);
-  });
-  document.getElementById('cardCvc')?.addEventListener('input', e => {
-    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
   });
   document.getElementById('checkoutIban')?.addEventListener('input', e => {
     e.target.value = formatIbanValue(e.target.value);
@@ -36,9 +39,23 @@ let customerBookings = [];
     chip.classList.add('active');
     activeCategory = chip.dataset.cat;
     document.getElementById('categoryFilter').value = activeCategory;
-    renderServices();
+    resetAndLoadServices();
   });
 })();
+
+function setCustomerViewMode(area, mode) {
+  customerViewModes[area] = mode === 'list' ? 'list' : 'grid';
+  localStorage.setItem(`servicerate_customer_${area}_view`, customerViewModes[area]);
+  applyCustomerViewMode(area);
+}
+
+function applyCustomerViewMode(area) {
+  const mode = customerViewModes[area] === 'list' ? 'list' : 'grid';
+  const gridId = area === 'bookings' ? 'customerBookingsGrid' : 'servicesGrid';
+  document.getElementById(gridId)?.classList.toggle('is-list-view', mode === 'list');
+  document.getElementById(`${area === 'bookings' ? 'customerBookings' : 'market'}GridViewBtn`)?.classList.toggle('active', mode === 'grid');
+  document.getElementById(`${area === 'bookings' ? 'customerBookings' : 'market'}ListViewBtn`)?.classList.toggle('active', mode === 'list');
+}
 
 // ── Wetter-Widget ─────────────────────────────────────────────────────────────
 async function loadWeather() {
@@ -97,7 +114,12 @@ async function loadServices() {
   const grid = document.getElementById('servicesGrid');
   grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
   try {
-    allServices = await fetchAPI('/services', 'GET', null, 'customer_jwt');
+    const params = serviceQueryParams();
+    const data = await fetchAPI(`/services?${params.toString()}`, 'GET', null, 'customer_jwt');
+    allServices = Array.isArray(data) ? data : (data.content || []);
+    serviceTotalElements = Array.isArray(data) ? allServices.length : Number(data.totalElements || 0);
+    serviceTotalPages = Array.isArray(data) ? 1 : Number(data.totalPages || 0);
+    servicePage = Array.isArray(data) ? 0 : Number(data.page || 0);
     renderServices();
   } catch {
     grid.innerHTML = `
@@ -106,6 +128,7 @@ async function loadServices() {
         <p>Services konnten nicht geladen werden.<br/>Läuft das Backend auf Port 8081?</p>
       </div>`;
     document.getElementById('countPill').textContent = '0';
+    document.getElementById('servicePagination').innerHTML = '';
   }
 }
 
@@ -117,44 +140,53 @@ function applyFilters() {
       c.classList.toggle('active', c.dataset.cat === cat);
     });
   }
-  renderServices();
+  resetAndLoadServices();
+}
+
+function resetAndLoadServices() {
+  servicePage = 0;
+  loadServices();
+}
+
+function scheduleServiceSearch() {
+  clearTimeout(serviceSearchTimer);
+  serviceSearchTimer = setTimeout(resetAndLoadServices, 250);
+}
+
+function serviceQueryParams() {
+  const q = document.getElementById('searchInput').value.trim();
+  const location = (document.getElementById('locationFilter')?.value || '').trim();
+  const maxPrice = document.getElementById('maxPriceFilter')?.value || '';
+  const minRating = document.getElementById('minRatingFilter')?.value || '0';
+  const sort = document.getElementById('sortFilter')?.value || 'recommended';
+  const params = new URLSearchParams({
+    page: String(servicePage),
+    size: String(servicePageSize),
+    sort
+  });
+  if (q) params.set('q', q);
+  if (activeCategory) params.set('category', activeCategory);
+  if (location) params.set('location', location);
+  if (maxPrice) params.set('maxPrice', maxPrice);
+  if (minRating && minRating !== '0') params.set('minRating', minRating);
+  return params;
 }
 
 function renderServices() {
-  const q   = document.getElementById('searchInput').value.toLowerCase().trim();
-  const cat = activeCategory;
-  const location = (document.getElementById('locationFilter')?.value || '').toLowerCase().trim();
-  const maxPrice = parseFloat(document.getElementById('maxPriceFilter')?.value || '');
-  const minRating = parseFloat(document.getElementById('minRatingFilter')?.value || '0');
-  const sort = document.getElementById('sortFilter')?.value || 'recommended';
-
-  const filtered = allServices.filter(s => {
-    const matchText = !q || (s.title + ' ' + s.description + ' ' + (s.providerName || '')).toLowerCase().includes(q);
-    const matchCat  = !cat || s.category === cat;
-    const matchLocation = !location || String(s.location || '').toLowerCase().includes(location);
-    const matchPrice = Number.isNaN(maxPrice) || Number(s.price || 0) <= maxPrice;
-    const matchRating = !minRating || Number(s.averageRating || 0) >= minRating;
-    return matchText && matchCat && matchLocation && matchPrice && matchRating;
-  }).sort((a, b) => {
-    if (sort === 'rating') return Number(b.averageRating || 0) - Number(a.averageRating || 0);
-    if (sort === 'priceAsc') return Number(a.price || 0) - Number(b.price || 0);
-    if (sort === 'priceDesc') return Number(b.price || 0) - Number(a.price || 0);
-    return Number(b.trustScore || 0) - Number(a.trustScore || 0);
-  });
-
-  document.getElementById('countPill').textContent = filtered.length + ' gefunden';
+  document.getElementById('countPill').textContent = serviceTotalElements + ' gefunden';
   const grid = document.getElementById('servicesGrid');
 
-  if (filtered.length === 0) {
+  if (allServices.length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
         <p>Keine Services gefunden. Versuch einen anderen Suchbegriff.</p>
       </div>`;
+    renderServicePagination();
     return;
   }
 
-  grid.innerHTML = filtered.map(s => `
+  grid.innerHTML = allServices.map(s => `
     <article class="service-card" onclick="openServicePage('${s.id}')">
       ${catImage(s.category, s.imageUrl)}
       <div class="card-top">
@@ -165,6 +197,7 @@ function renderServices() {
       <div class="card-title">${esc(s.title)}</div>
       <div class="card-desc">${esc(s.description)}</div>
       <div class="card-desc">${serviceMetaLine(s)}</div>
+      ${paymentBadgesForAvailability(s)}
       ${serviceRatingPanel(s)}
       <div class="card-footer">
         <div class="provider-row">
@@ -175,6 +208,27 @@ function renderServices() {
       </div>
     </article>
   `).join('');
+  renderServicePagination();
+}
+
+function renderServicePagination() {
+  const host = document.getElementById('servicePagination');
+  if (!host || serviceTotalPages <= 1) {
+    if (host) host.innerHTML = '';
+    return;
+  }
+  const current = servicePage + 1;
+  host.innerHTML = `
+    <button class="btn btn-ghost btn-sm" ${servicePage <= 0 ? 'disabled' : ''} onclick="goToServicePage(${servicePage - 1})">Zurück</button>
+    <span class="page-info">Seite ${current} von ${serviceTotalPages}</span>
+    <button class="btn btn-ghost btn-sm" ${servicePage >= serviceTotalPages - 1 ? 'disabled' : ''} onclick="goToServicePage(${servicePage + 1})">Weiter</button>
+  `;
+}
+
+function goToServicePage(page) {
+  servicePage = Math.max(0, Math.min(page, Math.max(0, serviceTotalPages - 1)));
+  loadServices();
+  document.getElementById('marketView')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function serviceMetaLine(s) {
@@ -183,6 +237,84 @@ function serviceMetaLine(s) {
   if (s.deliverableType === 'DIGITAL') parts.push('Digital lieferbar');
   if (s.deliverableType === 'HYBRID') parts.push('Digital & vor Ort');
   return parts.length ? parts.map(esc).join(' · ') : 'Flexible Abwicklung';
+}
+
+function paymentMethodConfig(method) {
+  const key = String(method || '').toUpperCase();
+  const map = {
+    PAYPAL: {
+      key: 'paypal',
+      mark: 'P',
+      label: 'PayPal',
+      title: 'PayPal',
+      hint: 'Online zahlen und automatisch zur Buchung zurückkehren.'
+    },
+    CARD: {
+      key: 'stripe',
+      mark: 'S',
+      label: 'Stripe Karte',
+      title: 'Kredit-/Debitkarte',
+      hint: 'Sichere Kartenzahlung über Stripe Checkout.'
+    },
+    STRIPE: {
+      key: 'stripe',
+      mark: 'S',
+      label: 'Stripe Karte',
+      title: 'Kredit-/Debitkarte',
+      hint: 'Sichere Kartenzahlung über Stripe Checkout.'
+    },
+    BANK_TRANSFER: {
+      key: 'bank',
+      mark: 'B',
+      label: 'Überweisung',
+      title: 'Banküberweisung',
+      hint: 'Direkt an den Anbieter zahlen.'
+    },
+    CASH: {
+      key: 'cash',
+      mark: 'C',
+      label: 'Barzahlung',
+      title: 'Barzahlung vor Ort',
+      hint: 'Beim Termin direkt beim Anbieter zahlen.'
+    },
+    MANUAL: {
+      key: 'muted',
+      mark: 'M',
+      label: 'Manuell',
+      title: 'Manuell geprüft',
+      hint: 'Zahlung wurde manuell im Dashboard verbucht.'
+    },
+    SEPA: {
+      key: 'bank',
+      mark: 'S',
+      label: 'SEPA',
+      title: 'SEPA',
+      hint: 'Zahlung per SEPA.'
+    }
+  };
+  return map[key] || { key: 'muted', mark: '?', label: key || 'Offen', title: key || 'Offen', hint: 'Zahlungsstatus wird aktualisiert.' };
+}
+
+function paymentBadge(method, labelOverride = '') {
+  const cfg = paymentMethodConfig(method);
+  return `<span class="payment-badge ${cfg.key}"><span class="payment-mark">${esc(cfg.mark)}</span>${esc(labelOverride || cfg.label)}</span>`;
+}
+
+function paymentPill(method, labelOverride = '') {
+  const cfg = paymentMethodConfig(method);
+  return `<span class="payment-pill ${cfg.key}"><span class="payment-mark">${esc(cfg.mark)}</span>${esc(labelOverride || cfg.label)}</span>`;
+}
+
+function paymentBadgesForAvailability(source) {
+  const badges = [];
+  if (source?.providerPaypalAvailable) badges.push(paymentBadge('PAYPAL'));
+  if (source?.providerStripeAvailable) badges.push(paymentBadge('CARD'));
+  if (source?.providerOfflinePaymentAvailable !== false) {
+    badges.push(paymentBadge('BANK_TRANSFER'));
+    badges.push(paymentBadge('CASH'));
+  }
+  if (!badges.length) badges.push(paymentBadge('', 'Zahlung nach Absprache'));
+  return `<div class="payment-badges" aria-label="Verfügbare Zahlungsarten">${badges.join('')}</div>`;
 }
 
 function openServicePage(id) {
@@ -406,6 +538,7 @@ function handleAuthLinks() {
   const paypalStatus = params.get('paypal');
   const paypalBookingId = params.get('bookingId');
   const paypalOrderId = params.get('token');
+  const stripeStatus = params.get('stripe');
 
   if (paypalStatus === 'success' && paypalBookingId && paypalOrderId) {
     capturePayPalPayment(paypalBookingId, paypalOrderId);
@@ -415,6 +548,20 @@ function handleAuthLinks() {
 
   if (paypalStatus === 'cancel') {
     notify('PayPal-Zahlung wurde abgebrochen.', 'info');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (stripeStatus === 'success') {
+    notify('Stripe-Zahlung wurde verarbeitet. Der Status wird automatisch aktualisiert.', 'success');
+    switchCustomerTab('bookings');
+    loadCustomerBookings();
+    window.history.replaceState({}, document.title, window.location.pathname);
+    return;
+  }
+
+  if (stripeStatus === 'cancel') {
+    notify('Kartenzahlung wurde abgebrochen.', 'info');
     window.history.replaceState({}, document.title, window.location.pathname);
     return;
   }
@@ -520,6 +667,7 @@ async function loadCustomerBookings() {
 
       return `
       <div class="service-card booking-card ${statusClass}" style="cursor: default;">
+        ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
         <div class="card-top">
           <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
         </div>
@@ -529,7 +677,13 @@ async function loadCustomerBookings() {
         <span class="provider-name">Angeboten von: <strong>${esc(b.providerName || '–')}</strong></span>
       </div>
         <div class="booking-date-line">${dateLabel}</div>
-        <div class="booking-date-line">Zahlung: <strong>${esc(b.paymentStatus || 'UNPAID')}</strong>${b.actualHours ? ` · Aufwand: <strong>${Number(b.actualHours).toFixed(2)} Std</strong>` : ''}</div>
+        <div class="payment-summary-card">
+          <div class="payment-badges">
+            ${b.paymentProvider ? paymentPill(b.paymentProvider) : paymentPill('', 'Noch nicht gewählt')}
+            <span class="payment-pill ${b.paymentStatus === 'PAID' ? 'bank' : 'muted'}">${esc(b.paymentStatus || 'UNPAID')}</span>
+          </div>
+          <p>${paymentStatusCopy(b)}${b.actualHours ? ` Aufwand: ${Number(b.actualHours).toFixed(2)} Std.` : ''}</p>
+        </div>
         ${b.deliveryAvailable && b.deliveryUrl ? `<div class="booking-date-line">Lieferung: <button class="btn btn-ghost btn-sm" onclick="openDelivery('${b.id}')">${esc(b.deliveryLabel || 'Download öffnen')}</button>${b.deliveryExpiresAt ? ` · gültig bis ${formatDateTimeShort(b.deliveryExpiresAt)}` : ''}</div>` : b.deliveryUrl ? `<div class="booking-date-line">Lieferung: nach Zahlung verfügbar</div>` : ''}
         ${b.providerNotes ? `<div class="booking-date-line">Notiz: ${esc(b.providerNotes)}</div>` : ''}
         ${review ? renderBookingReview(review) : renderBookingReviewEmpty(b.status)}
@@ -561,34 +715,25 @@ function renderServiceReviews(reviews) {
 async function openPaymentSettings() {
   document.getElementById('paymentModal').classList.add('open');
   await loadCustomerProfile();
-  await loadPaymentMethods();
+  loadPaymentMethods();
 }
 
 function closePaymentSettings() {
   document.getElementById('paymentModal').classList.remove('open');
 }
 
-async function loadPaymentMethods() {
+function loadPaymentMethods() {
   const host = document.getElementById('paymentMethodsList');
-  host.innerHTML = `<div class="review-loading">Zahlungsarten werden geladen...</div>`;
-  try {
-    const methods = await fetchAPI('/payment-methods', 'GET', null, 'customer_jwt');
-    cachedPaymentMethods = methods;
-    host.innerHTML = methods.length ? methods.map(m => `
-      <div class="public-review">
-        <div class="public-review-top">
-          <div><strong>${esc(m.brand)} •••• ${esc(m.last4)}</strong><span>${esc(m.holderName || '')}</span></div>
-          <span>
-            <button class="btn btn-ghost btn-sm" onclick="editPaymentMethod('${m.id}')">Ändern</button>
-            <button class="btn btn-danger btn-sm" onclick="deletePaymentMethod('${m.id}')">Löschen</button>
-          </span>
-        </div>
-        <p class="muted">Gültig bis ${String(m.expiryMonth).padStart(2, '0')}/${m.expiryYear}</p>
+  host.innerHTML = `
+    <div class="payment-summary-card">
+      <div class="payment-badges">
+        ${paymentBadge('CARD')}
+        ${paymentBadge('PAYPAL')}
+        ${paymentBadge('BANK_TRANSFER')}
+        ${paymentBadge('CASH')}
       </div>
-    `).join('') : `<div class="review-empty">Noch keine Zahlungsart gespeichert.</div>`;
-  } catch {
-    host.innerHTML = `<div class="review-empty">Zahlungsarten konnten nicht geladen werden.</div>`;
-  }
+      <p>Stripe und PayPal erscheinen im Checkout, sobald der jeweilige Anbieter sie verbunden hat. Kartendaten bleiben immer bei Stripe.</p>
+    </div>`;
 }
 
 async function loadCustomerProfile() {
@@ -634,74 +779,6 @@ async function saveCustomerProfile() {
   }
 }
 
-async function savePaymentMethod() {
-  const rawNumber = document.getElementById('cardNumber').value.replace(/\D/g, '');
-  const holderName = document.getElementById('cardHolder').value.trim();
-  const expiryMonth = parseInt(document.getElementById('cardMonth').value, 10);
-  const expiryYear = parseInt(document.getElementById('cardYear').value, 10);
-  const cvc = document.getElementById('cardCvc').value.trim();
-  if (!isValidCardNumber(rawNumber)) {
-    notify('Kartennummer ist ungültig.', 'error');
-    return;
-  }
-  if (!/^\d{3,4}$/.test(cvc)) {
-    notify('Bitte gültige Prüfziffer eingeben.', 'error');
-    return;
-  }
-  if (!holderName || !expiryMonth || !expiryYear) {
-    notify('Bitte Kartendaten vollständig eingeben.', 'error');
-    return;
-  }
-  const last4 = rawNumber.slice(-4);
-  const brand = detectCardBrand(rawNumber);
-  const providerToken = `tok_demo_${crypto.randomUUID ? crypto.randomUUID() : Date.now()}`;
-  try {
-    const payload = { brand, last4, holderName, expiryMonth, expiryYear, providerToken, defaultMethod: true };
-    if (editingPaymentMethodId) {
-      await fetchAPI(`/payment-methods/${editingPaymentMethodId}`, 'PUT', payload, 'customer_jwt');
-    } else {
-      await fetchAPI('/payment-methods', 'POST', payload, 'customer_jwt');
-    }
-    editingPaymentMethodId = null;
-    document.getElementById('cardNumber').value = '';
-    document.getElementById('cardHolder').value = '';
-    document.getElementById('cardCvc').value = '';
-    notify('Zahlungsart gespeichert.', 'success');
-    loadPaymentMethods();
-  } catch (e) {
-    notify(e.message || 'Zahlungsart konnte nicht gespeichert werden.', 'error');
-  }
-}
-
-function editPaymentMethod(id) {
-  const method = cachedPaymentMethods.find(m => m.id === id);
-  if (!method) return;
-  editingPaymentMethodId = id;
-  document.getElementById('cardHolder').value = method.holderName || '';
-  document.getElementById('cardMonth').value = method.expiryMonth || '';
-  document.getElementById('cardYear').value = method.expiryYear || '';
-  document.getElementById('cardNumber').value = '';
-  document.getElementById('cardCvc').value = '';
-  notify('Bitte Kartennummer erneut eingeben. Sie wird nicht gespeichert.', 'info');
-}
-
-async function deletePaymentMethod(id) {
-  try {
-    await fetchAPI(`/payment-methods/${id}`, 'DELETE', null, 'customer_jwt');
-    notify('Zahlungsart gelöscht.', 'success');
-    loadPaymentMethods();
-  } catch (e) {
-    notify(e.message || 'Zahlungsart konnte nicht gelöscht werden.', 'error');
-  }
-}
-
-function detectCardBrand(number) {
-  if (number.startsWith('4')) return 'Visa';
-  if (/^5[1-5]/.test(number)) return 'Mastercard';
-  if (/^3[47]/.test(number)) return 'Amex';
-  return 'Card';
-}
-
 function payBooking(bookingId) {
   activeCheckoutBookingId = bookingId;
   document.getElementById('checkoutModal').classList.add('open');
@@ -718,29 +795,41 @@ async function renderCheckoutFields() {
   const method = document.getElementById('checkoutMethod').value;
   const host = document.getElementById('checkoutFields');
   renderCheckoutConfirmButton(method);
-  if (method === 'PAYPAL') {
+  const saveCardRow = document.getElementById('saveCardRow');
+  if (saveCardRow) saveCardRow.style.display = method === 'CARD' ? 'flex' : 'none';
+  if (method === 'PAYPAL' || method === 'CARD') {
+    const cfg = paymentMethodConfig(method);
     host.innerHTML = `
-      <div class="review-empty">
-        <strong>PayPal</strong><br/>
-        Du wirst zu PayPal weitergeleitet. Nach der Bestätigung kommst du automatisch zurück zur Buchung.
+      <div class="payment-summary-card">
+        <div class="payment-badges">${paymentPill(method)}</div>
+        <strong>${esc(cfg.title)}</strong>
+        <p>
+        ${method === 'CARD'
+          ? 'Du wirst zu Stripe Checkout weitergeleitet. ServiceRate speichert keine Kartennummern oder Prüfziffern.'
+          : 'Du wirst zu PayPal weitergeleitet. Nach der Bestätigung kommst du automatisch zurück zur Buchung.'}
+        </p>
       </div>`;
     return;
   }
   if (method === 'BANK_TRANSFER') {
     host.innerHTML = `
-      <div class="review-empty">
-        Du zahlst per Bankueberweisung direkt an den Anbieter. Der Anbieter verbucht den Zahlungseingang danach im Dashboard.
+      <div class="payment-summary-card">
+        <div class="payment-badges">${paymentPill(method)}</div>
+        <strong>Banküberweisung an Anbieter</strong>
+        <p>Du zahlst direkt an den Anbieter. Der Anbieter verbucht den Zahlungseingang danach im Dashboard.</p>
       </div>`;
     return;
   }
   if (method === 'CASH') {
     host.innerHTML = `
-      <div class="review-empty">
-        Du bezahlst vor Ort direkt beim Anbieter. Der Anbieter verbucht die Zahlung danach im Dashboard.
+      <div class="payment-summary-card">
+        <div class="payment-badges">${paymentPill(method)}</div>
+        <strong>Barzahlung vor Ort</strong>
+        <p>Du bezahlst beim Termin direkt beim Anbieter. Der Anbieter verbucht die Zahlung danach im Dashboard.</p>
       </div>`;
     return;
   }
-  host.innerHTML = `<div class="review-empty">Keine Zahlungsart verfuegbar.</div>`;
+  host.innerHTML = `<div class="review-empty">Keine Zahlungsart verfügbar.</div>`;
 }
 
 function renderCheckoutConfirmButton(method) {
@@ -750,6 +839,8 @@ function renderCheckoutConfirmButton(method) {
   button.classList.toggle('btn-primary', method !== 'PAYPAL');
   if (method === 'PAYPAL') {
     button.innerHTML = `<img src="https://www.paypalobjects.com/paypal-ui/logos/svg/paypal-color.svg" alt="PayPal" /> Pay with PayPal`;
+  } else if (method === 'CARD') {
+    button.textContent = 'Zur Kartenzahlung';
   } else if (method === 'BANK_TRANSFER') {
     button.textContent = 'Überweisung vormerken';
   } else if (method === 'CASH') {
@@ -768,12 +859,15 @@ async function confirmBookingPayment() {
       notify('Keine Zahlungsart verfügbar.', 'error');
       return;
     }
-    const checkout = await fetchAPI(`/bookings/${bookingId}/checkout`, 'POST', { provider: method }, 'customer_jwt');
-    if (method === 'PAYPAL') {
+    const savePaymentMethod = method === 'CARD' && Boolean(document.getElementById('checkoutSavePaymentMethod')?.checked);
+    const checkout = await fetchAPI(`/bookings/${bookingId}/checkout`, 'POST', { provider: method, savePaymentMethod }, 'customer_jwt');
+    if (method === 'PAYPAL' || method === 'CARD') {
       if (!checkout.checkoutUrl) {
-        throw new Error('PayPal hat keine Checkout-URL geliefert.');
+        throw new Error('Der Zahlungsanbieter hat keine Checkout-URL geliefert.');
       }
-      notify('Weiterleitung zu PayPal...', 'info');
+      notify(method === 'CARD'
+        ? 'Weiterleitung zur sicheren Kartenzahlung...'
+        : 'Weiterleitung zu PayPal...', 'info');
       window.location.href = checkout.checkoutUrl;
       return;
     }
@@ -789,15 +883,57 @@ async function confirmBookingPayment() {
 
 function renderCheckoutOptions() {
   const select = document.getElementById('checkoutMethod');
+  const grid = document.getElementById('checkoutOptionsGrid');
   const booking = customerBookings.find(b => b.id === activeCheckoutBookingId);
   const options = [];
   if (booking?.providerPaypalAvailable) {
     options.push({ value: 'PAYPAL', label: 'PayPal' });
   }
+  if (booking?.providerStripeAvailable) {
+    options.push({ value: 'CARD', label: 'Kredit-/Debitkarte' });
+  }
   options.push({ value: 'BANK_TRANSFER', label: 'Banküberweisung an Anbieter' });
   options.push({ value: 'CASH', label: 'Barzahlung vor Ort' });
 
   select.innerHTML = options.map(o => `<option value="${o.value}">${esc(o.label)}</option>`).join('');
+  grid.innerHTML = options.map(o => {
+    const cfg = paymentMethodConfig(o.value);
+    return `
+      <button type="button" class="checkout-option" data-method="${esc(o.value)}" onclick="selectCheckoutMethod('${esc(o.value)}')">
+        <span class="checkout-option-main">
+          <span class="payment-badge ${cfg.key}"><span class="payment-mark">${esc(cfg.mark)}</span>${esc(cfg.label)}</span>
+          <span class="checkout-option-copy">
+            <strong>${esc(o.label)}</strong>
+            <span>${esc(cfg.hint)}</span>
+          </span>
+        </span>
+        <span class="checkout-radio" aria-hidden="true"></span>
+      </button>`;
+  }).join('');
+  syncCheckoutOptionState();
+}
+
+function selectCheckoutMethod(method) {
+  const select = document.getElementById('checkoutMethod');
+  if (!select) return;
+  select.value = method;
+  syncCheckoutOptionState();
+  renderCheckoutFields();
+}
+
+function syncCheckoutOptionState() {
+  const method = document.getElementById('checkoutMethod')?.value;
+  document.querySelectorAll('#checkoutOptionsGrid .checkout-option').forEach(button => {
+    button.classList.toggle('active', button.dataset.method === method);
+  });
+}
+
+function paymentStatusCopy(booking) {
+  if (booking.paymentStatus === 'PAID') return 'Zahlung abgeschlossen.';
+  if (booking.paymentStatus === 'AWAITING_OFFLINE_PAYMENT') return 'Offline-Zahlung wurde vorgemerkt.';
+  if (booking.paymentProvider === 'PAYPAL') return 'PayPal-Zahlung ist vorbereitet.';
+  if (booking.paymentProvider === 'CARD' || booking.paymentProvider === 'STRIPE') return 'Stripe-Kartenzahlung ist vorbereitet.';
+  return 'Zahlungsart wird beim Bezahlen gewählt.';
 }
 
 async function capturePayPalPayment(bookingId, orderId) {
