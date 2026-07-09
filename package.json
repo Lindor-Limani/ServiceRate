@@ -1,0 +1,16 @@
+{
+  "name": "servicerate-quality-tests",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:perf:baseline": "k6 run tests/performance/baseline.js",
+    "test:perf:stress": "k6 run tests/performance/stress.js",
+    "test:perf:spike": "k6 run tests/performance/spike.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "http-server": "^14.1.1"
+  }
+}

@@ -1,0 +1,241 @@
+package at.hcw.serviceratebackend.service;
+
+import at.hcw.serviceratebackend.dto.CreateServiceRequest;
+import at.hcw.serviceratebackend.dto.ReviewResponse;
+import at.hcw.serviceratebackend.model.entity.Review;
+import at.hcw.serviceratebackend.model.entity.ServiceOffering;
+import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.repository.ReviewRepository;
+import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
+import at.hcw.serviceratebackend.repository.UserRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class ServiceOfferingServiceTest {
+
+    @Mock
+    private ServiceOfferingRepository serviceRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private ReviewRepository reviewRepository;
+    @Mock
+    private ReviewService reviewService;
+    @Mock
+    private LocationValidationService locationValidationService;
+    @Mock
+    private StripeConnectService stripeConnectService;
+
+    private ServiceOfferingService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ServiceOfferingService(
+                serviceRepository,
+                userRepository,
+                reviewRepository,
+                reviewService,
+                locationValidationService,
+                stripeConnectService
+        );
+    }
+
+    @Test
+    void createForProviderEmail_createsActiveServiceWithResolvedLocationAndNormalizedImages() {
+        User provider = provider(true);
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
+        when(locationValidationService.resolveCityName("1010")).thenReturn("Wien, Innere Stadt");
+        when(serviceRepository.save(any(ServiceOffering.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reviewRepository.findAverageRatingByServiceId(any())).thenReturn(null);
+        when(reviewRepository.findReviewCountByServiceId(any())).thenReturn(0L);
+        when(stripeConnectService.isProviderStripeAvailable(provider)).thenReturn(false);
+
+        var response = service.createForProviderEmail(new CreateServiceRequest(
+                null,
+                "Bad sanieren",
+                "Komplettservice",
+                "REPAIR",
+                80.0,
+                2.5,
+                " https://fallback.example/image.jpg ",
+                List.of(" https://example.com/one.jpg ", " ", "https://example.com/two.jpg"),
+                " digital ",
+                "1010"
+        ), "provider@example.com");
+
+        ArgumentCaptor<ServiceOffering> captor = ArgumentCaptor.forClass(ServiceOffering.class);
+        verify(serviceRepository).save(captor.capture());
+        ServiceOffering saved = captor.getValue();
+
+        assertThat(saved.getProvider()).isSameAs(provider);
+        assertThat(saved.getLocation()).isEqualTo("Wien, Innere Stadt");
+        assertThat(saved.getStatus()).isEqualTo("ACTIVE");
+        assertThat(saved.getDeliverableType()).isEqualTo("DIGITAL");
+        assertThat(saved.getImageUrl()).isEqualTo("https://example.com/one.jpg");
+        assertThat(saved.getImageUrls()).isEqualTo("https://example.com/one.jpg\nhttps://example.com/two.jpg");
+        assertThat(response.location()).isEqualTo("Wien, Innere Stadt");
+        assertThat(response.imageUrls()).containsExactly("https://example.com/one.jpg", "https://example.com/two.jpg");
+        assertThat(response.trustScore()).isEqualTo(10);
+        assertThat(response.reviews()).isEmpty();
+        verify(reviewRepository, never()).findByBookingServiceOfferingId(any());
+    }
+
+    @Test
+    void getById_includesFullReviewsForDetailPage() {
+        User provider = provider(true);
+        ServiceOffering offering = offering(provider);
+        Review review = new Review();
+        UUID reviewId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+        when(reviewRepository.findAverageRatingByServiceId(offering.getId())).thenReturn(5.0);
+        when(reviewRepository.findReviewCountByServiceId(offering.getId())).thenReturn(1L);
+        when(reviewRepository.findByBookingServiceOfferingId(offering.getId())).thenReturn(List.of(review));
+        when(reviewService.toResponse(review)).thenReturn(new ReviewResponse(
+                reviewId,
+                bookingId,
+                "Grace Customer",
+                offering.getTitle(),
+                5,
+                "Top"
+        ));
+        when(stripeConnectService.isProviderStripeAvailable(provider)).thenReturn(false);
+
+        var response = service.getById(offering.getId());
+
+        assertThat(response.reviews()).hasSize(1);
+        assertThat(response.reviews().getFirst().comment()).isEqualTo("Top");
+        verify(reviewRepository).findByBookingServiceOfferingId(offering.getId());
+    }
+
+    @Test
+    void createForProviderEmail_rejectsCustomerAccountsBeforeExternalZipLookup() {
+        User customer = provider(true);
+        customer.setAccountType("CUSTOMER");
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+
+        assertThatThrownBy(() -> service.createForProviderEmail(validRequest(), "customer@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Nur Anbieter dürfen Services erstellen.");
+
+        verify(locationValidationService, never()).resolveCityName(any());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createForProviderEmail_rejectsUnverifiedProviderBeforeExternalZipLookup() {
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(false)));
+
+        assertThatThrownBy(() -> service.createForProviderEmail(validRequest(), "provider@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Bitte verifiziere zuerst deine E-Mail-Adresse.");
+
+        verify(locationValidationService, never()).resolveCityName(any());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createForProviderEmail_rejectsInvalidDeliverableType() {
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
+        when(locationValidationService.resolveCityName("1010")).thenReturn("Wien");
+
+        assertThatThrownBy(() -> service.createForProviderEmail(new CreateServiceRequest(
+                null,
+                "Service",
+                "Beschreibung",
+                "REPAIR",
+                50.0,
+                1.0,
+                null,
+                List.of(),
+                "TELEPORT",
+                "1010"
+        ), "provider@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Ungültige Lieferart.");
+
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void createForProviderEmail_rejectsMoreThanTenImages() {
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
+        when(locationValidationService.resolveCityName("1010")).thenReturn("Wien");
+
+        assertThatThrownBy(() -> service.createForProviderEmail(new CreateServiceRequest(
+                null,
+                "Service",
+                "Beschreibung",
+                "REPAIR",
+                50.0,
+                1.0,
+                null,
+                List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"),
+                "ON_SITE",
+                "1010"
+        ), "provider@example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Maximal 10 Bilder pro Service erlaubt.");
+
+        verify(serviceRepository, never()).save(any());
+    }
+
+    private CreateServiceRequest validRequest() {
+        return new CreateServiceRequest(
+                null,
+                "Service",
+                "Beschreibung",
+                "REPAIR",
+                50.0,
+                1.0,
+                null,
+                List.of("https://example.com/image.jpg"),
+                "ON_SITE",
+                "1010"
+        );
+    }
+
+    private User provider(boolean emailVerified) {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setEmail("provider@example.com");
+        user.setPasswordHash("hash");
+        user.setFirstName("Pro");
+        user.setLastName("Vider");
+        user.setAccountType("PROVIDER");
+        user.setStatus("ACTIVE");
+        user.setEmailVerified(emailVerified);
+        return user;
+    }
+
+    private ServiceOffering offering(User provider) {
+        ServiceOffering offering = new ServiceOffering();
+        offering.setId(UUID.randomUUID());
+        offering.setProvider(provider);
+        offering.setTitle("Bad sanieren");
+        offering.setDescription("Komplettservice");
+        offering.setCategory("REPAIR");
+        offering.setPrice(80.0);
+        offering.setEstimatedHours(2.5);
+        offering.setDeliverableType("ON_SITE");
+        offering.setStatus("ACTIVE");
+        offering.setLocation("Wien");
+        return offering;
+    }
+}

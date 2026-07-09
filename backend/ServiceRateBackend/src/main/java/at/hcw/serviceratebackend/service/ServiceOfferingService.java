@@ -2,6 +2,7 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
 import at.hcw.serviceratebackend.dto.PageResponse;
+import at.hcw.serviceratebackend.dto.ReviewResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
 import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
@@ -70,13 +71,13 @@ public class ServiceOfferingService {
         service.setLocation(location);
         service.setStatus("ACTIVE");
 
-        return mapToResponse(serviceRepository.save(service));
+        return mapToSummaryResponse(serviceRepository.save(service));
     }
 
     public List<ServiceOfferingResponse> getAll() {
         return serviceRepository.findAll().stream()
                 .filter(service -> "ACTIVE".equals(service.getStatus()))
-                .map(this::mapToResponse)
+                .map(this::mapToSummaryResponse)
                 .toList();
     }
 
@@ -100,7 +101,7 @@ public class ServiceOfferingService {
                 maxPrice,
                 minRating == null ? 0.0 : Math.max(0.0, minRating),
                 pageable
-        ).map(this::mapToResponse);
+        ).map(this::mapToSummaryResponse);
         return new PageResponse<>(
                 results.getContent(),
                 results.getTotalElements(),
@@ -113,13 +114,13 @@ public class ServiceOfferingService {
     public ServiceOfferingResponse getById(UUID id) {
         return serviceRepository.findById(id)
                 .filter(service -> "ACTIVE".equals(service.getStatus()))
-                .map(this::mapToResponse)
+                .map(this::mapToDetailResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
     }
 
     public ServiceOfferingResponse getByIdForAdmin(UUID id) {
         return serviceRepository.findById(id)
-                .map(this::mapToResponse)
+                .map(this::mapToDetailResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
     }
 
@@ -128,7 +129,7 @@ public class ServiceOfferingService {
         User provider = userRepository.findByEmail(providerEmail)
                 .orElseThrow(() -> new IllegalArgumentException("Provider nicht gefunden"));
         return serviceRepository.findByProviderId(provider.getId()).stream()
-                .map(this::mapToResponse)
+                .map(this::mapToSummaryResponse)
                 .toList();
     }
 
@@ -150,18 +151,29 @@ public class ServiceOfferingService {
         service.setImageUrls(serializeImageUrls(imageUrls));
         service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
 
-        return mapToResponse(serviceRepository.save(service));
+        return mapToSummaryResponse(serviceRepository.save(service));
     }
 
-    // Wandelt eine Entity ins Antwort-DTO um und reichert sie mit den Live-Bewertungen an
-    private ServiceOfferingResponse mapToResponse(ServiceOffering service) {
+    private ServiceOfferingResponse mapToSummaryResponse(ServiceOffering service) {
+        return mapToResponse(service, false);
+    }
+
+    private ServiceOfferingResponse mapToDetailResponse(ServiceOffering service) {
+        return mapToResponse(service, true);
+    }
+
+    // Wandelt eine Entity ins Antwort-DTO um. Listen liefern nur Review-Summaries;
+    // Detailseiten laden die vollständigen Reviews.
+    private ServiceOfferingResponse mapToResponse(ServiceOffering service, boolean includeReviews) {
         // findAverageRatingByServiceId kann null sein, wenn es noch keine Reviews gibt -> sauber auf 0.0 mappen
         Double avg = reviewRepository.findAverageRatingByServiceId(service.getId());
         double averageRating = (avg != null) ? avg : 0.0;
         Long reviewCount = reviewRepository.findReviewCountByServiceId(service.getId());
-        var reviews = reviewRepository.findByBookingServiceOfferingId(service.getId()).stream()
-                .map(reviewService::toResponse)
-                .toList();
+        var reviews = includeReviews
+                ? reviewRepository.findByBookingServiceOfferingId(service.getId()).stream()
+                        .map(reviewService::toResponse)
+                        .toList()
+                : List.<ReviewResponse>of();
         int trustScore = calculateTrustScore(averageRating, reviewCount, service.getStatus());
 
         return new ServiceOfferingResponse(

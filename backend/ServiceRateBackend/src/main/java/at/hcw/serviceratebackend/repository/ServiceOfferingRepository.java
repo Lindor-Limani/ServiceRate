@@ -3,6 +3,7 @@ package at.hcw.serviceratebackend.repository;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +15,7 @@ public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering
 
     // Die neue, simple Methode: Finde alle Services, die einem bestimmten Handwerker (User) gehören.
     // Das brauchen wir später für das "Provider Dashboard" (S2).
+    @EntityGraph(attributePaths = "provider")
     List<ServiceOffering> findByProviderId(UUID providerId);
 
     @Query(
@@ -50,6 +52,7 @@ public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering
                            where r.booking.serviceOffering = s) >= :minRating
                     """
     )
+    @EntityGraph(attributePaths = "provider")
     Page<ServiceOffering> searchActive(
             @Param("q") String q,
             @Param("category") String category,

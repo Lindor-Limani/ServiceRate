@@ -55,7 +55,7 @@ ServiceRate/
 
 ### 1. Datenbank starten
 
-Die PostgreSQL-Datenbank laeuft ueber Docker Compose und wird lokal auf Port `5433` veroeffentlicht, damit sie nicht mit einer lokalen PostgreSQL-Instanz auf Port `5432` kollidiert.
+Die PostgreSQL-Datenbank laeuft ueber Docker Compose und wird lokal auf Port `5533` veroeffentlicht, damit sie nicht mit einer lokalen PostgreSQL-Instanz auf Port `5432` kollidiert.
 
 ```bash
 docker compose up -d
@@ -66,7 +66,7 @@ Standardwerte:
 * Datenbank: `servicerate`
 * Benutzer: `postgres`
 * Passwort: `postgres`
-* JDBC URL: `jdbc:postgresql://localhost:5433/servicerate`
+* JDBC URL: `jdbc:postgresql://localhost:5533/servicerate`
 
 ### 2. Backend starten
 
@@ -92,7 +92,7 @@ Die wichtigsten Umgebungsvariablen:
 | `SERVER_PORT` | Backend-Port | `8081` |
 | `APP_PLATFORM_FEE_PERCENT` | Prozentuale Plattformprovision je Buchung | `10` |
 | `APP_PLATFORM_FEE_FIXED` | Fixe Plattformprovision je Buchung | `0` |
-| `SPRING_DATASOURCE_URL` | PostgreSQL-Verbindung | `jdbc:postgresql://localhost:5433/servicerate` |
+| `SPRING_DATASOURCE_URL` | PostgreSQL-Verbindung | `jdbc:postgresql://localhost:5533/servicerate` |
 | `SPRING_DATASOURCE_USERNAME` | Datenbank-User | `postgres` |
 | `SPRING_DATASOURCE_PASSWORD` | Datenbank-Passwort | `postgres` |
 | `OPENWEATHER_API_KEY` | API-Key fuer Wetterdaten | leer |
