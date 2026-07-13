@@ -81,8 +81,11 @@ public class ChatMessageService {
     }
 
     private void validatePayload(String content, String imageDataUrl) {
-        if (content.isBlank() && imageDataUrl.isBlank()) {
+        if (!hasMeaningfulContent(content) && imageDataUrl.isBlank()) {
             throw new IllegalArgumentException("Nachricht oder Bild erforderlich.");
+        }
+        if (content.length() > 1000) {
+            throw new IllegalArgumentException("Nachricht ist zu lang.");
         }
         if (!imageDataUrl.isBlank()) {
             if (!imageDataUrl.startsWith("data:image/")) {
@@ -92,6 +95,10 @@ public class ChatMessageService {
                 throw new IllegalArgumentException("Bild ist zu groß. Bitte kleineres Bild wählen.");
             }
         }
+    }
+
+    private boolean hasMeaningfulContent(String content) {
+        return content != null && content.codePoints().anyMatch(Character::isLetterOrDigit);
     }
 
     private void emitMessage(ChatMessageResponse response) {

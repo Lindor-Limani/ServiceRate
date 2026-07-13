@@ -134,19 +134,68 @@ async function buildChatPayload(textareaId, imageInputId) {
 
   if (imageInput?.files?.length) {
     const [file] = imageInput.files;
-    const [compressed] = await readImageFiles(imageInput, 1);
-    imageDataUrl = compressed || '';
+    if (!file.type.startsWith('image/')) {
+      notify('Bitte nur Bilddateien auswählen.', 'error');
+      imageInput.value = '';
+      updateChatImageLabel(imageInput.id);
+      return { content, imageDataUrl, imageName };
+    }
+    imageDataUrl = await compressImageFile(file, 900, 0.62);
+    if (imageDataUrl.length > 1_400_000) {
+      notify('Bild ist zu groß. Bitte kleineres Bild wählen.', 'error');
+      imageDataUrl = '';
+    }
     imageName = file?.name || 'chat-bild';
   }
 
   return { content, imageDataUrl, imageName };
 }
 
+function hasMeaningfulChatContent(content) {
+  return /[\p{L}\p{N}]/u.test(content || '');
+}
+
 function resetChatInputs(textareaId, imageInputId) {
   const input = document.getElementById(textareaId);
   const imageInput = document.getElementById(imageInputId);
   if (input) input.value = '';
-  if (imageInput) imageInput.value = '';
+  if (imageInput) {
+    imageInput.value = '';
+    updateChatImageLabel(imageInput.id);
+  }
+}
+
+function withLocalChatImage(message, payload) {
+  if (!message || !payload?.imageDataUrl) return message;
+  return {
+    ...message,
+    imageDataUrl: message.imageDataUrl || payload.imageDataUrl,
+    imageName: message.imageName || payload.imageName
+  };
+}
+
+function upsertChatMessage(thread, message, renderMessage, emptySelector) {
+  if (!thread || !message?.id) return;
+  const existing = document.getElementById(`chat-message-${message.id}`);
+  if (existing) {
+    if (message.imageDataUrl && !existing.querySelector('.chat-image')) {
+      existing.outerHTML = renderMessage(message);
+    }
+    return;
+  }
+  if (emptySelector && thread.querySelector(emptySelector)) thread.innerHTML = '';
+  thread.insertAdjacentHTML('beforeend', renderMessage(message));
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function updateChatImageLabel(inputId) {
+  const input = document.getElementById(inputId);
+  const label = input?.closest('.chat-attach-btn');
+  const text = label?.querySelector('.chat-attach-text');
+  if (!text) return;
+  const file = input.files?.[0];
+  text.textContent = file ? 'Bild gewählt' : 'Bild';
+  label.classList.toggle('has-file', Boolean(file));
 }
 
 function formatIbanValue(value) {

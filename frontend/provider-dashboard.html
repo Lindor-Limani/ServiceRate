@@ -1446,6 +1446,9 @@
     .chat-attach-btn:hover {
       background: var(--primary-tint); border-color: #99d8d2; color: var(--primary-dark);
     }
+    .chat-attach-btn.has-file {
+      background: #dcfce7; border-color: #86efac; color: #047857;
+    }
     .chat-attach-btn input { display: none; }
     .chat-image {
       display: block; max-width: min(320px, 100%); max-height: 240px;
@@ -1486,7 +1489,10 @@
     }
     .chat-main-head span { display: grid; gap: .1rem; }
     .chat-main-head small { color: var(--muted); font-size: .78rem; font-weight: 600; }
-    .chat-main .chat-thread { max-height: none; min-height: 360px; }
+    .chat-main .chat-thread {
+      height: clamp(320px, calc(100vh - 380px), 560px);
+      max-height: 560px; min-height: 320px;
+    }
     .appointment-empty-card {
       grid-column: 1 / -1; background: #fff; border: 1px dashed var(--border);
       border-radius: 18px; padding: 2rem; text-align: center; color: var(--muted);
@@ -1675,10 +1681,10 @@
           <div class="chat-main-head" id="providerChatTitle">Wähle einen Chat</div>
           <div class="chat-thread" id="providerChatHubThread"></div>
           <div class="chat-compose">
-            <textarea class="form-input" id="providerChatHubInput" rows="3" placeholder="Nachricht schreiben..."></textarea>
+            <textarea class="form-input" id="providerChatHubInput" rows="3" maxlength="1000" placeholder="Nachricht schreiben..."></textarea>
             <label class="chat-attach-btn" title="Bild senden">
-              Bild
-              <input type="file" id="providerChatHubImage" accept="image/*" />
+              <span class="chat-attach-text">Bild</span>
+              <input type="file" id="providerChatHubImage" accept="image/*" onchange="updateChatImageLabel('providerChatHubImage')" />
             </label>
             <button class="btn btn-primary" onclick="sendProviderHubMessage()">Senden</button>
           </div>
@@ -2007,10 +2013,10 @@
     </div>
     <div class="chat-thread" id="chatThread"></div>
     <div class="chat-compose">
-      <textarea class="form-input" id="chatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+      <textarea class="form-input" id="chatInput" rows="2" maxlength="1000" placeholder="Nachricht schreiben..."></textarea>
       <label class="chat-attach-btn" title="Bild senden">
-        Bild
-        <input type="file" id="chatImageInput" accept="image/*" />
+        <span class="chat-attach-text">Bild</span>
+        <input type="file" id="chatImageInput" accept="image/*" onchange="updateChatImageLabel('chatImageInput')" />
       </label>
       <button class="btn btn-primary" onclick="sendChatMessage('provider_jwt')">Senden</button>
     </div>

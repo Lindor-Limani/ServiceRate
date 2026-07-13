@@ -1901,6 +1901,12 @@ header {
   color: var(--primary-dark);
 }
 
+.chat-attach-btn.has-file {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #047857;
+}
+
 .chat-attach-btn input {
   display: none;
 }
@@ -2018,8 +2024,9 @@ header {
 }
 
 .chat-main .chat-thread {
-  max-height: none;
-  min-height: 360px;
+  height: clamp(320px, calc(100vh - 380px), 560px);
+  max-height: 560px;
+  min-height: 320px;
 }
 
 @media (max-width: 760px) {

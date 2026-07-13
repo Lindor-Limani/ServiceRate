@@ -92,6 +92,10 @@ public class SchemaMigrationConfig {
                     updated_at TIMESTAMP WITH TIME ZONE
                 )
                 """);
+
+        jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data_url TEXT");
+        jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_name VARCHAR(255)");
+        tryExecute("ALTER TABLE chat_messages ALTER COLUMN content DROP NOT NULL");
     }
 
     private void tryExecute(String sql) {

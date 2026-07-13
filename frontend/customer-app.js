@@ -1560,19 +1560,19 @@ function closeCustomerChatStream() {
 
 function appendCustomerHubMessage(message) {
   const thread = document.getElementById('customerChatHubThread');
-  if (!thread || !message?.id || document.getElementById(`chat-message-${message.id}`)) return;
-  if (thread.querySelector('.review-empty')) thread.innerHTML = '';
-  thread.insertAdjacentHTML('beforeend', renderChatMessage(message));
-  thread.scrollTop = thread.scrollHeight;
+  upsertChatMessage(thread, message, renderChatMessage, '.review-empty');
 }
 
 async function sendCustomerHubMessage() {
   const payload = await buildChatPayload('customerChatHubInput', 'customerChatHubImage');
-  if ((!payload.content && !payload.imageDataUrl) || !activeCustomerHubBookingId) return;
+  if ((!hasMeaningfulChatContent(payload.content) && !payload.imageDataUrl) || !activeCustomerHubBookingId) {
+    notify('Bitte schreibe eine Nachricht oder wähle ein Bild aus.', 'info');
+    return;
+  }
   try {
     const message = await fetchAPI(`/messages/booking/${activeCustomerHubBookingId}`, 'POST', payload, 'customer_jwt');
     resetChatInputs('customerChatHubInput', 'customerChatHubImage');
-    appendCustomerHubMessage(message);
+    appendCustomerHubMessage(withLocalChatImage(message, payload));
   } catch (e) {
     notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
   }
@@ -1612,11 +1612,19 @@ function renderChatMessage(message) {
 
 async function sendChatMessage(tokenKey) {
   const payload = await buildChatPayload('chatInput', 'chatImageInput');
-  if ((!payload.content && !payload.imageDataUrl) || !activeChatBookingId) return;
+  if ((!hasMeaningfulChatContent(payload.content) && !payload.imageDataUrl) || !activeChatBookingId) {
+    notify('Bitte schreibe eine Nachricht oder wähle ein Bild aus.', 'info');
+    return;
+  }
   try {
-    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', payload, tokenKey);
+    const message = await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', payload, tokenKey);
     resetChatInputs('chatInput', 'chatImageInput');
-    await loadChatMessages(tokenKey);
+    const thread = document.getElementById('chatThread');
+    if (thread) {
+      upsertChatMessage(thread, withLocalChatImage(message, payload), renderChatMessage, '.review-empty');
+    } else {
+      await loadChatMessages(tokenKey);
+    }
   } catch (e) {
     notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
   }

@@ -136,10 +136,10 @@
         <div class="chat-main-head" id="customerChatTitle">Wähle einen Chat</div>
         <div class="chat-thread" id="customerChatHubThread"></div>
         <div class="chat-compose">
-          <textarea class="form-input" id="customerChatHubInput" rows="3" placeholder="Nachricht schreiben..."></textarea>
+          <textarea class="form-input" id="customerChatHubInput" rows="3" maxlength="1000" placeholder="Nachricht schreiben..."></textarea>
           <label class="chat-attach-btn" title="Bild senden">
-            Bild
-            <input type="file" id="customerChatHubImage" accept="image/*" />
+            <span class="chat-attach-text">Bild</span>
+            <input type="file" id="customerChatHubImage" accept="image/*" onchange="updateChatImageLabel('customerChatHubImage')" />
           </label>
           <button class="btn btn-primary" onclick="sendCustomerHubMessage()">Senden</button>
         </div>
@@ -352,10 +352,10 @@
     </div>
     <div class="chat-thread" id="chatThread"></div>
     <div class="chat-compose">
-      <textarea class="form-input" id="chatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+      <textarea class="form-input" id="chatInput" rows="2" maxlength="1000" placeholder="Nachricht schreiben..."></textarea>
       <label class="chat-attach-btn" title="Bild senden">
-        Bild
-        <input type="file" id="chatImageInput" accept="image/*" />
+        <span class="chat-attach-text">Bild</span>
+        <input type="file" id="chatImageInput" accept="image/*" onchange="updateChatImageLabel('chatImageInput')" />
       </label>
       <button class="btn btn-primary" onclick="sendChatMessage('customer_jwt')">Senden</button>
     </div>
