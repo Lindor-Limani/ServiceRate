@@ -3,8 +3,11 @@ package at.hcw.serviceratebackend.controller;
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
 import at.hcw.serviceratebackend.dto.PageResponse;
 import at.hcw.serviceratebackend.dto.ServiceOfferingResponse;
+import at.hcw.serviceratebackend.service.ImageResource;
 import at.hcw.serviceratebackend.service.ServiceOfferingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -12,6 +15,7 @@ import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 @RestController
@@ -47,6 +51,13 @@ public class ServiceOfferingController {
         return ResponseEntity.ok(service.getById(id));
     }
 
+    @GetMapping("/{id}/image")
+    public ResponseEntity<byte[]> getPrimaryImage(@PathVariable("id") UUID id) {
+        return service.getPrimaryImage(id)
+                .map(this::imageResponse)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     // Gibt nur die Services des eingeloggten Providers zurück (E-Mail kommt aus dem JWT)
     @GetMapping("/my")
     public ResponseEntity<List<ServiceOfferingResponse>> getMyServices(Authentication authentication) {
@@ -71,5 +82,12 @@ public class ServiceOfferingController {
             @PathVariable("id") java.util.UUID id,
             @RequestBody UpdateServiceRequest request) {
         return ResponseEntity.ok(service.updateService(id, request));
+    }
+
+    private ResponseEntity<byte[]> imageResponse(ImageResource image) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
+                .body(image.bytes());
     }
 }

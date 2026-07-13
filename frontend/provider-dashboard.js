@@ -649,7 +649,7 @@ function updateProviderVerifyBanner() {
 // ── Services laden & rendern ──────────────────────────────────────────────────
 async function loadServices() {
   const grid = document.getElementById('servicesGrid');
-  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
+  grid.innerHTML = skeletonCards(preferredViewMode('services') === 'list' ? 4 : 6, preferredViewMode('services'));
   try {
     // /services/my liefert nur die Services des eingeloggten Providers (per JWT)
     allServices = await fetchAPI('/services/my', 'GET', null, 'provider_jwt');
@@ -746,10 +746,16 @@ function renderProviderServiceListCard(s) {
 
 function listMedia(category, imageUrl = '') {
   if (imageUrl) {
-    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+    return `<div class="sr-list-media"><img src="${esc(imageUrl)}" alt="" loading="lazy" decoding="async"></div>`;
   }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
+}
+
+function bookingServiceImageUrl(booking) {
+  if (booking?.serviceImageUrl) return booking.serviceImageUrl;
+  if (booking?.serviceHasImage && booking?.serviceId) return `${BASE_URL}/services/${encodeURIComponent(booking.serviceId)}/image`;
+  return '';
 }
 
 function updateStats() {
@@ -900,14 +906,17 @@ function switchDashboardTab(tab) {
   document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
   document.getElementById('tabProviderGuide').classList.toggle('active', tab === 'guide');
 
-  if (tab === 'bookings') loadBookings();
-  else if (tab === 'services') loadServices();
+  if (tab === 'bookings') {
+    providerBookings.length ? renderBookings() : loadBookings();
+  } else if (tab === 'services') {
+    allServices.length ? renderServices() : loadServices();
+  }
 }
 
 // ── Buchungen laden & anzeigen ────────────────────────────────────────────────
 async function loadBookings() {
   const grid = document.getElementById('bookingsGrid');
-  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade Anfragen…</p></div>`;
+  grid.innerHTML = skeletonCards(preferredViewMode('bookings') === 'list' ? 4 : 6, preferredViewMode('bookings'));
 
   if (!localStorage.getItem('provider_jwt')) {
     grid.innerHTML = `<div class="empty-state"><p>Bitte neu anmelden.</p></div>`;
@@ -987,7 +996,7 @@ function renderProviderBookingListCard(b) {
   const review = b.review;
   return `
     <article class="sr-list-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
-      ${listMedia(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+      ${listMedia(b.serviceCategory || 'OTHER', bookingServiceImageUrl(b))}
       <div class="sr-list-body">
         <div class="sr-list-top">
           <div class="sr-list-main">
@@ -1205,7 +1214,7 @@ function renderProviderBookingCard(b) {
 
   return `
     <div class="svc-card appointment-card list-layout-card ${statusClass}" onclick="openBookingDrawer('${b.id}')">
-      ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+      ${catImage(b.serviceCategory || 'OTHER', bookingServiceImageUrl(b))}
       <div class="list-card-body">
         <div class="svc-top">
           <span class="cat-badge status-badge ${statusClass}">${esc(b.status)}</span>

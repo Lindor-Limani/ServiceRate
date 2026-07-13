@@ -48,6 +48,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/stripe/webhook").permitAll()
                         // Kunden dürfen den Marktplatz ohne Login durchstöbern
                         .requestMatchers(HttpMethod.GET, "/api/services").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/services/*/image").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/services/*", "/api/providers/**").permitAll()
                         // Bewertungen sind öffentlich lesbar; das Abgeben einer Bewertung erfordert Login
                         .requestMatchers(HttpMethod.GET, "/api/reviews/booking/**", "/api/reviews/service/**").permitAll()

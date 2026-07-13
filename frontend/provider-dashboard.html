@@ -212,6 +212,45 @@
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
+      overflow: hidden;
+    }
+
+    .card-image img,
+    .sr-list-media img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+    }
+
+    .skeleton-card { pointer-events: none; }
+    .skeleton-block,
+    .skeleton-line {
+      position: relative;
+      overflow: hidden;
+      background: #e9eef1;
+    }
+    .skeleton-line {
+      height: 12px;
+      border-radius: 999px;
+    }
+    .skeleton-line.short { width: 32%; }
+    .skeleton-line.medium { width: 62%; }
+    .skeleton-line.title {
+      width: 78%;
+      height: 18px;
+    }
+    .skeleton-block::after,
+    .skeleton-line::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+      animation: skeleton-shimmer 1.35s infinite;
+    }
+    @keyframes skeleton-shimmer {
+      100% { transform: translateX(100%); }
     }
 
     /* ── PAGE HEADER ───────────────────────────────────────────────────────── */
@@ -1847,8 +1886,8 @@
   </div>
 </div>
 
-<script src="utils.js?v=20260707-first-list-boot1"></script>
-<script src="api.js?v=20260707-first-list-boot1"></script>
-<script src="provider-dashboard.js?v=20260707-first-list-boot1"></script>
+<script src="utils.js?v=20260713-perf-images"></script>
+<script src="api.js?v=20260713-perf-images"></script>
+<script src="provider-dashboard.js?v=20260713-perf-images"></script>
 </body>
 </html>

@@ -12,8 +12,8 @@ module.exports = defineConfig({
     trace: 'on-first-retry'
   },
   webServer: {
-    command: 'npx http-server . -p 5600 -c-1',
-    url: 'http://127.0.0.1:5600/frontend/customer-app.html',
+    command: 'npx http-server frontend -p 5600 -c-1',
+    url: 'http://127.0.0.1:5600/customer-app.html',
     reuseExistingServer: true,
     timeout: 15_000
   },

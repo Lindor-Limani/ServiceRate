@@ -20,7 +20,7 @@ const CAT_IMAGES = {
 // Liefert das HTML für das Kategorie-Platzhalterbild oben auf einer Karte
 function catImage(category, imageUrl = '') {
   if (imageUrl) {
-    return `<div class="card-image has-photo" style="background-image:url('${esc(imageUrl)}')"></div>`;
+    return `<div class="card-image has-photo"><img src="${esc(imageUrl)}" alt="" loading="lazy" decoding="async"></div>`;
   }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="card-image" style="background:${img.bg}">${img.emoji}</div>`;
@@ -48,24 +48,52 @@ function readImageFiles(input, maxFiles = 1) {
     input.value = '';
     return Promise.resolve([]);
   }
-  const tooLarge = files.find(file => file.size > 900 * 1024);
-  if (tooLarge) {
-    notify('Bitte Bilder unter 900 KB verwenden.', 'error');
-    input.value = '';
-    return Promise.resolve([]);
-  }
   const invalid = files.find(file => !file.type.startsWith('image/'));
   if (invalid) {
     notify('Bitte nur Bilddateien auswählen.', 'error');
     input.value = '';
     return Promise.resolve([]);
   }
-  return Promise.all(files.map(file => new Promise((resolve, reject) => {
+  return Promise.all(files.map(compressImageFile));
+}
+
+function compressImageFile(file, maxEdge = 1280, quality = 0.78) {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const type = file.type === 'image/png' && file.size < 350 * 1024 ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(type, type === 'image/jpeg' ? quality : undefined));
+      };
+      img.src = reader.result;
+    };
     reader.readAsDataURL(file);
-  })));
+  });
+}
+
+function skeletonCards(count = 6, mode = 'grid') {
+  return Array.from({ length: count }, () => `
+    <article class="${mode === 'list' ? 'sr-list-card' : 'service-card svc-card'} skeleton-card" aria-hidden="true">
+      <div class="${mode === 'list' ? 'sr-list-media' : 'card-image'} skeleton-block"></div>
+      <div class="${mode === 'list' ? 'sr-list-body' : 'list-card-body'}">
+        <div class="skeleton-line short"></div>
+        <div class="skeleton-line title"></div>
+        <div class="skeleton-line"></div>
+        <div class="skeleton-line medium"></div>
+      </div>
+    </article>
+  `).join('');
 }
 
 function formatIbanValue(value) {

@@ -74,6 +74,7 @@ class BookingServiceTest {
         );
         ReflectionTestUtils.setField(bookingService, "platformFeePercent", 10.0);
         ReflectionTestUtils.setField(bookingService, "platformFeeFixed", 1.0);
+        ReflectionTestUtils.setField(bookingService, "backendBaseUrl", "http://localhost:8081");
     }
 
     @Test
@@ -126,6 +127,28 @@ class BookingServiceTest {
 
         verify(serviceRepository, never()).findById(any());
         verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void createBooking_usesServiceImageEndpointForUploadedPreviewImage() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        ServiceOffering offering = offering(user("provider@example.com", "PROVIDER", true), 120.0);
+        offering.setImageUrl(null);
+        offering.setImageUrls("data:image/png;base64,preview-image");
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(any())).thenReturn(List.of());
+
+        var response = bookingService.createBooking(
+                new CreateBookingRequest(customer.getId(), offering.getId(), LocalDate.of(2026, 8, 1)),
+                "customer@example.com"
+        );
+
+        assertThat(response.serviceId()).isEqualTo(offering.getId());
+        assertThat(response.serviceImageUrl())
+                .startsWith("http://localhost:8081/api/services/" + offering.getId() + "/image?v=");
+        assertThat(response.serviceHasImage()).isTrue();
     }
 
     @Test

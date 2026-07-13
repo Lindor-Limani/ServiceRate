@@ -132,7 +132,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('customer can search services and XSS-like service text is rendered as text', async ({ page }) => {
-  await page.goto('/frontend/customer-app.html');
+  await page.goto('/customer-app.html');
 
   await expect(page.getByRole('heading', { name: /Finde den richtigen/i })).toBeVisible();
   await expect(page.getByText('Rohr reparieren')).toBeVisible();
@@ -145,7 +145,7 @@ test('customer can search services and XSS-like service text is rendered as text
 });
 
 test('registration and invalid login show understandable user feedback', async ({ page }) => {
-  await page.goto('/frontend/customer-app.html');
+  await page.goto('/customer-app.html');
   await page.getByRole('button', { name: 'Anmelden' }).click();
   await page.getByRole('button', { name: 'Registrieren' }).click();
   await page.locator('#regFirst').fill('New');
@@ -164,7 +164,7 @@ test('registration and invalid login show understandable user feedback', async (
 });
 
 test('customer must choose a booking date before creating a booking', async ({ page }) => {
-  await page.goto('/frontend/customer-app.html');
+  await page.goto('/customer-app.html');
   await page.evaluate(token => {
     localStorage.setItem('customer_jwt', token);
     localStorage.setItem('customer_email_verified', 'true');
@@ -192,7 +192,7 @@ test('main customer UI is usable on desktop and mobile viewports', async ({ page
     { width: 390, height: 844 }
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto('/frontend/customer-app.html');
+    await page.goto('/customer-app.html');
     await expect(page.getByRole('link', { name: /ServiceRate/i })).toBeVisible();
     await expect(page.getByPlaceholder(/Was brauchst du/i)).toBeVisible();
     await expect(page.getByText('Rohr reparieren')).toBeVisible();

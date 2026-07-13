@@ -83,13 +83,13 @@ function rerenderCustomerView(area) {
     return;
   }
   if (area === 'bookings') {
-    if (customerBookings.length) loadCustomerBookings();
+    if (customerBookings.length) renderCustomerBookings();
   }
 }
 
 function refreshCustomerViewsFromStoredMode() {
   if (allServices.length || serviceTotalElements > 0) renderServices();
-  if (customerBookings.length) loadCustomerBookings();
+  if (customerBookings.length) renderCustomerBookings();
   applyAllCustomerViewModes();
 }
 
@@ -152,7 +152,7 @@ async function fetchForecastFor(dateStr) {
 // ── Services laden & rendern ──────────────────────────────────────────────────
 async function loadServices() {
   const grid = document.getElementById('servicesGrid');
-  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Wird geladen…</p></div>`;
+  grid.innerHTML = skeletonCards(preferredViewMode('market') === 'list' ? 4 : 6, preferredViewMode('market'));
   try {
     const params = serviceQueryParams();
     const data = await fetchAPI(`/services?${params.toString()}`, 'GET', null, 'customer_jwt');
@@ -299,10 +299,16 @@ function renderCustomerServiceListCard(s) {
 
 function listMedia(category, imageUrl = '') {
   if (imageUrl) {
-    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+    return `<div class="sr-list-media"><img src="${esc(imageUrl)}" alt="" loading="lazy" decoding="async"></div>`;
   }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
+}
+
+function bookingServiceImageUrl(booking) {
+  if (booking?.serviceImageUrl) return booking.serviceImageUrl;
+  if (booking?.serviceHasImage && booking?.serviceId) return `${BASE_URL}/services/${encodeURIComponent(booking.serviceId)}/image`;
+  return '';
 }
 
 function renderServicePagination() {
@@ -734,7 +740,7 @@ function switchCustomerTab(tab) {
 // ── Buchungen des Kunden laden ────────────────────────────────────────────────
 async function loadCustomerBookings() {
   const grid = document.getElementById('customerBookingsGrid');
-  grid.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade deine Buchungen…</p></div>`;
+  grid.innerHTML = skeletonCards(preferredViewMode('bookings') === 'list' ? 4 : 6, preferredViewMode('bookings'));
 
   if (!localStorage.getItem('customer_jwt')) {
     grid.innerHTML = `<div class="empty-state"><p>Bitte logge dich ein.</p></div>`;
@@ -744,19 +750,29 @@ async function loadCustomerBookings() {
   try {
     const bookings = await fetchAPI('/bookings/customer/me', 'GET', null, 'customer_jwt');
     customerBookings = Array.isArray(bookings) ? bookings : [];
+    renderCustomerBookings();
+  } catch (e) {
+    console.error('Fehler beim Laden der Kunden-Buchungen:', e);
+    grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
+    notify('Fehler beim Laden der Buchungen.', 'error');
+  }
+}
 
-    if (customerBookings.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
-      return;
-    }
+function renderCustomerBookings() {
+  const grid = document.getElementById('customerBookingsGrid');
 
-    if (preferredViewMode('bookings') === 'list') {
-      grid.innerHTML = customerBookings.map(renderCustomerBookingListCard).join('');
-      applyCustomerViewMode('bookings');
-      return;
-    }
+  if (customerBookings.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
+    return;
+  }
 
-    grid.innerHTML = customerBookings.map(b => {
+  if (preferredViewMode('bookings') === 'list') {
+    grid.innerHTML = customerBookings.map(renderCustomerBookingListCard).join('');
+    applyCustomerViewMode('bookings');
+    return;
+  }
+
+  grid.innerHTML = customerBookings.map(b => {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
       const dateLabel   = b.bookingDate ? `📅 Wunschtermin: ${b.bookingDate}` : '📅 Kein Termin angegeben';
@@ -767,7 +783,7 @@ async function loadCustomerBookings() {
 
       return `
       <div class="service-card booking-card list-layout-card ${statusClass}" style="cursor: default;">
-        ${catImage(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+        ${catImage(b.serviceCategory || 'OTHER', bookingServiceImageUrl(b))}
         <div class="list-card-body">
           <div class="card-top">
             <span class="cat-badge status-badge ${statusClass}">${statusText}</span>
@@ -800,13 +816,8 @@ async function loadCustomerBookings() {
           ` : ''}
         </div>
       </div>`;
-    }).join('');
-    applyCustomerViewMode('bookings');
-  } catch (e) {
-    console.error('Fehler beim Laden der Kunden-Buchungen:', e);
-    grid.innerHTML = `<div class="empty-state"><p>❌ Fehler beim Laden der Buchungen.</p></div>`;
-    notify('Fehler beim Laden der Buchungen.', 'error');
-  }
+  }).join('');
+  applyCustomerViewMode('bookings');
 }
 
 function renderCustomerBookingListCard(b) {
@@ -820,7 +831,7 @@ function renderCustomerBookingListCard(b) {
 
   return `
     <article class="sr-list-card ${statusClass}">
-      ${listMedia(b.serviceCategory || 'OTHER', b.serviceImageUrl)}
+      ${listMedia(b.serviceCategory || 'OTHER', bookingServiceImageUrl(b))}
       <div class="sr-list-body">
         <div class="sr-list-top">
           <div class="sr-list-main">

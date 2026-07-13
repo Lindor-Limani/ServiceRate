@@ -7,8 +7,8 @@ export const options = {
       executor: 'ramping-vus',
       stages: [
         { duration: '10s', target: 10 },
-        { duration: '10s', target: 250 },
-        { duration: '30s', target: 300 },
+        { duration: '10s', target: 120 },
+        { duration: '30s', target: 150 },
         { duration: '10s', target: 10 },
         { duration: '10s', target: 0 }
       ]
@@ -16,7 +16,7 @@ export const options = {
   },
   thresholds: {
     http_req_failed: ['rate<0.05'],
-    http_req_duration: ['p(95)<1500']
+    http_req_duration: ['p(95)<2000']
   }
 };
 

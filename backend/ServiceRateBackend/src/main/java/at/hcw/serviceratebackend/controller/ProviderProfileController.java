@@ -6,10 +6,14 @@ import at.hcw.serviceratebackend.dto.PayPalIdentityReturnRequest;
 import at.hcw.serviceratebackend.dto.PayPalOnboardingReturnRequest;
 import at.hcw.serviceratebackend.dto.StripeOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.UserResponse;
+import at.hcw.serviceratebackend.service.ImageResource;
 import at.hcw.serviceratebackend.service.ProviderPayPalOnboardingService;
 import at.hcw.serviceratebackend.service.ProviderProfileService;
 import at.hcw.serviceratebackend.service.StripeConnectService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 @RestController
@@ -32,6 +37,13 @@ public class ProviderProfileController {
     @GetMapping("/{providerId}")
     public ProviderProfileResponse getProviderProfile(@PathVariable UUID providerId) {
         return providerProfileService.getProviderProfile(providerId);
+    }
+
+    @GetMapping("/{providerId}/avatar")
+    public ResponseEntity<byte[]> getProviderAvatar(@PathVariable UUID providerId) {
+        return providerProfileService.getProviderAvatar(providerId)
+                .map(this::imageResponse)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/me/paypal/onboarding-link")
@@ -62,5 +74,12 @@ public class ProviderProfileController {
     @PostMapping("/me/stripe/onboarding-status")
     public UserResponse refreshStripeOnboardingStatus(Authentication authentication) {
         return stripeConnectService.refreshOnboardingStatus((String) authentication.getPrincipal());
+    }
+
+    private ResponseEntity<byte[]> imageResponse(ImageResource image) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
+                .body(image.bytes());
     }
 }

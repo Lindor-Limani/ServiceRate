@@ -11,15 +11,25 @@ import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -32,6 +42,9 @@ public class ServiceOfferingService {
     private final ReviewService reviewService;
     private final LocationValidationService locationValidationService;
     private final StripeConnectService stripeConnectService;
+
+    @Value("${app.backend-base-url:http://localhost:8081}")
+    private String backendBaseUrl;
 
     public ServiceOfferingResponse create(CreateServiceRequest request) {
         User provider = userRepository.findById(request.providerId())
@@ -124,6 +137,13 @@ public class ServiceOfferingService {
                 .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
     }
 
+    public List<ServiceOfferingResponse> getActiveSummariesByProviderId(UUID providerId) {
+        return serviceRepository.findByProviderId(providerId).stream()
+                .filter(service -> "ACTIVE".equals(service.getStatus()))
+                .map(this::mapToSummaryResponse)
+                .toList();
+    }
+
     // Nur die Services des eingeloggten Providers (anhand der E-Mail aus dem JWT-Subject)
     public List<ServiceOfferingResponse> getMyServices(String providerEmail) {
         User provider = userRepository.findByEmail(providerEmail)
@@ -180,14 +200,14 @@ public class ServiceOfferingService {
                 service.getId(),
                 service.getProvider().getId(),
                 service.getProvider().getFirstName() + " " + service.getProvider().getLastName(),
-                service.getProvider().getProfileImageUrl(),
+                includeReviews ? service.getProvider().getProfileImageUrl() : compactProviderAvatarUrl(service.getProvider()),
                 service.getTitle(),
                 service.getDescription(),
                 service.getCategory(),
                 service.getPrice(),
                 service.getEstimatedHours(),
-                service.getImageUrl(),
-                parseImageUrls(service.getImageUrls(), service.getImageUrl()),
+                includeReviews ? service.getImageUrl() : compactServiceImageUrl(service, primaryImageValue(service)),
+                includeReviews ? parseImageUrls(service.getImageUrls(), service.getImageUrl()) : compactImageUrls(service),
                 service.getDeliverableType(),
                 service.getStatus(),
                 service.getLocation(),
@@ -199,6 +219,12 @@ public class ServiceOfferingService {
                 true,
                 reviews
         );
+    }
+
+    public Optional<ImageResource> getPrimaryImage(UUID id) {
+        return serviceRepository.findById(id)
+                .flatMap(service -> decodeDataImage(primaryImageValue(service)))
+                .map(image -> thumbnail(image, 640));
     }
 
     private boolean isProviderPaypalAvailable(User provider) {
@@ -283,5 +309,94 @@ public class ServiceOfferingService {
             parsed.add(fallback);
         }
         return parsed;
+    }
+
+    private List<String> compactImageUrls(ServiceOffering service) {
+        return parseImageUrls(service.getImageUrls(), service.getImageUrl()).stream()
+                .map(value -> compactServiceImageUrl(service, value))
+                .filter(value -> value != null)
+                .distinct()
+                .toList();
+    }
+
+    private String primaryImageValue(ServiceOffering service) {
+        List<String> images = parseImageUrls(service.getImageUrls(), service.getImageUrl());
+        return images.isEmpty() ? null : images.get(0);
+    }
+
+    private String compactProviderAvatarUrl(User provider) {
+        if (provider == null) {
+            return null;
+        }
+        String mediaUrl = blankToNull(provider.getProfileImageUrl());
+        if (mediaUrl == null) {
+            return null;
+        }
+        if (mediaUrl.regionMatches(true, 0, "data:", 0, 5)) {
+            return backendBaseUrl + "/api/providers/" + provider.getId() + "/avatar?v=" + cacheVersion(mediaUrl);
+        }
+        return mediaUrl;
+    }
+
+    private String compactServiceImageUrl(ServiceOffering service, String value) {
+        String mediaUrl = blankToNull(value);
+        if (mediaUrl == null) {
+            return null;
+        }
+        if (mediaUrl.regionMatches(true, 0, "data:", 0, 5)) {
+            return backendBaseUrl + "/api/services/" + service.getId() + "/image?v=" + cacheVersion(mediaUrl);
+        }
+        return mediaUrl;
+    }
+
+    private String cacheVersion(String value) {
+        return Integer.toHexString(value.hashCode());
+    }
+
+    private Optional<ImageResource> decodeDataImage(String value) {
+        String dataUrl = blankToNull(value);
+        if (dataUrl == null || !dataUrl.regionMatches(true, 0, "data:image/", 0, 11)) {
+            return Optional.empty();
+        }
+        int comma = dataUrl.indexOf(',');
+        if (comma < 0 || !dataUrl.substring(0, comma).toLowerCase().contains(";base64")) {
+            return Optional.empty();
+        }
+        String metadata = dataUrl.substring(5, comma).toLowerCase();
+        String contentType = metadata.substring(0, metadata.indexOf(';'));
+        if (!List.of("image/jpeg", "image/png", "image/webp", "image/gif").contains(contentType)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ImageResource(Base64.getDecoder().decode(dataUrl.substring(comma + 1)), contentType));
+    }
+
+    private ImageResource thumbnail(ImageResource image, int maxEdge) {
+        if (!List.of("image/jpeg", "image/png").contains(image.contentType())) {
+            return image;
+        }
+        try {
+            BufferedImage source = ImageIO.read(new ByteArrayInputStream(image.bytes()));
+            if (source == null) {
+                return image;
+            }
+            int largestEdge = Math.max(source.getWidth(), source.getHeight());
+            if (largestEdge <= maxEdge) {
+                return image;
+            }
+            double scale = maxEdge / (double) largestEdge;
+            int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+            int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+            BufferedImage target = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+            Graphics2D graphics = target.createGraphics();
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.drawImage(source, 0, 0, width, height, null);
+            graphics.dispose();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(target, "jpg", out);
+            return new ImageResource(out.toByteArray(), "image/jpeg");
+        } catch (IOException ignored) {
+            return image;
+        }
     }
 }

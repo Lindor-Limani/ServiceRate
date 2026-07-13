@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -54,6 +55,7 @@ class ServiceOfferingServiceTest {
                 locationValidationService,
                 stripeConnectService
         );
+        ReflectionTestUtils.setField(service, "backendBaseUrl", "http://localhost:8081");
     }
 
     @Test
@@ -100,6 +102,8 @@ class ServiceOfferingServiceTest {
     void getById_includesFullReviewsForDetailPage() {
         User provider = provider(true);
         ServiceOffering offering = offering(provider);
+        offering.setImageUrl("data:image/png;base64,full-service-image");
+        offering.setImageUrls("data:image/png;base64,full-service-image");
         Review review = new Review();
         UUID reviewId = UUID.randomUUID();
         UUID bookingId = UUID.randomUUID();
@@ -121,7 +125,35 @@ class ServiceOfferingServiceTest {
 
         assertThat(response.reviews()).hasSize(1);
         assertThat(response.reviews().getFirst().comment()).isEqualTo("Top");
+        assertThat(response.imageUrl()).isEqualTo("data:image/png;base64,full-service-image");
         verify(reviewRepository).findByBookingServiceOfferingId(offering.getId());
+    }
+
+    @Test
+    void getMyServices_usesCompactImageEndpointsForUploadedMedia() {
+        User provider = provider(true);
+        provider.setProfileImageUrl("data:image/png;base64,avatar");
+        ServiceOffering offering = offering(provider);
+        offering.setImageUrl(null);
+        offering.setImageUrls("data:image/png;base64,preview-image");
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
+        when(serviceRepository.findByProviderId(provider.getId())).thenReturn(List.of(offering));
+        when(reviewRepository.findAverageRatingByServiceId(offering.getId())).thenReturn(0.0);
+        when(reviewRepository.findReviewCountByServiceId(offering.getId())).thenReturn(0L);
+        when(stripeConnectService.isProviderStripeAvailable(provider)).thenReturn(false);
+
+        var responses = service.getMyServices("provider@example.com");
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.getFirst().imageUrl())
+                .startsWith("http://localhost:8081/api/services/" + offering.getId() + "/image?v=");
+        assertThat(responses.getFirst().imageUrls())
+                .hasSize(1);
+        assertThat(responses.getFirst().imageUrls().getFirst())
+                .startsWith("http://localhost:8081/api/services/" + offering.getId() + "/image?v=");
+        assertThat(responses.getFirst().providerProfileImageUrl())
+                .startsWith("http://localhost:8081/api/providers/" + provider.getId() + "/avatar?v=");
+        assertThat(responses.getFirst().reviews()).isEmpty();
     }
 
     @Test

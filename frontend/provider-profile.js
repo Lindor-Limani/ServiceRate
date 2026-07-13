@@ -131,7 +131,7 @@ function renderProviderServiceListCard(s) {
 
 function listMedia(category, imageUrl = '') {
   if (imageUrl) {
-    return `<div class="sr-list-media" style="background-image:url('${esc(imageUrl)}')"></div>`;
+    return `<div class="sr-list-media"><img src="${esc(imageUrl)}" alt="" loading="lazy" decoding="async"></div>`;
   }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;

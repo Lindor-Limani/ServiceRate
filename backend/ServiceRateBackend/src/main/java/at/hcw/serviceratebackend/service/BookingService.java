@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -53,6 +55,9 @@ public class BookingService {
 
     @Value("${app.platform-fee-fixed:0}")
     private double platformFeeFixed;
+
+    @Value("${app.backend-base-url:http://localhost:8081}")
+    private String backendBaseUrl;
 
     public BookingResponse createBooking(CreateBookingRequest request, String customerEmail) {
         User customer = userRepository.findByEmail(customerEmail)
@@ -368,10 +373,12 @@ public class BookingService {
                 customer != null ? customer.getProfileImageUrl() : null,
                 providerName(booking.getServiceOffering()),
                 provider != null ? provider.getProfileImageUrl() : null,
+                booking.getServiceOffering() != null ? booking.getServiceOffering().getId() : null,
                 serviceTitle(booking.getServiceOffering()),
                 servicePrice(booking.getServiceOffering()),
                 serviceCategory(booking.getServiceOffering()),
                 serviceImageUrl(booking.getServiceOffering()),
+                serviceHasImage(booking.getServiceOffering()),
                 booking.getStatus(),
                 booking.getBookingDate(),
                 booking.getActualHours(),
@@ -408,7 +415,44 @@ public class BookingService {
     }
 
     private String serviceImageUrl(ServiceOffering service) {
-        return service == null ? null : service.getImageUrl();
+        if (service == null) {
+            return null;
+        }
+        List<String> images = parseImageUrls(service.getImageUrls(), service.getImageUrl());
+        if (images.isEmpty()) {
+            return null;
+        }
+        String mediaUrl = blankToNull(images.get(0));
+        if (mediaUrl == null) {
+            return null;
+        }
+        if (mediaUrl.regionMatches(true, 0, "data:", 0, 5)) {
+            return backendBaseUrl + "/api/services/" + service.getId() + "/image?v=" + Integer.toHexString(mediaUrl.hashCode());
+        }
+        return mediaUrl;
+    }
+
+    private boolean serviceHasImage(ServiceOffering service) {
+        return service != null && !parseImageUrls(service.getImageUrls(), service.getImageUrl()).isEmpty();
+    }
+
+    private List<String> parseImageUrls(String imageUrls, String fallbackImageUrl) {
+        List<String> parsed = imageUrls == null || imageUrls.isBlank()
+                ? new ArrayList<>()
+                : new ArrayList<>(Arrays.stream(imageUrls.split("\\R"))
+                        .map(this::blankToNull)
+                        .filter(value -> value != null)
+                        .limit(10)
+                        .toList());
+        String fallback = blankToNull(fallbackImageUrl);
+        if (parsed.isEmpty() && fallback != null) {
+            parsed.add(fallback);
+        }
+        return parsed;
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ReviewResponse findReviewResponse(Booking booking) {
