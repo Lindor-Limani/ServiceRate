@@ -19,6 +19,13 @@ public class ChatMessage extends AuditableEntity {
     @JoinColumn(name = "sender_id", nullable = false)
     private User sender;
 
-    @Column(nullable = false, columnDefinition = "text")
+    @Column(columnDefinition = "text")
     private String content;
+
+    @Lob
+    @Column(name = "image_data_url", columnDefinition = "text")
+    private String imageDataUrl;
+
+    @Column(name = "image_name")
+    private String imageName;
 }

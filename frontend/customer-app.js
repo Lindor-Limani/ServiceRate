@@ -56,7 +56,8 @@ function preferredViewMode(area) {
 
 function setCustomerViewMode(area, mode) {
   setGlobalViewMode(mode);
-  rerenderCustomerView(area);
+  rerenderCustomerView('market');
+  rerenderCustomerView('bookings');
   applyAllCustomerViewModes();
 }
 
@@ -133,7 +134,12 @@ async function onBookingDateChange() {
   if (!value) return;
 
   const diffDays = Math.round((new Date(value) - new Date(todayISO())) / 86400000);
-  if (diffDays < 0 || diffDays > 5) return; // Forecast reicht nur ~5 Tage
+  if (diffDays < 0) {
+    document.getElementById('bookingDate').value = '';
+    notify('Termine in der Vergangenheit können nicht gebucht werden.', 'error');
+    return;
+  }
+  if (diffDays > 5) return; // Forecast reicht nur ~5 Tage
 
   hint.textContent = 'Wetter wird geladen…';
   try {
@@ -215,8 +221,9 @@ function serviceQueryParams() {
 function renderServices() {
   document.getElementById('countPill').textContent = serviceTotalElements + ' gefunden';
   const grid = document.getElementById('servicesGrid');
+  const services = sortedVisibleServices();
 
-  if (allServices.length === 0) {
+  if (services.length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">🔍</div>
@@ -227,13 +234,13 @@ function renderServices() {
   }
 
   if (preferredViewMode('market') === 'list') {
-    grid.innerHTML = allServices.map(renderCustomerServiceListCard).join('');
+    grid.innerHTML = services.map(renderCustomerServiceListCard).join('');
     applyCustomerViewMode('market');
     renderServicePagination();
     return;
   }
 
-  grid.innerHTML = allServices.map(s => `
+  grid.innerHTML = services.map(s => `
     <article class="service-card list-layout-card" onclick="openServicePage('${s.id}')">
       ${catImage(s.category, s.imageUrl)}
       <div class="list-card-body">
@@ -303,6 +310,19 @@ function listMedia(category, imageUrl = '') {
   }
   const img = CAT_IMAGES[category] || CAT_IMAGES.OTHER;
   return `<div class="sr-list-media" style="background:${img.bg}">${img.emoji}</div>`;
+}
+
+function sortedVisibleServices() {
+  const sort = document.getElementById('sortFilter')?.value || 'recommended';
+  const services = [...allServices];
+  if (sort === 'rating') {
+    return services.sort((a, b) =>
+      Number(b.averageRating || 0) - Number(a.averageRating || 0)
+      || Number(b.reviewCount || 0) - Number(a.reviewCount || 0)
+      || String(a.title || '').localeCompare(String(b.title || ''))
+    );
+  }
+  return services;
 }
 
 function bookingServiceImageUrl(booking) {
@@ -468,7 +488,7 @@ async function openServiceModal(id) {
         <div class="price-note">Stundensatz</div>
         <div class="price-big">€${parseFloat(s.price).toFixed(2)}</div>
       </div>
-      <button class="btn btn-primary btn-lg" onclick="doBook('${s.id}','${esc(s.title)}',${s.price})">
+      <button class="btn btn-primary btn-lg" id="bookingSubmitBtn" onclick="doBook('${s.id}','${esc(s.title)}',${s.price})">
         Jetzt buchen
       </button>
     </div>
@@ -499,6 +519,14 @@ async function doBook(serviceId, title, price) {
 
   const bookingDate = document.getElementById('bookingDate').value;
   if (!bookingDate) { notify('Bitte wähle einen Wunschtermin.', 'error'); return; }
+  if (bookingDate < todayISO()) { notify('Termine in der Vergangenheit können nicht gebucht werden.', 'error'); return; }
+
+  const button = document.getElementById('bookingSubmitBtn');
+  if (button?.disabled) return;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Buchung wird gespeichert...';
+  }
 
   try {
     await fetchAPI('/bookings', 'POST', {
@@ -510,13 +538,17 @@ async function doBook(serviceId, title, price) {
     document.getElementById('serviceModalContent').innerHTML = `
       <div class="book-success">
         <div class="success-icon">✓</div>
-        <h3>Buchung erfolgreich!</h3>
+        <h3>Buchung aufgegeben</h3>
         <p>Du hast <strong>${esc(title)}</strong> gebucht.<br/>Der Anbieter meldet sich in Kürze bei dir.</p>
         <br/>
         <button class="btn btn-ghost" onclick="closeServiceModal()">Schließen</button>
       </div>`;
     notify('Buchung wurde gespeichert ✓', 'success');
   } catch {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Jetzt buchen';
+    }
     notify('Fehler bei der Buchung: Bitte überprüfe deine Daten.', 'error');
   }
 }
@@ -698,6 +730,7 @@ function updateNavUI() {
   const token     = localStorage.getItem('customer_jwt');
   const loginBtn  = document.getElementById('loginNavBtn');
   const paymentBtn = document.getElementById('paymentSettingsBtn');
+  const chatHubBtn = document.getElementById('customerChatHubBtn');
   const navUser   = document.getElementById('navUser');
   const tabs      = document.getElementById('customerTabs');
 
@@ -707,6 +740,7 @@ function updateNavUI() {
       if (payload.accountType === 'CUSTOMER') {
         loginBtn.style.display  = 'none';
         if (paymentBtn) paymentBtn.style.display = 'inline-flex';
+        if (chatHubBtn) chatHubBtn.style.display = 'inline-flex';
         navUser.textContent     = payload.sub || '';
         if (tabs) tabs.style.display = 'flex';
         return;
@@ -717,6 +751,7 @@ function updateNavUI() {
   // Ausgeloggter Zustand
   loginBtn.style.display  = 'inline-flex';
   if (paymentBtn) paymentBtn.style.display = 'none';
+  if (chatHubBtn) chatHubBtn.style.display = 'none';
   navUser.textContent     = '';
   if (tabs) tabs.style.display = 'none';
   if (typeof switchCustomerTab === 'function') switchCustomerTab('market');
@@ -731,10 +766,16 @@ function initials(name) {
 function switchCustomerTab(tab) {
   document.getElementById('marketView').style.display   = tab === 'market'   ? 'block' : 'none';
   document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+  document.getElementById('customerChatsView').style.display = tab === 'chats' ? 'block' : 'none';
   document.getElementById('tabMarket').classList.toggle('active', tab === 'market');
   document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+  document.getElementById('tabCustomerChats').classList.toggle('active', tab === 'chats');
 
-  if (tab === 'bookings') loadCustomerBookings();
+  if (tab === 'bookings') {
+    customerBookings.length ? renderCustomerBookings() : loadCustomerBookings();
+  } else if (tab === 'chats') {
+    openCustomerChatHub();
+  }
 }
 
 // ── Buchungen des Kunden laden ────────────────────────────────────────────────
@@ -760,6 +801,7 @@ async function loadCustomerBookings() {
 
 function renderCustomerBookings() {
   const grid = document.getElementById('customerBookingsGrid');
+  const visibleBookings = filteredCustomerBookings();
 
   if (customerBookings.length === 0) {
     grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Du hast noch keine Services gebucht.</p></div>`;
@@ -767,12 +809,14 @@ function renderCustomerBookings() {
   }
 
   if (preferredViewMode('bookings') === 'list') {
-    grid.innerHTML = customerBookings.map(renderCustomerBookingListCard).join('');
+    grid.innerHTML = renderCustomerBookingFilters() + (visibleBookings.length
+      ? visibleBookings.map(renderCustomerBookingListCard).join('')
+      : `<div class="empty-state"><p>Keine Buchungen passen zu den aktuellen Filtern.</p></div>`);
     applyCustomerViewMode('bookings');
     return;
   }
 
-  grid.innerHTML = customerBookings.map(b => {
+  grid.innerHTML = renderCustomerBookingFilters() + (visibleBookings.length ? visibleBookings.map(b => {
       const statusClass = bookingStatusClass(b.status);
       const statusText  = bookingStatusText(b.status);
       const dateLabel   = b.bookingDate ? `📅 Wunschtermin: ${b.bookingDate}` : '📅 Kein Termin angegeben';
@@ -806,6 +850,7 @@ function renderCustomerBookings() {
           ${b.providerNotes ? `<div class="booking-date-line">Notiz: ${esc(b.providerNotes)}</div>` : ''}
           <div class="booking-actions">
             <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
+            ${b.paymentStatus === 'PAID' ? `<button class="btn btn-ghost btn-sm" onclick="printCustomerInvoice('${b.id}')">Rechnung</button>` : ''}
             ${canPay ? `<button class="btn btn-primary btn-sm" onclick="payBooking('${b.id}')">Sicher bezahlen</button>` : ''}
           </div>
           ${b.status === 'COMPLETED' && !review ? `
@@ -816,8 +861,66 @@ function renderCustomerBookings() {
           ` : ''}
         </div>
       </div>`;
-  }).join('');
+  }).join('') : `<div class="empty-state"><p>Keine Buchungen passen zu den aktuellen Filtern.</p></div>`);
   applyCustomerViewMode('bookings');
+}
+
+function renderCustomerBookingFilters() {
+  const q = esc(document.getElementById('customerBookingSearchFilter')?.value || '');
+  const status = document.getElementById('customerBookingStatusFilter')?.value || '';
+  const payment = document.getElementById('customerBookingPaymentFilter')?.value || '';
+  const from = document.getElementById('customerBookingFromFilter')?.value || '';
+  const to = document.getElementById('customerBookingToFilter')?.value || '';
+  return `
+    <div class="booking-filters customer-booking-filters">
+      <div class="booking-filters-head">
+        <div>
+          <strong>Buchungen filtern</strong>
+          <span>Suche nach Service, Anbieter, Zahlungsstatus oder Zeitraum.</span>
+        </div>
+      </div>
+      <input class="form-input" id="customerBookingSearchFilter" placeholder="Service, Anbieter oder Notiz suchen" value="${q}" oninput="renderCustomerBookings()" />
+      <select class="form-input" id="customerBookingStatusFilter" onchange="renderCustomerBookings()">
+        <option value="" ${status === '' ? 'selected' : ''}>Alle Status</option>
+        <option value="PENDING" ${status === 'PENDING' ? 'selected' : ''}>Offen</option>
+        <option value="ACCEPTED" ${status === 'ACCEPTED' ? 'selected' : ''}>Akzeptiert</option>
+        <option value="COMPLETED" ${status === 'COMPLETED' ? 'selected' : ''}>Abgeschlossen</option>
+        <option value="REJECTED" ${status === 'REJECTED' ? 'selected' : ''}>Abgelehnt</option>
+      </select>
+      <select class="form-input" id="customerBookingPaymentFilter" onchange="renderCustomerBookings()">
+        <option value="" ${payment === '' ? 'selected' : ''}>Alle Zahlungen</option>
+        <option value="UNPAID" ${payment === 'UNPAID' ? 'selected' : ''}>Unbezahlt</option>
+        <option value="CHECKOUT_CREATED" ${payment === 'CHECKOUT_CREATED' ? 'selected' : ''}>Checkout gestartet</option>
+        <option value="AWAITING_OFFLINE_PAYMENT" ${payment === 'AWAITING_OFFLINE_PAYMENT' ? 'selected' : ''}>Offline vorgemerkt</option>
+        <option value="PAID" ${payment === 'PAID' ? 'selected' : ''}>Bezahlt</option>
+      </select>
+      <label class="filter-field">
+        <span>Von</span>
+        <input class="form-input" type="date" id="customerBookingFromFilter" value="${esc(from)}" onchange="renderCustomerBookings()" />
+      </label>
+      <label class="filter-field">
+        <span>Bis</span>
+        <input class="form-input" type="date" id="customerBookingToFilter" value="${esc(to)}" onchange="renderCustomerBookings()" />
+      </label>
+    </div>
+  `;
+}
+
+function filteredCustomerBookings() {
+  const q = (document.getElementById('customerBookingSearchFilter')?.value || '').toLowerCase().trim();
+  const status = document.getElementById('customerBookingStatusFilter')?.value || '';
+  const payment = document.getElementById('customerBookingPaymentFilter')?.value || '';
+  const from = document.getElementById('customerBookingFromFilter')?.value || '';
+  const to = document.getElementById('customerBookingToFilter')?.value || '';
+  return customerBookings.filter(booking => {
+    const text = [booking.serviceTitle, booking.providerName, booking.providerNotes, booking.customerNotes, booking.paymentProvider, booking.paymentStatus].join(' ').toLowerCase();
+    const date = booking.bookingDate || '';
+    return (!q || text.includes(q))
+      && (!status || booking.status === status)
+      && (!payment || booking.paymentStatus === payment)
+      && (!from || date >= from)
+      && (!to || date <= to);
+  });
 }
 
 function renderCustomerBookingListCard(b) {
@@ -864,6 +967,7 @@ function renderCustomerBookingListCard(b) {
         ${b.providerNotes ? `<div class="sr-list-meta">Notiz: ${esc(b.providerNotes)}</div>` : ''}
         <div class="sr-list-actions">
           <button class="btn btn-ghost btn-sm" onclick="openChatModal('${b.id}', 'customer_jwt')">Nachrichten</button>
+          ${b.paymentStatus === 'PAID' ? `<button class="btn btn-ghost btn-sm" onclick="printCustomerInvoice('${b.id}')">Rechnung</button>` : ''}
           ${canPay ? `<button class="btn btn-primary btn-sm" onclick="payBooking('${b.id}')">Sicher bezahlen</button>` : ''}
           ${b.status === 'COMPLETED' && !review ? `<button class="btn btn-primary btn-sm" onclick="openReviewModal('${b.id || ''}', '${esc(b.serviceTitle || '')}')">Bewerten</button>` : ''}
         </div>
@@ -1134,6 +1238,69 @@ async function openDelivery(bookingId) {
   }
 }
 
+function printCustomerInvoice(bookingId) {
+  const booking = customerBookings.find(item => item.id === bookingId);
+  if (!booking) return;
+  const amount = Number(booking.grossAmount || booking.servicePrice || 0);
+  openInvoicePrintWindow({
+    title: 'ServiceRate Rechnung',
+    subtitle: booking.serviceTitle || 'Service',
+    recipientLabel: 'Kunde',
+    recipientName: booking.customerName || localStorage.getItem('customer_email') || '-',
+    counterpartyLabel: 'Provider',
+    counterpartyName: booking.providerName || '-',
+    booking,
+    amount
+  });
+}
+
+function openInvoicePrintWindow({ title, subtitle, recipientLabel, recipientName, counterpartyLabel, counterpartyName, booking, amount }) {
+  const win = window.open('', '_blank');
+  if (!win) {
+    notify('Popup blockiert. Bitte Popups erlauben, um die Rechnung zu öffnen.', 'error');
+    return;
+  }
+  win.document.write(`
+    <html>
+    <head>
+      <title>${esc(title)} ${esc(booking.id || '')}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#0f172a;margin:36px;background:#f5f8f8}
+        .invoice{background:white;border:1px solid #dbe3e7;border-top:6px solid #00877C;border-radius:18px;padding:32px;max-width:820px;margin:auto}
+        header{display:flex;justify-content:space-between;gap:24px;border-bottom:1px solid #dbe3e7;padding-bottom:20px;margin-bottom:24px}
+        h1{margin:0;color:#00877C;font-size:28px} h2{margin:0 0 8px;font-size:18px}
+        .logo{font-weight:900;font-size:24px}.logo span{color:#00877C}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
+        .box{border:1px solid #dbe3e7;border-radius:14px;padding:16px;background:#f8fbfb}
+        table{width:100%;border-collapse:collapse;margin-top:18px} th,td{padding:12px;border-bottom:1px solid #dbe3e7;text-align:left}
+        th{background:#e0f2f1;color:#00685f}.total{text-align:right;font-size:22px;font-weight:900;color:#00877C;margin-top:20px}
+        @media print{body{background:white;margin:0}.invoice{border-radius:0;border-left:0;border-right:0}}
+      </style>
+    </head>
+    <body>
+      <main class="invoice">
+        <header>
+          <div><div class="logo">Service<span>Rate</span></div><p>${esc(subtitle)}</p></div>
+          <div><h1>${esc(title)}</h1><p>Rechnungsdatum: ${new Date().toLocaleDateString('de-AT')}</p></div>
+        </header>
+        <section class="grid">
+          <div class="box"><h2>${esc(recipientLabel)}</h2><p>${esc(recipientName)}</p></div>
+          <div class="box"><h2>${esc(counterpartyLabel)}</h2><p>${esc(counterpartyName)}</p></div>
+        </section>
+        <p><strong>Buchung:</strong> ${esc(booking.id || '-')} · <strong>Termin:</strong> ${esc(booking.bookingDate || '-')}</p>
+        <table>
+          <thead><tr><th>Leistung</th><th>Zahlungsart</th><th>Status</th><th>Betrag</th></tr></thead>
+          <tbody><tr><td>${esc(booking.serviceTitle || '-')}</td><td>${esc(booking.paymentProvider || '-')}</td><td>${esc(booking.paymentStatus || '-')}</td><td>€${amount.toFixed(2)}</td></tr></tbody>
+        </table>
+        <p class="total">Gesamt: €${amount.toFixed(2)}</p>
+      </main>
+      <script>window.print();</script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
 // Mappt den Status auf die CSS-Klasse / das Anzeige-Label der Buchungs-Kachel
 function bookingStatusClass(status) {
   if (status === 'ACCEPTED')  return 'status-accepted';
@@ -1294,6 +1461,122 @@ function trustBadge(score) {
 }
 
 let activeChatBookingId = null;
+let activeCustomerHubBookingId = null;
+let customerChatEventSource = null;
+
+async function openCustomerChatHub() {
+  if (!localStorage.getItem('customer_jwt')) {
+    notify('Bitte melde dich an, um deine Chats zu öffnen.', 'info');
+    openAuthModal('login');
+    return;
+  }
+  if (document.getElementById('customerChatsView')?.style.display !== 'block') {
+    switchCustomerTab('chats');
+    return;
+  }
+  document.getElementById('customerChatList').innerHTML = chatListSkeleton();
+  document.getElementById('customerChatHubThread').innerHTML = chatThreadSkeleton();
+  await ensureCustomerBookingsForChat();
+  renderCustomerChatList();
+  if (!activeCustomerHubBookingId && customerBookings.length) {
+    await selectCustomerHubChat(customerBookings[0].id);
+  } else if (activeCustomerHubBookingId) {
+    await selectCustomerHubChat(activeCustomerHubBookingId);
+  }
+}
+
+function closeCustomerChatHub() {
+  closeCustomerChatStream();
+  switchCustomerTab('bookings');
+}
+
+async function ensureCustomerBookingsForChat() {
+  if (customerBookings.length) return;
+  try {
+    const bookings = await fetchAPI('/bookings/customer/me', 'GET', null, 'customer_jwt');
+    customerBookings = Array.isArray(bookings) ? bookings : [];
+  } catch (e) {
+    notify(e.message || 'Chats konnten nicht geladen werden.', 'error');
+  }
+}
+
+function renderCustomerChatList() {
+  const list = document.getElementById('customerChatList');
+  if (!list) return;
+  list.innerHTML = customerBookings.length ? customerBookings.map(booking => `
+    <button class="chat-list-item ${booking.id === activeCustomerHubBookingId ? 'active' : ''}" onclick="selectCustomerHubChat('${booking.id}')">
+      ${avatarHtml(booking.providerName, booking.providerProfileImageUrl)}
+      <span class="chat-list-copy">
+        <strong>${esc(booking.serviceTitle || 'Service')}</strong>
+        <span>${esc(booking.providerName || 'Provider')} · ${esc(booking.bookingDate || 'kein Termin')}</span>
+      </span>
+    </button>
+  `).join('') : `<div class="review-empty">Noch keine Chats vorhanden.</div>`;
+}
+
+async function selectCustomerHubChat(bookingId) {
+  closeCustomerChatStream();
+  activeCustomerHubBookingId = bookingId;
+  const booking = customerBookings.find(item => item.id === bookingId);
+  document.getElementById('customerChatTitle').innerHTML = booking
+    ? `${avatarHtml(booking.providerName, booking.providerProfileImageUrl)}<span><strong>${esc(booking.providerName || 'Provider')}</strong><small>${esc(booking.serviceTitle || 'Service')}</small></span>`
+    : 'Chat';
+  renderCustomerChatList();
+  await loadCustomerHubMessages();
+  openCustomerChatStream();
+}
+
+async function loadCustomerHubMessages() {
+  const thread = document.getElementById('customerChatHubThread');
+  if (!thread || !activeCustomerHubBookingId) return;
+  thread.innerHTML = chatThreadSkeleton();
+  try {
+    const messages = await fetchAPI(`/messages/booking/${activeCustomerHubBookingId}`, 'GET', null, 'customer_jwt');
+    thread.innerHTML = messages.length ? messages.map(renderChatMessage).join('') : `<div class="review-empty">Noch keine Nachrichten.</div>`;
+    thread.scrollTop = thread.scrollHeight;
+  } catch {
+    thread.innerHTML = `<div class="review-empty">Nachrichten konnten nicht geladen werden.</div>`;
+  }
+}
+
+function openCustomerChatStream() {
+  const token = localStorage.getItem('customer_jwt');
+  if (!token || !activeCustomerHubBookingId || typeof EventSource === 'undefined') return;
+  customerChatEventSource = new EventSource(`${BASE_URL}/messages/booking/${encodeURIComponent(activeCustomerHubBookingId)}/stream?token=${encodeURIComponent(token)}`);
+  customerChatEventSource.addEventListener('message', event => {
+    appendCustomerHubMessage(JSON.parse(event.data));
+  });
+  customerChatEventSource.onerror = () => {
+    closeCustomerChatStream();
+  };
+}
+
+function closeCustomerChatStream() {
+  if (customerChatEventSource) {
+    customerChatEventSource.close();
+    customerChatEventSource = null;
+  }
+}
+
+function appendCustomerHubMessage(message) {
+  const thread = document.getElementById('customerChatHubThread');
+  if (!thread || !message?.id || document.getElementById(`chat-message-${message.id}`)) return;
+  if (thread.querySelector('.review-empty')) thread.innerHTML = '';
+  thread.insertAdjacentHTML('beforeend', renderChatMessage(message));
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function sendCustomerHubMessage() {
+  const payload = await buildChatPayload('customerChatHubInput', 'customerChatHubImage');
+  if ((!payload.content && !payload.imageDataUrl) || !activeCustomerHubBookingId) return;
+  try {
+    const message = await fetchAPI(`/messages/booking/${activeCustomerHubBookingId}`, 'POST', payload, 'customer_jwt');
+    resetChatInputs('customerChatHubInput', 'customerChatHubImage');
+    appendCustomerHubMessage(message);
+  } catch (e) {
+    notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
+  }
+}
 
 async function openChatModal(bookingId, tokenKey) {
   activeChatBookingId = bookingId;
@@ -1319,20 +1602,20 @@ async function loadChatMessages(tokenKey) {
 
 function renderChatMessage(message) {
   return `
-    <div class="chat-message ${message.senderRole === 'PROVIDER' ? 'from-provider' : 'from-customer'}">
+    <div class="chat-message ${message.senderRole === 'PROVIDER' ? 'from-provider' : 'from-customer'}" id="chat-message-${esc(message.id || '')}">
       <strong>${esc(message.senderName || 'User')}</strong>
-      <p>${esc(message.content || '')}</p>
+      ${message.content ? `<p>${esc(message.content || '')}</p>` : ''}
+      ${message.imageDataUrl ? `<img class="chat-image" src="${esc(message.imageDataUrl)}" alt="${esc(message.imageName || 'Chat-Bild')}" loading="lazy" decoding="async">` : ''}
     </div>
   `;
 }
 
 async function sendChatMessage(tokenKey) {
-  const input = document.getElementById('chatInput');
-  const content = input.value.trim();
-  if (!content || !activeChatBookingId) return;
+  const payload = await buildChatPayload('chatInput', 'chatImageInput');
+  if ((!payload.content && !payload.imageDataUrl) || !activeChatBookingId) return;
   try {
-    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', { content }, tokenKey);
-    input.value = '';
+    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', payload, tokenKey);
+    resetChatInputs('chatInput', 'chatImageInput');
     await loadChatMessages(tokenKey);
   } catch (e) {
     notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');

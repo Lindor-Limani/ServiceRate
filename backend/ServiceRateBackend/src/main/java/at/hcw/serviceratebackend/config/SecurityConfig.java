@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/reviews/booking/**", "/api/reviews/service/**").permitAll()
                         // Wetterdaten werden vom Backend als Proxy geliefert, damit API-Keys nicht im Frontend liegen
                         .requestMatchers(HttpMethod.GET, "/api/weather/**").permitAll()
+                        // EventSource kann keine Authorization-Header senden; der Stream validiert das JWT als Query-Token selbst.
+                        .requestMatchers(HttpMethod.GET, "/api/messages/booking/*/stream").permitAll()
                         // Doku & DB-Konsole
                         .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/bookings").hasRole("CUSTOMER")

@@ -94,7 +94,8 @@ function ensureGlobalViewMode() {
 
 function setProviderViewMode(area, mode) {
   setGlobalViewMode(mode);
-  rerenderProviderView(area);
+  rerenderProviderView('services');
+  rerenderProviderView('bookings');
   applyAllProviderViewModes();
 }
 
@@ -350,6 +351,7 @@ async function loadProviderProfileSettings() {
     document.getElementById('providerPayoutIban').value = user.payoutIban || '';
     document.getElementById('providerPaypalMerchantId').value = user.paypalMerchantId || '';
     document.getElementById('providerPaypalEmail').value = user.paypalEmail || '';
+    document.getElementById('providerStripeAccountId').value = user.stripeConnectedAccountId || '';
     renderProviderPayPalStatus(user);
     renderProviderStripeStatus(user);
   } catch (e) {
@@ -901,15 +903,19 @@ async function confirmDelete() {
 function switchDashboardTab(tab) {
   document.getElementById('servicesView').style.display = tab === 'services' ? 'block' : 'none';
   document.getElementById('bookingsView').style.display = tab === 'bookings' ? 'block' : 'none';
+  document.getElementById('providerChatsView').style.display = tab === 'chats' ? 'block' : 'none';
   document.getElementById('guideView').style.display = tab === 'guide' ? 'block' : 'none';
   document.getElementById('tabMyServices').classList.toggle('active', tab === 'services');
   document.getElementById('tabMyBookings').classList.toggle('active', tab === 'bookings');
+  document.getElementById('tabProviderChats').classList.toggle('active', tab === 'chats');
   document.getElementById('tabProviderGuide').classList.toggle('active', tab === 'guide');
 
   if (tab === 'bookings') {
     providerBookings.length ? renderBookings() : loadBookings();
   } else if (tab === 'services') {
     allServices.length ? renderServices() : loadServices();
+  } else if (tab === 'chats') {
+    openProviderChatHub();
   }
 }
 
@@ -1077,8 +1083,14 @@ function renderBookingFilters() {
         <option value="AWAITING_OFFLINE_PAYMENT" ${payment === 'AWAITING_OFFLINE_PAYMENT' ? 'selected' : ''}>Offline vorgemerkt</option>
         <option value="PAID" ${payment === 'PAID' ? 'selected' : ''}>Bezahlt</option>
       </select>
-      <input class="form-input" type="date" id="bookingFromFilter" value="${esc(from)}" onchange="renderBookings()" />
-      <input class="form-input" type="date" id="bookingToFilter" value="${esc(to)}" onchange="renderBookings()" />
+      <label class="filter-field">
+        <span>Von</span>
+        <input class="form-input" type="date" id="bookingFromFilter" value="${esc(from)}" onchange="renderBookings()" />
+      </label>
+      <label class="filter-field">
+        <span>Bis</span>
+        <input class="form-input" type="date" id="bookingToFilter" value="${esc(to)}" onchange="renderBookings()" />
+      </label>
     </div>
   `;
 }
@@ -1259,12 +1271,12 @@ async function saveWorkLog(bookingId) {
   const actualHours = parseFloat(document.getElementById('drawerTotalHours').value);
   const providerNotes = document.getElementById('drawerProviderNotes').value.trim();
   try {
-    await fetchAPI(`/bookings/${bookingId}/work`, 'PUT', {
+    const updated = await fetchAPI(`/bookings/${bookingId}/work`, 'PUT', {
       actualHours: Number.isNaN(actualHours) ? null : actualHours,
       providerNotes
     }, 'provider_jwt');
     notify('Aufwand gespeichert.', 'success');
-    await loadBookings();
+    replaceProviderBooking(updated);
     activeBookingId = bookingId;
     renderBookingDrawer();
     loadProviderOverview();
@@ -1335,6 +1347,7 @@ function renderBookingDrawer() {
         <p><strong>Provider-Netto:</strong> €${Number(b.providerReceivableAmount || revenue).toFixed(2)}</p>
         <p><strong>Abrechnung:</strong> ${esc(settlementLabel(b.settlementStatus || 'NOT_READY'))}</p>
         ${b.settlementNote ? `<p class="muted-text">${esc(b.settlementNote)}</p>` : ''}
+        ${b.paymentStatus === 'PAID' ? `<button class="btn btn-ghost btn-sm" style="margin-top:.6rem" onclick="printProviderInvoice('${b.id}')">Rechnung drucken</button>` : ''}
         ${b.paymentStatus !== 'PAID' ? `
           <select class="form-input" id="drawerPaymentMethod" style="margin-top:.7rem">
             <option value="CASH">Barzahlung</option>
@@ -1358,6 +1371,7 @@ function renderBookingDrawer() {
       </div>
       <input class="form-input" style="margin-top:.6rem" id="drawerEntryNote" placeholder="Tätigkeit / Notiz" />
       <button class="btn btn-primary btn-sm" style="margin-top:.6rem" onclick="addTimeEntry('${b.id}')">Zeitbuchung hinzufügen</button>
+      <button class="btn btn-ghost btn-sm" style="margin-top:.6rem" onclick="exportTimeEntriesPdf('${b.id}')">PDF exportieren</button>
       <div style="margin-top:.8rem">
         ${(b.timeEntries || []).length ? b.timeEntries.map(entry => `
           <div class="time-entry-row">
@@ -1391,6 +1405,10 @@ function renderBookingDrawer() {
       <div class="chat-thread" id="drawerChatThread"></div>
       <div class="chat-compose">
         <textarea class="form-input" id="drawerChatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+        <label class="chat-attach-btn" title="Bild senden">
+          Bild
+          <input type="file" id="drawerChatImage" accept="image/*" />
+        </label>
         <button class="btn btn-primary btn-sm" onclick="sendDrawerChatMessage()">Senden</button>
       </div>
     </section>
@@ -1470,12 +1488,11 @@ async function loadDrawerChatMessages() {
 }
 
 async function sendDrawerChatMessage() {
-  const input = document.getElementById('drawerChatInput');
-  const content = input.value.trim();
-  if (!content || !activeBookingId) return;
+  const payload = await buildChatPayload('drawerChatInput', 'drawerChatImage');
+  if ((!payload.content && !payload.imageDataUrl) || !activeBookingId) return;
   try {
-    await fetchAPI(`/messages/booking/${activeBookingId}`, 'POST', { content }, 'provider_jwt');
-    input.value = '';
+    await fetchAPI(`/messages/booking/${activeBookingId}`, 'POST', payload, 'provider_jwt');
+    resetChatInputs('drawerChatInput', 'drawerChatImage');
     await loadDrawerChatMessages();
   } catch (e) {
     notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
@@ -1491,15 +1508,109 @@ async function addTimeEntry(bookingId) {
     return;
   }
   try {
-    await fetchAPI(`/bookings/${bookingId}/time-entries`, 'POST', { workDate, hours, note }, 'provider_jwt');
+    const updated = await fetchAPI(`/bookings/${bookingId}/time-entries`, 'POST', { workDate, hours, note }, 'provider_jwt');
     notify('Zeitbuchung hinzugefügt.', 'success');
-    await loadBookings();
+    replaceProviderBooking(updated);
     activeBookingId = bookingId;
     renderBookingDrawer();
     loadProviderOverview();
   } catch (e) {
     notify(e.message || 'Zeitbuchung konnte nicht gespeichert werden.', 'error');
   }
+}
+
+function replaceProviderBooking(updated) {
+  if (!updated?.id) return;
+  providerBookings = providerBookings.map(booking => booking.id === updated.id ? updated : booking);
+  renderBookings();
+}
+
+function exportTimeEntriesPdf(bookingId) {
+  const booking = providerBookings.find(item => item.id === bookingId);
+  if (!booking) return;
+  const rows = (booking.timeEntries || []).map(entry => `
+    <tr>
+      <td>${esc(entry.workDate || '-')}</td>
+      <td>${Number(entry.hours || 0).toFixed(2)}h</td>
+      <td>${esc(entry.note || '')}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="3">Keine Zeitbuchungen vorhanden.</td></tr>`;
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html>
+    <head>
+      <title>Zeitaufzeichnung ${esc(booking.serviceTitle || '')}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#0f172a;margin:32px}
+        header{border-bottom:4px solid #00877C;padding-bottom:16px;margin-bottom:24px}
+        h1{margin:0;color:#00877C}
+        table{width:100%;border-collapse:collapse;margin-top:20px}
+        th,td{padding:12px;border-bottom:1px solid #dbe3e7;text-align:left}
+        th{background:#e0f2f1;color:#00685f}
+        .total{margin-top:20px;font-size:18px;font-weight:700}
+      </style>
+    </head>
+    <body>
+      <header><h1>ServiceRate Zeitaufzeichnung</h1><p>${esc(booking.serviceTitle || '-')} · ${esc(booking.customerName || '-')}</p></header>
+      <p><strong>Termin:</strong> ${esc(booking.bookingDate || '-')}</p>
+      <table><thead><tr><th>Datum</th><th>Stunden</th><th>Tätigkeit</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="total">Gesamtaufwand: ${Number(booking.actualHours || 0).toFixed(2)}h</p>
+      <script>window.print();</script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function printProviderInvoice(bookingId) {
+  const booking = providerBookings.find(item => item.id === bookingId);
+  if (!booking) return;
+  const revenue = Number(booking.grossAmount || (Number(booking.actualHours || 1) * Number(booking.servicePrice || 0)) || 0);
+  const win = window.open('', '_blank');
+  if (!win) {
+    notify('Popup blockiert. Bitte Popups erlauben, um die Rechnung zu öffnen.', 'error');
+    return;
+  }
+  win.document.write(`
+    <html>
+    <head>
+      <title>Provider Rechnung ${esc(booking.id || '')}</title>
+      <style>
+        body{font-family:Arial,sans-serif;color:#0f172a;margin:36px;background:#f5f8f8}
+        .invoice{background:white;border:1px solid #dbe3e7;border-top:6px solid #00877C;border-radius:18px;padding:32px;max-width:820px;margin:auto}
+        header{display:flex;justify-content:space-between;gap:24px;border-bottom:1px solid #dbe3e7;padding-bottom:20px;margin-bottom:24px}
+        h1{margin:0;color:#00877C;font-size:28px} h2{margin:0 0 8px;font-size:18px}
+        .logo{font-weight:900;font-size:24px}.logo span{color:#00877C}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
+        .box{border:1px solid #dbe3e7;border-radius:14px;padding:16px;background:#f8fbfb}
+        table{width:100%;border-collapse:collapse;margin-top:18px} th,td{padding:12px;border-bottom:1px solid #dbe3e7;text-align:left}
+        th{background:#e0f2f1;color:#00685f}.total{text-align:right;font-size:22px;font-weight:900;color:#00877C;margin-top:20px}
+        @media print{body{background:white;margin:0}.invoice{border-radius:0;border-left:0;border-right:0}}
+      </style>
+    </head>
+    <body>
+      <main class="invoice">
+        <header>
+          <div><div class="logo">Service<span>Rate</span></div><p>${esc(booking.serviceTitle || '-')}</p></div>
+          <div><h1>Provider Rechnung</h1><p>Rechnungsdatum: ${new Date().toLocaleDateString('de-AT')}</p></div>
+        </header>
+        <section class="grid">
+          <div class="box"><h2>Kunde</h2><p>${esc(booking.customerName || '-')}</p></div>
+          <div class="box"><h2>Auftrag</h2><p>${esc(booking.id || '-')}<br>Termin: ${esc(booking.bookingDate || '-')}</p></div>
+        </section>
+        <table>
+          <thead><tr><th>Leistung</th><th>Zahlungsart</th><th>Aufwand</th><th>Betrag</th></tr></thead>
+          <tbody><tr><td>${esc(booking.serviceTitle || '-')}</td><td>${esc(providerPaymentLabel(booking.paymentProvider))}</td><td>${Number(booking.actualHours || 0).toFixed(2)}h</td><td>€${revenue.toFixed(2)}</td></tr></tbody>
+        </table>
+        <p>Plattformprovision: €${Number(booking.platformFeeAmount || 0).toFixed(2)}</p>
+        <p>Provider-Netto: €${Number(booking.providerReceivableAmount || revenue).toFixed(2)}</p>
+        <p class="total">Brutto: €${revenue.toFixed(2)}</p>
+      </main>
+      <script>window.print();</script>
+    </body>
+    </html>
+  `);
+  win.document.close();
 }
 
 function serviceRatingPanel(s) {
@@ -1611,6 +1722,117 @@ async function updateBookingStatus(bookingId, newStatus) {
 }
 
 let activeChatBookingId = null;
+let activeProviderHubBookingId = null;
+let providerChatEventSource = null;
+
+async function openProviderChatHub() {
+  if (document.getElementById('providerChatsView')?.style.display !== 'block') {
+    switchDashboardTab('chats');
+    return;
+  }
+  document.getElementById('providerChatList').innerHTML = chatListSkeleton();
+  document.getElementById('providerChatHubThread').innerHTML = chatThreadSkeleton();
+  await ensureProviderBookingsForChat();
+  renderProviderChatList();
+  if (!activeProviderHubBookingId && providerBookings.length) {
+    await selectProviderHubChat(providerBookings[0].id);
+  } else if (activeProviderHubBookingId) {
+    await selectProviderHubChat(activeProviderHubBookingId);
+  }
+}
+
+function closeProviderChatHub() {
+  closeProviderChatStream();
+  switchDashboardTab('bookings');
+}
+
+async function ensureProviderBookingsForChat() {
+  if (providerBookings.length) return;
+  try {
+    const bookings = await fetchAPI('/bookings/provider/me', 'GET', null, 'provider_jwt');
+    providerBookings = Array.isArray(bookings) ? bookings : [];
+  } catch (e) {
+    notify(e.message || 'Chats konnten nicht geladen werden.', 'error');
+  }
+}
+
+function renderProviderChatList() {
+  const list = document.getElementById('providerChatList');
+  if (!list) return;
+  list.innerHTML = providerBookings.length ? providerBookings.map(booking => `
+    <button class="chat-list-item ${booking.id === activeProviderHubBookingId ? 'active' : ''}" onclick="selectProviderHubChat('${booking.id}')">
+      ${avatarHtml(booking.customerName, booking.customerProfileImageUrl)}
+      <span class="chat-list-copy">
+        <strong>${esc(booking.serviceTitle || 'Service')}</strong>
+        <span>${esc(booking.customerName || 'Kunde')} · ${esc(booking.bookingDate || 'kein Termin')}</span>
+      </span>
+    </button>
+  `).join('') : `<div class="muted-text">Noch keine Chats vorhanden.</div>`;
+}
+
+async function selectProviderHubChat(bookingId) {
+  closeProviderChatStream();
+  activeProviderHubBookingId = bookingId;
+  const booking = providerBookings.find(item => item.id === bookingId);
+  document.getElementById('providerChatTitle').innerHTML = booking
+    ? `${avatarHtml(booking.customerName, booking.customerProfileImageUrl)}<span><strong>${esc(booking.customerName || 'Kunde')}</strong><small>${esc(booking.serviceTitle || 'Service')}</small></span>`
+    : 'Chat';
+  renderProviderChatList();
+  await loadProviderHubMessages();
+  openProviderChatStream();
+}
+
+async function loadProviderHubMessages() {
+  const thread = document.getElementById('providerChatHubThread');
+  if (!thread || !activeProviderHubBookingId) return;
+  thread.innerHTML = chatThreadSkeleton();
+  try {
+    const messages = await fetchAPI(`/messages/booking/${activeProviderHubBookingId}`, 'GET', null, 'provider_jwt');
+    thread.innerHTML = messages.length ? messages.map(renderChatMessage).join('') : `<div class="muted-text">Noch keine Nachrichten.</div>`;
+    thread.scrollTop = thread.scrollHeight;
+  } catch {
+    thread.innerHTML = `<div class="muted-text">Nachrichten konnten nicht geladen werden.</div>`;
+  }
+}
+
+function openProviderChatStream() {
+  const token = localStorage.getItem('provider_jwt');
+  if (!token || !activeProviderHubBookingId || typeof EventSource === 'undefined') return;
+  providerChatEventSource = new EventSource(`${BASE_URL}/messages/booking/${encodeURIComponent(activeProviderHubBookingId)}/stream?token=${encodeURIComponent(token)}`);
+  providerChatEventSource.addEventListener('message', event => {
+    appendProviderHubMessage(JSON.parse(event.data));
+  });
+  providerChatEventSource.onerror = () => {
+    closeProviderChatStream();
+  };
+}
+
+function closeProviderChatStream() {
+  if (providerChatEventSource) {
+    providerChatEventSource.close();
+    providerChatEventSource = null;
+  }
+}
+
+function appendProviderHubMessage(message) {
+  const thread = document.getElementById('providerChatHubThread');
+  if (!thread || !message?.id || document.getElementById(`chat-message-${message.id}`)) return;
+  if (thread.querySelector('.muted-text')) thread.innerHTML = '';
+  thread.insertAdjacentHTML('beforeend', renderChatMessage(message));
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function sendProviderHubMessage() {
+  const payload = await buildChatPayload('providerChatHubInput', 'providerChatHubImage');
+  if ((!payload.content && !payload.imageDataUrl) || !activeProviderHubBookingId) return;
+  try {
+    const message = await fetchAPI(`/messages/booking/${activeProviderHubBookingId}`, 'POST', payload, 'provider_jwt');
+    resetChatInputs('providerChatHubInput', 'providerChatHubImage');
+    appendProviderHubMessage(message);
+  } catch (e) {
+    notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');
+  }
+}
 
 async function openChatModal(bookingId, tokenKey) {
   activeChatBookingId = bookingId;
@@ -1636,20 +1858,20 @@ async function loadChatMessages(tokenKey) {
 
 function renderChatMessage(message) {
   return `
-    <div class="chat-message ${message.senderRole === 'PROVIDER' ? 'from-provider' : 'from-customer'}">
+    <div class="chat-message ${message.senderRole === 'PROVIDER' ? 'from-provider' : 'from-customer'}" id="chat-message-${esc(message.id || '')}">
       <strong>${esc(message.senderName || 'User')}</strong>
-      <p>${esc(message.content || '')}</p>
+      ${message.content ? `<p>${esc(message.content || '')}</p>` : ''}
+      ${message.imageDataUrl ? `<img class="chat-image" src="${esc(message.imageDataUrl)}" alt="${esc(message.imageName || 'Chat-Bild')}" loading="lazy" decoding="async">` : ''}
     </div>
   `;
 }
 
 async function sendChatMessage(tokenKey) {
-  const input = document.getElementById('chatInput');
-  const content = input.value.trim();
-  if (!content || !activeChatBookingId) return;
+  const payload = await buildChatPayload('chatInput', 'chatImageInput');
+  if ((!payload.content && !payload.imageDataUrl) || !activeChatBookingId) return;
   try {
-    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', { content }, tokenKey);
-    input.value = '';
+    await fetchAPI(`/messages/booking/${activeChatBookingId}`, 'POST', payload, tokenKey);
+    resetChatInputs('chatInput', 'chatImageInput');
     await loadChatMessages(tokenKey);
   } catch (e) {
     notify(e.message || 'Nachricht konnte nicht gesendet werden.', 'error');

@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -68,6 +69,9 @@ public class BookingService {
 
         ServiceOffering service = serviceRepository.findById(request.serviceOfferingId())
                 .orElseThrow(() -> new RuntimeException("Service nicht gefunden"));
+        if (request.bookingDate() == null || request.bookingDate().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Termine in der Vergangenheit können nicht gebucht werden.");
+        }
 
         Booking booking = new Booking();
         booking.setId(UUID.randomUUID());

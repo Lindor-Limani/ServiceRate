@@ -9,5 +9,7 @@ public record ChatMessageResponse(
         String senderName,
         String senderRole,
         String content,
+        String imageDataUrl,
+        String imageName,
         OffsetDateTime createdAt
 ) {}

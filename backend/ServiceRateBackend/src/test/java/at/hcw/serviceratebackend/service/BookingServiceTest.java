@@ -130,6 +130,23 @@ class BookingServiceTest {
     }
 
     @Test
+    void createBooking_rejectsPastBookingDate() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        ServiceOffering offering = offering(user("provider@example.com", "PROVIDER", true), 120.0);
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        assertThatThrownBy(() -> bookingService.createBooking(
+                new CreateBookingRequest(customer.getId(), offering.getId(), LocalDate.now().minusDays(1)),
+                "customer@example.com"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Termine in der Vergangenheit können nicht gebucht werden.");
+
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
     void createBooking_usesServiceImageEndpointForUploadedPreviewImage() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         ServiceOffering offering = offering(user("provider@example.com", "PROVIDER", true), 120.0);

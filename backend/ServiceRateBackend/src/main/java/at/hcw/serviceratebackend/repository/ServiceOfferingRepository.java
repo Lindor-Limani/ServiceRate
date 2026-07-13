@@ -61,4 +61,56 @@ public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering
             @Param("minRating") Double minRating,
             Pageable pageable
     );
+
+    @Query(
+            value = """
+                    select s
+                    from ServiceOffering s
+                    where s.status = 'ACTIVE'
+                      and (:q = ''
+                           or lower(s.title) like lower(concat('%', :q, '%'))
+                           or lower(s.description) like lower(concat('%', :q, '%'))
+                           or lower(s.provider.firstName) like lower(concat('%', :q, '%'))
+                           or lower(s.provider.lastName) like lower(concat('%', :q, '%')))
+                      and (:category = '' or s.category = :category)
+                      and (:location = '' or lower(s.location) like lower(concat('%', :location, '%')))
+                      and (:maxPrice is null or s.price <= :maxPrice)
+                      and (select coalesce(avg(r.rating), 0)
+                           from Review r
+                           where r.booking.serviceOffering = s) >= :minRating
+                    order by
+                      (select coalesce(avg(r.rating), 0)
+                       from Review r
+                       where r.booking.serviceOffering = s) desc,
+                      (select count(r)
+                       from Review r
+                       where r.booking.serviceOffering = s) desc,
+                      s.title asc
+                    """,
+            countQuery = """
+                    select count(distinct s)
+                    from ServiceOffering s
+                    where s.status = 'ACTIVE'
+                      and (:q = ''
+                           or lower(s.title) like lower(concat('%', :q, '%'))
+                           or lower(s.description) like lower(concat('%', :q, '%'))
+                           or lower(s.provider.firstName) like lower(concat('%', :q, '%'))
+                           or lower(s.provider.lastName) like lower(concat('%', :q, '%')))
+                      and (:category = '' or s.category = :category)
+                      and (:location = '' or lower(s.location) like lower(concat('%', :location, '%')))
+                      and (:maxPrice is null or s.price <= :maxPrice)
+                      and (select coalesce(avg(r.rating), 0)
+                           from Review r
+                           where r.booking.serviceOffering = s) >= :minRating
+                    """
+    )
+    @EntityGraph(attributePaths = "provider")
+    Page<ServiceOffering> searchActiveOrderByRating(
+            @Param("q") String q,
+            @Param("category") String category,
+            @Param("location") String location,
+            @Param("maxPrice") Double maxPrice,
+            @Param("minRating") Double minRating,
+            Pageable pageable
+    );
 }

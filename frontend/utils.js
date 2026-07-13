@@ -96,6 +96,59 @@ function skeletonCards(count = 6, mode = 'grid') {
   `).join('');
 }
 
+function chatListSkeleton(count = 8) {
+  return Array.from({ length: count }, () => `
+    <div class="chat-list-item skeleton-card" aria-hidden="true">
+      <div class="chat-skeleton-avatar skeleton-block"></div>
+      <span class="chat-list-copy">
+        <span class="skeleton-line title"></span>
+        <span class="skeleton-line medium"></span>
+      </span>
+    </div>
+  `).join('');
+}
+
+function chatThreadSkeleton() {
+  return `
+    <div class="chat-message skeleton-message from-provider" aria-hidden="true">
+      <div class="skeleton-line short"></div>
+      <div class="skeleton-line medium"></div>
+    </div>
+    <div class="chat-message skeleton-message from-customer" aria-hidden="true">
+      <div class="skeleton-line short"></div>
+      <div class="skeleton-line"></div>
+    </div>
+    <div class="chat-message skeleton-message from-provider" aria-hidden="true">
+      <div class="skeleton-line short"></div>
+      <div class="skeleton-line medium"></div>
+    </div>
+  `;
+}
+
+async function buildChatPayload(textareaId, imageInputId) {
+  const input = document.getElementById(textareaId);
+  const imageInput = document.getElementById(imageInputId);
+  const content = input?.value.trim() || '';
+  let imageDataUrl = '';
+  let imageName = '';
+
+  if (imageInput?.files?.length) {
+    const [file] = imageInput.files;
+    const [compressed] = await readImageFiles(imageInput, 1);
+    imageDataUrl = compressed || '';
+    imageName = file?.name || 'chat-bild';
+  }
+
+  return { content, imageDataUrl, imageName };
+}
+
+function resetChatInputs(textareaId, imageInputId) {
+  const input = document.getElementById(textareaId);
+  const imageInput = document.getElementById(imageInputId);
+  if (input) input.value = '';
+  if (imageInput) imageInput.value = '';
+}
+
 function formatIbanValue(value) {
   return String(value || '').replace(/\s/g, '').toUpperCase().slice(0, 34).replace(/(.{4})/g, '$1 ').trim();
 }

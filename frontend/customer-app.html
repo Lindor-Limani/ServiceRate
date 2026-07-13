@@ -27,6 +27,7 @@
 
   <div class="header-right">
     <span id="navUser" style="font-size:.84rem;color:var(--muted)"></span>
+    <button class="btn btn-ghost btn-sm" id="customerChatHubBtn" style="display:none" onclick="openCustomerChatHub()">Chats</button>
     <button class="btn btn-ghost btn-sm" id="paymentSettingsBtn" style="display:none" onclick="openPaymentSettings()">Settings</button>
     <button class="btn btn-primary btn-sm" id="loginNavBtn" onclick="openAuthModal('login')">Anmelden</button>
     <a href="provider-dashboard.html" class="btn btn-ghost btn-sm provider-nav-link">Für Handwerker</a>
@@ -55,9 +56,10 @@
 <!-- ══ MAIN ════════════════════════════════════════════════════════════════ -->
 <main class="main">
 
-  <div class="auth-tabs" id="customerTabs" style="display: none; max-width: 400px; margin-bottom: 2rem;">
+  <div class="auth-tabs" id="customerTabs" style="display: none; max-width: 560px; margin-bottom: 2rem;">
     <button class="auth-tab active" id="tabMarket" onclick="switchCustomerTab('market')">Marktplatz</button>
     <button class="auth-tab" id="tabMyBookings" onclick="switchCustomerTab('bookings')">Meine Buchungen</button>
+    <button class="auth-tab" id="tabCustomerChats" onclick="switchCustomerTab('chats')">Chats</button>
   </div>
 
   <div id="marketView">
@@ -119,6 +121,30 @@
       </div>
     </div>
     <div class="cards-grid is-list-view" id="customerBookingsGrid"></div>
+  </div>
+
+  <div id="customerChatsView" style="display: none;">
+    <div class="section-header">
+      <div>
+        <h2 class="section-title">Meine Chats</h2>
+        <p class="muted-text">Alle Nachrichten zu deinen Buchungen auf einen Blick.</p>
+      </div>
+    </div>
+    <section class="chat-page">
+      <div class="chat-list" id="customerChatList"></div>
+      <div class="chat-main">
+        <div class="chat-main-head" id="customerChatTitle">Wähle einen Chat</div>
+        <div class="chat-thread" id="customerChatHubThread"></div>
+        <div class="chat-compose">
+          <textarea class="form-input" id="customerChatHubInput" rows="3" placeholder="Nachricht schreiben..."></textarea>
+          <label class="chat-attach-btn" title="Bild senden">
+            Bild
+            <input type="file" id="customerChatHubImage" accept="image/*" />
+          </label>
+          <button class="btn btn-primary" onclick="sendCustomerHubMessage()">Senden</button>
+        </div>
+      </div>
+    </section>
   </div>
 
 </main>
@@ -327,6 +353,10 @@
     <div class="chat-thread" id="chatThread"></div>
     <div class="chat-compose">
       <textarea class="form-input" id="chatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+      <label class="chat-attach-btn" title="Bild senden">
+        Bild
+        <input type="file" id="chatImageInput" accept="image/*" />
+      </label>
       <button class="btn btn-primary" onclick="sendChatMessage('customer_jwt')">Senden</button>
     </div>
   </div>

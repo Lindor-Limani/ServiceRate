@@ -106,15 +106,17 @@ public class ServiceOfferingService {
     ) {
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 48));
-        Pageable pageable = PageRequest.of(safePage, safeSize, sortFor(sort));
-        Page<ServiceOfferingResponse> results = serviceRepository.searchActive(
-                blankToEmpty(q),
-                blankToEmpty(category),
-                blankToEmpty(location),
-                maxPrice,
-                minRating == null ? 0.0 : Math.max(0.0, minRating),
-                pageable
-        ).map(this::mapToSummaryResponse);
+        Pageable pageable = "rating".equals(sort)
+                ? PageRequest.of(safePage, safeSize)
+                : PageRequest.of(safePage, safeSize, sortFor(sort));
+        String cleanQ = blankToEmpty(q);
+        String cleanCategory = blankToEmpty(category);
+        String cleanLocation = blankToEmpty(location);
+        double cleanMinRating = minRating == null ? 0.0 : Math.max(0.0, minRating);
+        Page<ServiceOffering> services = "rating".equals(sort)
+                ? serviceRepository.searchActiveOrderByRating(cleanQ, cleanCategory, cleanLocation, maxPrice, cleanMinRating, pageable)
+                : serviceRepository.searchActive(cleanQ, cleanCategory, cleanLocation, maxPrice, cleanMinRating, pageable);
+        Page<ServiceOfferingResponse> results = services.map(this::mapToSummaryResponse);
         return new PageResponse<>(
                 results.getContent(),
                 results.getTotalElements(),

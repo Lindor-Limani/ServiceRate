@@ -465,7 +465,7 @@
     .booking-filters {
       grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(130px, 1fr));
+      grid-template-columns: minmax(180px, 1.5fr) repeat(3, minmax(140px, 1fr)) minmax(260px, 1.2fr);
       gap: .75rem;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -491,6 +491,14 @@
       color: var(--muted);
       font-size: .78rem;
       margin-top: .1rem;
+    }
+    .filter-field {
+      display: grid; grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center; gap: .45rem;
+    }
+    .filter-field span {
+      color: var(--muted); font-size: .78rem; font-weight: 800;
+      text-transform: uppercase;
     }
 
     .svc-card {
@@ -702,6 +710,8 @@
     }
     .trust-badge span { text-transform: uppercase; letter-spacing: .05em; }
     .trust-badge strong { color: #065f46; font-size: .9rem; }
+    .trust-badge + .service-rating-panel,
+    .trust-badge + .booking-review { margin-top: .85rem; }
 
     .svc-footer {
       display: flex;
@@ -864,6 +874,24 @@
       border-color: var(--primary);
       background: #fff;
       box-shadow: 0 0 0 3px rgba(0,135,124,.12);
+    }
+    .form-input[type="file"] {
+      padding: .55rem;
+      cursor: pointer;
+    }
+    .form-input[type="file"]::file-selector-button {
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: var(--primary);
+      color: #fff;
+      font-weight: 800;
+      padding: .65rem 1rem;
+      margin-right: .8rem;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,135,124,.18);
+    }
+    .form-input[type="file"]::file-selector-button:hover {
+      background: var(--primary-dark);
     }
     textarea.form-input { resize: vertical; min-height: 80px; }
 
@@ -1374,27 +1402,91 @@
       }
     }
     .chat-thread {
-      display: grid; gap: .6rem; max-height: 340px; overflow-y: auto;
+      display: grid; align-items: start; align-content: start;
+      grid-auto-rows: max-content; gap: .6rem; max-height: 340px; overflow-y: auto;
       background: var(--bg); border: 1px solid var(--border);
       border-radius: var(--radius-sm); padding: .85rem; margin-bottom: .85rem;
     }
     .chat-message {
       background: #fff; border: 1px solid var(--border);
       border-radius: var(--radius-sm); padding: .7rem .8rem;
+      align-self: start; width: fit-content;
+      max-width: min(72%, 620px);
     }
     .chat-message.from-customer {
       background: #e0f2fe;
       border-color: #7dd3fc;
+      justify-self: start;
     }
     .chat-message.from-provider {
       background: #ffedd5;
       border-color: #fdba74;
+      justify-self: end;
     }
     .chat-message strong {
       display: block; font-size: .78rem; color: var(--primary); margin-bottom: .2rem;
     }
-    .chat-message p { color: var(--text); font-size: .88rem; line-height: 1.45; }
-    .chat-compose { display: grid; gap: .6rem; }
+    .chat-message p { color: var(--text); font-size: .88rem; line-height: 1.45; margin: 0; }
+    .chat-compose {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: end; gap: .7rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .65rem;
+    }
+    .chat-compose textarea { min-height: 64px; resize: vertical; }
+    .chat-compose .btn {
+      justify-self: end; align-self: end; min-width: 112px; height: 42px;
+      justify-content: center;
+    }
+    .chat-attach-btn {
+      height: 42px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--surface); color: var(--text); font-size: .84rem;
+      font-weight: 800; padding: 0 .9rem; cursor: pointer;
+    }
+    .chat-attach-btn:hover {
+      background: var(--primary-tint); border-color: #99d8d2; color: var(--primary-dark);
+    }
+    .chat-attach-btn input { display: none; }
+    .chat-image {
+      display: block; max-width: min(320px, 100%); max-height: 240px;
+      border-radius: var(--radius-sm); margin-top: .45rem; object-fit: cover;
+    }
+    .chat-skeleton-avatar { width: 34px; height: 34px; border-radius: 50%; }
+    .skeleton-message { min-width: min(280px, 70%); pointer-events: none; }
+    .chat-hub-drawer { max-width: min(980px, calc(100vw - 28px)); }
+    .chat-hub, .chat-page {
+      display: grid; grid-template-columns: minmax(220px, 300px) 1fr;
+      gap: 1rem; min-height: 520px;
+    }
+    .chat-page { min-height: calc(100vh - 240px); }
+    .chat-list {
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg); padding: .55rem; overflow-y: auto; max-height: 456px;
+    }
+    .chat-list-item {
+      width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr);
+      align-items: center; gap: .45rem; border: 0;
+      border-radius: var(--radius-sm); background: transparent;
+      padding: .75rem; text-align: left; cursor: pointer; color: var(--text);
+      min-height: 62px;
+    }
+    .chat-list-item:hover, .chat-list-item.active { background: #e0f2f1; }
+    .chat-list-copy { display: grid; gap: .15rem; min-width: 0; }
+    .chat-list-copy strong {
+      font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-list-copy span {
+      color: var(--muted); font-size: .78rem; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }
+    .chat-main-head {
+      display: flex; align-items: center; gap: .65rem;
+      font-weight: 900; margin-bottom: .7rem;
+    }
+    .chat-main-head span { display: grid; gap: .1rem; }
+    .chat-main-head small { color: var(--muted); font-size: .78rem; font-weight: 600; }
+    .chat-main .chat-thread { max-height: none; min-height: 360px; }
     .appointment-empty-card {
       grid-column: 1 / -1; background: #fff; border: 1px dashed var(--border);
       border-radius: 18px; padding: 2rem; text-align: center; color: var(--muted);
@@ -1409,6 +1501,11 @@
       .calendar-today-btn { flex: 1; }
     }
     @media (max-width: 640px) {
+      .chat-hub, .chat-page { grid-template-columns: 1fr; min-height: 0; }
+      .chat-list { max-height: 210px; }
+      .chat-message { max-width: 100%; }
+      .chat-compose { grid-template-columns: 1fr; }
+      .filter-field { grid-template-columns: 1fr; }
       .appointment-calendar-shell { padding: .85rem; border-radius: 18px; }
       .calendar-surface { padding: .75rem; border-radius: 16px; }
       .calendar-board { min-width: 700px; }
@@ -1484,6 +1581,7 @@
     <div class="header-right">
       <span class="header-user" id="headerUser"></span>
       <a href="customer-app.html" class="btn btn-ghost btn-sm">Zum Marktplatz</a>
+      <button class="btn btn-ghost btn-sm" onclick="switchDashboardTab('chats')">Chats</button>
       <button class="btn btn-ghost btn-sm" onclick="openProviderSettings()">Settings</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Abmelden</button>
     </div>
@@ -1514,6 +1612,7 @@
     <div class="dash-tabs">
       <button class="dash-tab active" id="tabMyServices" onclick="switchDashboardTab('services')">Meine Services</button>
       <button class="dash-tab" id="tabMyBookings" onclick="switchDashboardTab('bookings')">Anfragen (Postfach)</button>
+      <button class="dash-tab" id="tabProviderChats" onclick="switchDashboardTab('chats')">Chats</button>
       <button class="dash-tab" id="tabProviderGuide" onclick="switchDashboardTab('guide')">Guide</button>
     </div>
 
@@ -1561,6 +1660,30 @@
           <p>Lade Anfragen...</p>
         </div>
       </div>
+    </div>
+
+    <div id="providerChatsView" style="display: none;">
+      <div class="section-row-title" style="margin-bottom:1rem">
+        <div>
+          <span>Chats</span>
+          <small>Alle Nachrichten zu deinen Aufträgen auf einen Blick.</small>
+        </div>
+      </div>
+      <section class="chat-page">
+        <div class="chat-list" id="providerChatList"></div>
+        <div class="chat-main">
+          <div class="chat-main-head" id="providerChatTitle">Wähle einen Chat</div>
+          <div class="chat-thread" id="providerChatHubThread"></div>
+          <div class="chat-compose">
+            <textarea class="form-input" id="providerChatHubInput" rows="3" placeholder="Nachricht schreiben..."></textarea>
+            <label class="chat-attach-btn" title="Bild senden">
+              Bild
+              <input type="file" id="providerChatHubImage" accept="image/*" />
+            </label>
+            <button class="btn btn-primary" onclick="sendProviderHubMessage()">Senden</button>
+          </div>
+        </div>
+      </section>
     </div>
 
     <div id="guideView" style="display:none">
@@ -1765,11 +1888,15 @@
     </div>
     <div class="form-group">
       <label class="form-label">PayPal Merchant ID</label>
-      <input class="form-input" id="providerPaypalMerchantId" placeholder="Wird nach PayPal-Verbindung automatisch gesetzt" />
+      <input class="form-input" id="providerPaypalMerchantId" placeholder="Wird nach PayPal-Verbindung automatisch gesetzt" readonly />
     </div>
     <div class="form-group">
       <label class="form-label">PayPal E-Mail</label>
       <input class="form-input" id="providerPaypalEmail" type="email" placeholder="Optionaler Fallback" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Stripe Account ID</label>
+      <input class="form-input" id="providerStripeAccountId" placeholder="Wird nach Stripe-Verbindung automatisch gesetzt" readonly />
     </div>
     <p class="muted-text" style="margin-bottom:1rem">
       Kartenzahlungen laufen über Stripe Connect. Kartendaten werden nicht in ServiceRate gespeichert.
@@ -1881,6 +2008,10 @@
     <div class="chat-thread" id="chatThread"></div>
     <div class="chat-compose">
       <textarea class="form-input" id="chatInput" rows="2" placeholder="Nachricht schreiben..."></textarea>
+      <label class="chat-attach-btn" title="Bild senden">
+        Bild
+        <input type="file" id="chatImageInput" accept="image/*" />
+      </label>
       <button class="btn btn-primary" onclick="sendChatMessage('provider_jwt')">Senden</button>
     </div>
   </div>
