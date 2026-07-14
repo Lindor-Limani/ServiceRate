@@ -88,6 +88,12 @@ Die Einstufung beschreibt die konkrete Anwendung, nicht nur die theoretische Sch
 | SR-F026 | Medium | Nein | Kritische Security-/Recovery-/Concurrency-Tests fehlen | Backend, Playwright, k6 | ASVS V14 |
 | SR-F027 | Low | Nein | Abhängigkeiten und Testartefakte in Git versioniert | Git-Index/`.gitignore` | Supply-chain hygiene |
 
+### Statusaktualisierung SR-F001 / FINDING-001 – 2026-07-14
+
+**Status: REQUIRES MANUAL VERIFICATION.** Der fest einkompilierte HMAC-Schlüssel wurde entfernt. JWT-Secret und Key-ID sind nun Pflichtkonfiguration ohne Default; Schlüssel unter 32 Bytes sowie ungültige Konfiguration verhindern den Start. Tokens binden und validieren Issuer, Audience, Key-ID und HS256. Der Request-Filter ignoriert den Rollen-Claim für die Autorisierung und lädt Status sowie Rolle bei jeder Anfrage aus der Datenbank. Automatisierte Regressionstests bestätigen Schlüsselrotation, Metadaten-/Algorithmusprüfung, Rollen-Claim-Manipulation, serverseitige Rollenänderung und Account-Sperrung.
+
+Das Finding wird erst nach manueller Betriebsverifikation geschlossen: Ein neuer produktiver Schlüssel muss im Secret Store erzeugt und ausgerollt, der bekannte alte Schlüssel entfernt, alle alten Tokens müssen nachweislich ungültig und der Rotationsablauf muss in der Zielumgebung geprüft sein. Bis dahin bleibt der Launch-Blocker aktiv.
+
 ### Statusaktualisierung SR-F002 / FINDING-002 – 2026-07-14
 
 **Status: PARTIALLY COMPLETED.** `PUT /api/services/{id}` und `DELETE /api/services/{id}` sind nun explizit auf die Provider-Rolle begrenzt. Der Controller leitet ausschließlich die Identität aus dem authentifizierten Principal weiter; der Service lädt den aktiven Provider und prüft vor Update oder Delete die Provider-ID des Angebots. HTTP- und Service-Regressionstests decken Owner, fremden Provider, Customer, anonymen Zugriff, gesperrten Provider und fehlende Ressource ab.

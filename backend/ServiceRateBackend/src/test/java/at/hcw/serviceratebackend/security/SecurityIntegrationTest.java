@@ -108,6 +108,34 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void manipulatedAdminClaimDoesNotOverrideCustomerRoleFromDatabase() throws Exception {
+        String tokenWithAdminClaim = jwtUtil.generateToken(customer.getEmail(), "ADMIN");
+
+        mockMvc.perform(get("/api/admin/users")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenWithAdminClaim))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/bookings/customer/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenWithAdminClaim))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void databaseRoleChangeTakesEffectWithoutIssuingNewToken() throws Exception {
+        String tokenWithProviderClaim = jwtUtil.generateToken(provider.getEmail(), "PROVIDER");
+        provider.setAccountType("CUSTOMER");
+        userRepository.saveAndFlush(provider);
+
+        mockMvc.perform(get("/api/bookings/provider/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenWithProviderClaim))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/bookings/customer/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenWithProviderClaim))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void providerCannotCallCustomerOrAdminEndpoints() throws Exception {
         mockMvc.perform(get("/api/bookings/customer/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(provider)))

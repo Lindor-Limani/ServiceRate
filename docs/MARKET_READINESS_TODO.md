@@ -21,6 +21,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-SEC-001 – JWT-Schlüssel kompromittiert behandeln und Rollen serverseitig bestimmen
 
+- **Status:** REQUIRES MANUAL VERIFICATION
+- **Abschlussdatum:** 2026-07-14 (Implementierung und automatisierte Tests)
+- **Geänderte Komponenten:** `JwtUtil`, `JwtAuthenticationFilter`, JWT-Properties, Gradle-Testkonfiguration und JWT-Rotationsanleitung im `README.md`.
+- **Hinzugefügte Tests:** Gültiges Token, ungültige/zu kurze Konfiguration, rotierter Schlüssel, falscher Issuer/Audience/Key-ID/Algorithmus, manipulierter Rollen-Claim und Datenbank-Rollenänderung; bestehender Sperrtest bleibt aktiv.
+- **Verbleibende Einschränkungen:** Der Codepfad ist umgesetzt und getestet. Vor Schließung müssen ein neuer produktiver Schlüssel tatsächlich im Secret Store erzeugt, der kompromittierte Schlüssel aus allen Umgebungen entfernt, alle bestehenden Tokens durch Deployment invalidiert und die Rotation in Staging/Produktion nach dem dokumentierten Runbook im Vier-Augen-Prinzip verifiziert werden. Refresh/Revocation jenseits einer globalen Schlüsselrotation bleibt MR-AUTH-003.
 - **Priorität/Kategorie:** P0 / Authentifizierung und Autorisierung
 - **Beschreibung:** Der fest einkompilierte Schlüssel erlaubt Token-Fälschung; die Rolle wird aus einem selbst signierbaren Claim übernommen.
 - **Technische Lösung:** Zufälligen, extern verwalteten Schlüssel mit Rotation einsetzen; bestehende Tokens invalidieren; Rollen bei jeder Anfrage aus der Datenbank laden oder über kurzlebige, versionierte Sessions binden; `kid`, Issuer und Audience validieren.

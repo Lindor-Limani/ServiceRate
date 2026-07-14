@@ -51,4 +51,8 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	def jwtTestSecret = new byte[32]
+	new java.security.SecureRandom().nextBytes(jwtTestSecret)
+	systemProperty 'security.jwt.secret-base64', java.util.Base64.encoder.encodeToString(jwtTestSecret)
+	systemProperty 'security.jwt.key-id', 'test-' + java.util.UUID.randomUUID()
 }

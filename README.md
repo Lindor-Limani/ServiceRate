@@ -72,10 +72,16 @@ Standardwerte:
 
 ```powershell
 cd backend\ServiceRateBackend
+$jwtBytes = New-Object byte[] 32
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($jwtBytes)
+$rng.Dispose()
+$env:JWT_SECRET_BASE64 = [Convert]::ToBase64String($jwtBytes)
+$env:JWT_KEY_ID = "local-$(Get-Date -Format yyyyMMddHHmmss)"
 .\gradlew.bat bootRun
 ```
 
-Das Backend startet standardmaessig auf `http://localhost:8081`. Der Port kann mit `SERVER_PORT` ueberschrieben werden.
+Das Backend startet standardmaessig auf `http://localhost:8081`. Der Port kann mit `SERVER_PORT` ueberschrieben werden. Ohne gueltiges `JWT_SECRET_BASE64` und `JWT_KEY_ID` startet das Backend absichtlich nicht. Den generierten Schluessel weder committen noch in Skripten oder Logs ausgeben.
 
 ### 3. Frontend starten
 
@@ -90,6 +96,11 @@ Die wichtigsten Umgebungsvariablen:
 | Variable | Zweck | Default |
 | --- | --- | --- |
 | `SERVER_PORT` | Backend-Port | `8081` |
+| `JWT_SECRET_BASE64` | Mindestens 32 zufaellige Bytes, Base64-codiert; nur aus Secret Store/Umgebung | **Pflichtwert** |
+| `JWT_KEY_ID` | Eindeutige Kennung der aktiven Schluesselgeneration | **Pflichtwert** |
+| `JWT_ISSUER` | Erwarteter JWT-Aussteller | `servicerate` |
+| `JWT_AUDIENCE` | Erwartete API-Zielgruppe | `servicerate-api` |
+| `JWT_EXPIRATION_MS` | Token-Laufzeit in Millisekunden | `86400000` |
 | `APP_PLATFORM_FEE_PERCENT` | Prozentuale Plattformprovision je Buchung | `10` |
 | `APP_PLATFORM_FEE_FIXED` | Fixe Plattformprovision je Buchung | `0` |
 | `SPRING_DATASOURCE_URL` | PostgreSQL-Verbindung | `jdbc:postgresql://localhost:5533/servicerate` |
@@ -122,6 +133,19 @@ Beispiel fuer Wetterdaten:
 $env:OPENWEATHER_API_KEY="dein_api_key"
 .\gradlew.bat bootRun
 ```
+
+### JWT-Schluesselrotation
+
+ServiceRate akzeptiert bewusst nur eine aktive JWT-Schluesselgeneration. Eine Rotation invalidiert daher sofort alle zuvor ausgegebenen Tokens und erfordert eine erneute Anmeldung.
+
+1. Mindestens 32 neue Zufallsbytes direkt im Secret Manager erzeugen und dort Base64-codiert als neue Version von `JWT_SECRET_BASE64` speichern. Den Wert niemals in Git, Tickets, Chat oder Logs kopieren.
+2. Eine neue eindeutige `JWT_KEY_ID` vergeben, beispielsweise anhand der Secret-Version. Secret und Key-ID muessen immer gemeinsam ausgerollt werden.
+3. Alle Backend-Instanzen in einem kontrollierten Wartungs-/Incident-Fenster auf die neue Secret-Version aktualisieren. Ein Mischbetrieb verschiedener aktiver Generationen ist nicht zulaessig.
+4. Nach dem Rollout einen neuen Login und einen geschuetzten Request pruefen. Ein vor der Rotation erzeugtes Token muss mit 401/403 abgewiesen werden.
+5. Alte Secret-Version aus dem aktiven Deployment entfernen, Zugriffsaudit pruefen und Nutzer ueber die erforderliche Neuanmeldung informieren.
+6. Bei vermuteter Kompromittierung sofort rotieren, Security Incident eroeffnen und Admin-/Payment-Auditdaten auf Missbrauch untersuchen.
+
+Vor Produktion muessen Secret-Injection, Rollout und Notfallrotation in Staging geprobt und im Vier-Augen-Prinzip freigegeben werden.
 
 ### PayPal Checkout
 

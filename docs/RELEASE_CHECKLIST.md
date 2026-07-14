@@ -25,7 +25,7 @@ Ein einziges zutreffendes Kriterium erzwingt **NO-GO**:
 
 ## 1. Nachweisbare Schließung der P0-Funde
 
-- [ ] **SR-F001:** alter JWT-Key rotiert, sämtliche Tokens invalidiert, Key extern gespeichert; Rollen serverseitig; Forge-/Rotationstests grün.
+- [ ] **SR-F001:** alter JWT-Key rotiert, sämtliche Tokens invalidiert, Key extern gespeichert; Rollen serverseitig; Forge-/Rotationstests grün. *(Code und Regressionstests am 2026-07-14 abgeschlossen; Gate bleibt bis zur nachgewiesenen Secret-Store-Rotation und Invalidierung in der Zielumgebung offen.)*
 - [ ] **SR-F002:** Service-Update/-Delete nur durch Owner-Provider bzw. explizit auditierte Admin-Policy; Rollenmatrix grün. *(Ownership und Rollenmatrix am 2026-07-14 umgesetzt und getestet; Gate bleibt bis zur Behebung des JWT-Identitätsbypasses SR-F001 offen.)*
 - [ ] **SR-F003:** `mark-paid` für Clients entfernt; bezahlter Zustand ausschließlich aus verifiziertem PSP-Ereignis.
 - [ ] **SR-F004:** PayPal-Merchant-Zuordnung ausschließlich serverseitig verifiziert; State/Nonce und Änderungs-Audit grün.
