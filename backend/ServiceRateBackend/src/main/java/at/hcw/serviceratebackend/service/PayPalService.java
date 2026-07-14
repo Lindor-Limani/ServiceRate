@@ -34,7 +34,6 @@ public class PayPalService {
     private final String sellerReturnUrl;
     private final String partnerAttributionId;
     private final String partnerMerchantId;
-    private final String webBaseUrl;
 
     private String cachedAccessToken;
     private Instant tokenExpiresAt = Instant.EPOCH;
@@ -56,9 +55,6 @@ public class PayPalService {
         this.baseUrl = "live".equalsIgnoreCase(mode)
                 ? "https://api-m.paypal.com"
                 : "https://api-m.sandbox.paypal.com";
-        this.webBaseUrl = "live".equalsIgnoreCase(mode)
-                ? "https://www.paypal.com"
-                : "https://www.sandbox.paypal.com";
         this.returnUrl = returnUrl;
         this.cancelUrl = cancelUrl;
         this.sellerReturnUrl = sellerReturnUrl;
@@ -69,68 +65,6 @@ public class PayPalService {
     public boolean isConfigured() {
         return clientId != null && !clientId.isBlank()
                 && clientSecret != null && !clientSecret.isBlank();
-    }
-
-    public String createIdentityConnectLink(User provider) {
-        requireConfigured();
-        if (provider == null || provider.getId() == null) {
-            throw new IllegalArgumentException("Provider fehlt.");
-        }
-
-        return webBaseUrl + "/connect"
-                + "?flowEntry=static"
-                + "&client_id=" + encode(clientId)
-                + "&response_type=code"
-                + "&scope=" + encode("openid profile email")
-                + "&redirect_uri=" + encode(sellerReturnUrl)
-                + "&state=" + encode(provider.getId().toString());
-    }
-
-    public PayPalIdentityProfile exchangeIdentityCode(String code, String redirectUri) {
-        requireConfigured();
-        if (code == null || code.isBlank()) {
-            throw new IllegalArgumentException("PayPal-Code fehlt.");
-        }
-
-        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("grant_type", "authorization_code");
-        form.add("code", code);
-        form.add("redirect_uri", redirectUri == null || redirectUri.isBlank() ? sellerReturnUrl : redirectUri);
-
-        Map<String, Object> tokenResponse;
-        try {
-            tokenResponse = restClient.post()
-                    .uri(baseUrl + "/v1/oauth2/token")
-                    .headers(headers -> headers.setBasicAuth(clientId, clientSecret, StandardCharsets.UTF_8))
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<>() {});
-        } catch (HttpStatusCodeException e) {
-            throw new IllegalStateException("PayPal Identity-Code konnte nicht gegen ein Token getauscht werden (" + e.getStatusCode() + "): " + e.getResponseBodyAsString(), e);
-        }
-
-        String accessToken = tokenResponse == null ? null : String.valueOf(tokenResponse.get("access_token"));
-        if (accessToken == null || accessToken.isBlank() || "null".equals(accessToken)) {
-            throw new IllegalStateException("PayPal Identity hat kein Access Token geliefert.");
-        }
-
-        Map<String, Object> userInfo;
-        try {
-            userInfo = restClient.get()
-                    .uri(baseUrl + "/v1/identity/oauth2/userinfo?schema=paypalv1.1")
-                    .headers(headers -> headers.setBearerAuth(accessToken))
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<>() {});
-        } catch (HttpStatusCodeException e) {
-            throw new IllegalStateException("PayPal UserInfo konnte nicht gelesen werden (" + e.getStatusCode() + "): " + e.getResponseBodyAsString(), e);
-        }
-
-        return new PayPalIdentityProfile(
-                findString(userInfo, "user_id", "payer_id", "sub"),
-                findString(userInfo, "email"),
-                findBoolean(userInfo, "email_verified", "verified_account")
-        );
     }
 
     public PayPalOrder createOrder(Booking booking) {
@@ -544,7 +478,6 @@ public class PayPalService {
     public record PayPalCapture(String status, String captureId) {}
     public record PayPalReferral(String actionUrl, String selfUrl) {}
     public record PayPalSellerStatus(String merchantIdInPayPal, Boolean permissionsGranted, String accountStatus, Boolean consentStatus, Boolean isEmailConfirmed) {}
-    public record PayPalIdentityProfile(String accountId, String email, Boolean emailConfirmed) {}
 
     private record UserPayee(String key, String value) {
         Map<String, String> asMap() {

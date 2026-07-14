@@ -1,7 +1,6 @@
 package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.PayPalOnboardingLinkResponse;
-import at.hcw.serviceratebackend.dto.PayPalIdentityReturnRequest;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.UserRepository;
@@ -25,26 +24,6 @@ public class ProviderPayPalOnboardingService {
         provider.setPaypalOnboardingStatus("LINK_CREATED");
         userRepository.save(provider);
         return new PayPalOnboardingLinkResponse(referral.actionUrl(), referral.selfUrl());
-    }
-
-    @Transactional
-    public UserResponse completeIdentityOnboarding(String providerEmail, PayPalIdentityReturnRequest request) {
-        User provider = findProvider(providerEmail);
-        if (request.state() != null && !request.state().isBlank() && !provider.getId().toString().equals(request.state())) {
-            throw new IllegalArgumentException("PayPal-Rueckkehr passt nicht zum eingeloggten Provider.");
-        }
-        PayPalService.PayPalIdentityProfile profile = payPalService.exchangeIdentityCode(request.code(), request.redirectUri());
-        if (profile.accountId() != null && !profile.accountId().isBlank()) {
-            provider.setPaypalMerchantId(profile.accountId());
-        }
-        if (profile.email() != null && !profile.email().isBlank()) {
-            provider.setPaypalEmail(profile.email());
-        }
-        provider.setPaypalPermissionsGranted(true);
-        provider.setPaypalEmailConfirmed(profile.emailConfirmed() == null || profile.emailConfirmed());
-        provider.setPaypalOnboardingStatus("CONNECTED");
-        User saved = userRepository.save(provider);
-        return userService.getById(saved.getId());
     }
 
     @Transactional

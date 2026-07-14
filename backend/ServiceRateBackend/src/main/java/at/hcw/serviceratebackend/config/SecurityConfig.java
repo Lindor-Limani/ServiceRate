@@ -75,6 +75,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/mark-paid").denyAll()
                         // Clientbehauptungen dürfen niemals PayPal-Empfänger oder Connected-Status setzen.
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/onboarding-return").denyAll()
+                        // Ungenutzter OAuth-Fallback ohne servergebundenen State bleibt fail-closed gesperrt.
+                        .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/identity-return").denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/stripe/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/services").hasRole("PROVIDER")

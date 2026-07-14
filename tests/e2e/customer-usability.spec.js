@@ -245,6 +245,29 @@ test('PayPal return parameters trigger only a server-side status refresh', async
   await expect(page.locator('#providerPaypalConfirmBtn')).toHaveCount(0);
 });
 
+test('unbound PayPal identity codes are discarded without an API callback', async ({ page }) => {
+  const requests = [];
+  await page.route('http://localhost:8081/api/**', route => {
+    requests.push(new URL(route.request().url()).pathname);
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+  await page.addInitScript(token => {
+    localStorage.setItem('provider_jwt', token);
+    localStorage.setItem('provider_user_id', '22222222-2222-4222-8222-222222222222');
+    localStorage.setItem('provider_paypal_onboarding_started', 'true');
+  }, fakeJwt('PROVIDER'));
+
+  await page.goto('/provider-dashboard.html?code=attacker-code&state=');
+
+  await expect(page).toHaveURL(/provider-dashboard\.html$/);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('provider_paypal_onboarding_started'))).toBeNull();
+  expect(requests).not.toContain('/api/providers/me/paypal/identity-return');
+});
+
 function fakeJwt(accountType) {
   const payload = Buffer.from(JSON.stringify({
     sub: `${accountType.toLowerCase()}@example.com`,

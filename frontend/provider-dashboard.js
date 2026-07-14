@@ -489,12 +489,13 @@ function handleAuthLinks() {
   const resetToken = params.get('resetToken');
   const paypalCode = params.get('code');
   if (paypalCode) {
-    completePayPalIdentityFromReturn(params);
+    localStorage.removeItem('provider_paypal_onboarding_started');
+    notify('Diese PayPal-Rückkehr wird aus Sicherheitsgründen nicht unterstützt. Bitte starte die Verbindung erneut.', 'error');
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
   const paypalOnboarding = params.get('paypalOnboarding');
-  if (paypalOnboarding === 'return' || hasPayPalReturnParams(params)) {
+  if (!paypalCode && (paypalOnboarding === 'return' || hasPayPalReturnParams(params))) {
     localStorage.removeItem('provider_paypal_onboarding_started');
     refreshPayPalOnboardingStatus();
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -522,26 +523,6 @@ function handleAuthLinks() {
     window.history.replaceState({}, document.title, window.location.pathname);
   }
   return false;
-}
-
-async function completePayPalIdentityFromReturn(params) {
-  if (!localStorage.getItem('provider_jwt')) {
-    notify('Bitte melde dich an, um die PayPal-Verbindung abzuschliessen.', 'info');
-    return;
-  }
-
-  try {
-    const user = await fetchAPI('/providers/me/paypal/identity-return', 'POST', {
-      code: params.get('code'),
-      state: params.get('state'),
-      redirectUri: `${window.location.origin}${window.location.pathname}`
-    }, 'provider_jwt');
-    localStorage.removeItem('provider_paypal_onboarding_started');
-    renderProviderPayPalStatus(user);
-    notify('PayPal wurde verbunden.', 'success');
-  } catch (e) {
-    notify(e.message || 'PayPal-Verbindung konnte nicht abgeschlossen werden.', 'error');
-  }
 }
 
 async function notifyPendingPayPalOnboardingWithoutParams() {
