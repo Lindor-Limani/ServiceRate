@@ -2,6 +2,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.cyclonedx.bom' version '3.2.4'
 }
 
 group = 'at.hcw'
@@ -94,4 +95,123 @@ tasks.register('verifySecurityPatchedRuntime') {
 
 tasks.named('check') {
 	dependsOn tasks.named('verifySecurityPatchedRuntime')
+}
+
+def rawCycloneDxSbom = layout.buildDirectory.file('tmp/cyclonedx/bom.json')
+def reproducibleCycloneDxSbom = layout.buildDirectory.file('reports/sbom/servicerate-backend.cdx.json')
+def sbomComponentGroup = project.group.toString()
+def sbomComponentName = project.name
+def sbomComponentVersion = project.version.toString()
+
+tasks.named('cyclonedxDirectBom') {
+	includeConfigs = ['runtimeClasspath']
+	skipConfigs = ['.*test.*', '.*Test.*']
+	projectType.set(projectType.get().class.enumConstants.find { it.name() == 'APPLICATION' })
+	includeBomSerialNumber = false
+	includeLicenseText = false
+	includeMetadataResolution = true
+	includeBuildEnvironment = false
+	includeBuildSystem = false
+	jsonOutput.set(rawCycloneDxSbom)
+	xmlOutput.unsetConvention()
+}
+
+tasks.named('cyclonedxBom') {
+	// This single-project build publishes only the canonical runtime SBOM below.
+	enabled = false
+}
+
+tasks.register('generateCycloneDxSbom') {
+	group = 'build'
+	description = 'Generates a canonical CycloneDX JSON SBOM for the production runtime classpath.'
+	dependsOn tasks.named('cyclonedxDirectBom')
+	inputs.file(rawCycloneDxSbom)
+	outputs.file(reproducibleCycloneDxSbom)
+	doLast {
+		def bom = new groovy.json.JsonSlurper().parse(rawCycloneDxSbom.get().asFile)
+		bom.remove('serialNumber')
+		bom.metadata?.remove('timestamp')
+
+		def canonicalize
+		canonicalize = { value ->
+			if (value instanceof Map) {
+				def sorted = new TreeMap()
+				value.each { key, nestedValue -> sorted[key.toString()] = canonicalize(nestedValue) }
+				return sorted
+			}
+			if (value instanceof List) {
+				return value.collect { canonicalize(it) }
+						.sort { left, right -> groovy.json.JsonOutput.toJson(left) <=> groovy.json.JsonOutput.toJson(right) }
+			}
+			return value
+		}
+
+		def outputFile = reproducibleCycloneDxSbom.get().asFile
+		outputFile.parentFile.mkdirs()
+		outputFile.setText(
+				groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(canonicalize(bom))) + '\n',
+				'UTF-8'
+		)
+	}
+}
+
+tasks.register('verifyCycloneDxSbom') {
+	group = 'verification'
+	description = 'Validates the reproducible production-runtime CycloneDX SBOM.'
+	dependsOn tasks.named('generateCycloneDxSbom')
+	inputs.file(reproducibleCycloneDxSbom)
+	doLast {
+		def sbomFile = reproducibleCycloneDxSbom.get().asFile
+		def sbomText = sbomFile.getText('UTF-8')
+		def normalizedText = sbomText.toLowerCase().replace('\\', '/')
+		def normalizedUserHome = System.getProperty('user.home').toLowerCase().replace('\\', '/')
+		def forbiddenMarkers = ['security.jwt.secret', 'client-secret', 'authorization:', 'bearer ']
+		if (normalizedText.contains(normalizedUserHome)
+				|| forbiddenMarkers.any { normalizedText.contains(it) }) {
+			throw new GradleException('SBOM contains a local path or secret-bearing configuration marker.')
+		}
+
+		def bom = new groovy.json.JsonSlurper().parseText(sbomText)
+		if (bom.bomFormat != 'CycloneDX' || bom.specVersion != '1.6') {
+			throw new GradleException('SBOM must be valid CycloneDX 1.6 JSON.')
+		}
+		if (bom.containsKey('serialNumber') || bom.metadata?.containsKey('timestamp')) {
+			throw new GradleException('SBOM must not contain non-reproducible serial numbers or timestamps.')
+		}
+		if (bom.metadata?.component?.group != sbomComponentGroup
+				|| bom.metadata?.component?.name != sbomComponentName
+				|| bom.metadata?.component?.version != sbomComponentVersion
+				|| bom.metadata?.component?.type != 'application') {
+			throw new GradleException('SBOM application metadata is incomplete or incorrect.')
+		}
+
+		def expectedComponents = [
+			'org.springframework.boot:spring-boot'               : '4.0.7',
+			'org.springframework.security:spring-security-core' : '7.0.6',
+			'org.apache.tomcat.embed:tomcat-embed-core'          : '11.0.24',
+			'tools.jackson.core:jackson-databind'                : '3.1.4',
+			'com.fasterxml.jackson.core:jackson-databind'        : '2.21.5',
+			'ch.qos.logback:logback-classic'                     : '1.5.37'
+		]
+		def components = bom.components ?: []
+		expectedComponents.each { coordinate, expectedVersion ->
+			def (expectedGroup, expectedName) = coordinate.split(':', 2)
+			def component = components.find {
+				it.group == expectedGroup && it.name == expectedName && it.version == expectedVersion
+			}
+			if (component == null || !component.purl?.startsWith("pkg:maven/${expectedGroup}/${expectedName}@${expectedVersion}")) {
+				throw new GradleException("SBOM is missing ${coordinate}:${expectedVersion} with its Maven PURL.")
+			}
+		}
+		def testComponent = components.find {
+			it.group?.startsWith('org.junit') || it.group?.startsWith('org.mockito') || it.group?.startsWith('org.assertj')
+		}
+		if (testComponent != null) {
+			throw new GradleException("Production SBOM contains test component ${testComponent.group}:${testComponent.name}.")
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifyCycloneDxSbom')
 }
