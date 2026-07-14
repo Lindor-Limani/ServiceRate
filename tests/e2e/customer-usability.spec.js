@@ -208,6 +208,43 @@ test('main customer UI is usable on desktop and mobile viewports', async ({ page
   }
 });
 
+test('PayPal return parameters trigger only a server-side status refresh', async ({ page }) => {
+  const requests = [];
+  await page.route('http://localhost:8081/api/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    requests.push(pathname);
+    if (pathname === '/api/providers/me/paypal/onboarding-status') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          paypalMerchantId: 'verified-merchant',
+          paypalEmail: 'verified@example.com',
+          paypalOnboardingStatus: 'CONNECTED',
+          paypalPermissionsGranted: true,
+          paypalEmailConfirmed: true
+        })
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+  await page.addInitScript(token => {
+    localStorage.setItem('provider_jwt', token);
+    localStorage.setItem('provider_user_id', '22222222-2222-4222-8222-222222222222');
+    localStorage.setItem('provider_paypal_onboarding_started', 'true');
+  }, fakeJwt('PROVIDER'));
+
+  await page.goto('/provider-dashboard.html?paypalOnboarding=return&merchantIdInPayPal=attacker-merchant&permissionsGranted=true&isEmailConfirmed=true');
+
+  await expect.poll(() => requests.filter(path => path === '/api/providers/me/paypal/onboarding-status').length).toBe(1);
+  expect(requests).not.toContain('/api/providers/me/paypal/onboarding-return');
+  await expect(page.locator('#providerPaypalConfirmBtn')).toHaveCount(0);
+});
+
 function fakeJwt(accountType) {
   const payload = Buffer.from(JSON.stringify({
     sub: `${accountType.toLowerCase()}@example.com`,

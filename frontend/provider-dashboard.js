@@ -24,13 +24,6 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('click', event => {
-  const button = event.target.closest('#providerPaypalConfirmBtn');
-  if (!button) return;
-  event.preventDefault();
-  confirmPayPalOnboardingManually();
-});
-
-document.addEventListener('click', event => {
   const button = event.target.closest('#providerPaypalRefreshBtn');
   if (!button) return;
   event.preventDefault();
@@ -212,31 +205,6 @@ async function refreshStripeOnboardingStatus() {
       button.disabled = false;
       button.textContent = 'Status bei Stripe prüfen';
     }
-  }
-}
-
-async function confirmPayPalOnboardingManually() {
-  const merchantId = document.getElementById('providerPaypalMerchantId')?.value.trim() || '';
-  const paypalEmail = document.getElementById('providerPaypalEmail')?.value.trim() || '';
-  if (!merchantId && !paypalEmail) {
-    notify('Bitte PayPal Merchant ID oder PayPal E-Mail eintragen.', 'error');
-    return;
-  }
-
-  try {
-    const user = await fetchAPI('/providers/me/paypal/onboarding-return', 'POST', {
-      merchantIdInPayPal: merchantId,
-      paypalEmail,
-      permissionsGranted: true,
-      accountStatus: 'BUSINESS_ACCOUNT',
-      consentStatus: true,
-      isEmailConfirmed: true
-    }, 'provider_jwt');
-    localStorage.removeItem('provider_paypal_onboarding_started');
-    renderProviderPayPalStatus(user);
-    notify('PayPal-Verbindung wurde gespeichert.', 'success');
-  } catch (e) {
-    notify(e.message || 'PayPal-Verbindung konnte nicht gespeichert werden.', 'error');
   }
 }
 
@@ -527,7 +495,8 @@ function handleAuthLinks() {
 
   const paypalOnboarding = params.get('paypalOnboarding');
   if (paypalOnboarding === 'return' || hasPayPalReturnParams(params)) {
-    completePayPalOnboardingFromReturn(params);
+    localStorage.removeItem('provider_paypal_onboarding_started');
+    refreshPayPalOnboardingStatus();
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
@@ -575,35 +544,6 @@ async function completePayPalIdentityFromReturn(params) {
   }
 }
 
-async function completePayPalOnboardingFromReturn(params) {
-  if (!localStorage.getItem('provider_jwt')) {
-    notify('Bitte melde dich an, um die PayPal-Verbindung abzuschliessen.', 'info');
-    return;
-  }
-  try {
-    const user = await fetchAPI('/providers/me/paypal/onboarding-return', 'POST', {
-      merchantIdInPayPal: firstParam(params, ['merchantIdInPayPal', 'merchant_id', 'payerId', 'payer_id']),
-      paypalEmail: firstParam(params, ['paypalEmail', 'email', 'email_address']),
-      permissionsGranted: parseBooleanParam(firstParam(params, ['permissionsGranted', 'permissions_granted'])),
-      accountStatus: firstParam(params, ['accountStatus', 'account_status']),
-      consentStatus: parseBooleanParam(firstParam(params, ['consentStatus', 'consent_status'])),
-      isEmailConfirmed: parseBooleanParam(firstParam(params, ['isEmailConfirmed', 'is_email_confirmed', 'emailConfirmed']))
-    }, 'provider_jwt');
-    localStorage.removeItem('provider_paypal_onboarding_started');
-    notify(user.paypalOnboardingStatus === 'CONNECTED'
-      ? 'PayPal wurde verbunden.'
-      : 'PayPal-Verbindung gespeichert. Bitte prüfe, ob noch Schritte bei PayPal offen sind.', 'success');
-    if (document.getElementById('providerSettingsModal')?.classList.contains('open')) {
-      renderProviderPayPalStatus(user);
-    }
-    if (user.paypalMerchantId && user.paypalOnboardingStatus !== 'CONNECTED') {
-      await refreshPayPalOnboardingStatus();
-    }
-  } catch (e) {
-    notify(e.message || 'PayPal-Rückkehr konnte nicht gespeichert werden.', 'error');
-  }
-}
-
 async function notifyPendingPayPalOnboardingWithoutParams() {
   const params = new URLSearchParams(window.location.search);
   if (params.toString() || localStorage.getItem('provider_paypal_onboarding_started') !== 'true') return;
@@ -622,19 +562,6 @@ async function notifyPendingStripeOnboardingWithoutParams() {
 function hasPayPalReturnParams(params) {
   return ['merchantIdInPayPal', 'merchant_id', 'payerId', 'payer_id', 'permissionsGranted', 'permissions_granted', 'isEmailConfirmed', 'is_email_confirmed']
     .some(key => params.has(key));
-}
-
-function firstParam(params, keys) {
-  for (const key of keys) {
-    const value = params.get(key);
-    if (value != null && value !== '') return value;
-  }
-  return null;
-}
-
-function parseBooleanParam(value) {
-  if (value == null) return null;
-  return String(value).toLowerCase() === 'true';
 }
 
 function isProviderEmailVerified() {

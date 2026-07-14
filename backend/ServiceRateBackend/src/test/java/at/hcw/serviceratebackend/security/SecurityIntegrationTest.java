@@ -308,6 +308,47 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void clientClaimedPayPalOnboardingReturnIsDeniedWithoutPersistingReceiver() throws Exception {
+        provider.setPaypalMerchantId("verified-merchant");
+        provider.setPaypalEmail("verified@example.com");
+        provider.setPaypalPermissionsGranted(false);
+        provider.setPaypalEmailConfirmed(false);
+        provider.setPaypalOnboardingStatus("LINK_CREATED");
+        userRepository.saveAndFlush(provider);
+
+        String payload = """
+                {
+                  "merchantIdInPayPal": "attacker-merchant",
+                  "paypalEmail": "attacker@example.com",
+                  "permissionsGranted": true,
+                  "accountStatus": "BUSINESS_ACCOUNT",
+                  "consentStatus": true,
+                  "isEmailConfirmed": true
+                }
+                """;
+
+        mockMvc.perform(post("/api/providers/me/paypal/onboarding-return")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        for (User caller : new User[]{customer, provider, admin, provider}) {
+            mockMvc.perform(post("/api/providers/me/paypal/onboarding-return")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(caller))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isForbidden());
+        }
+
+        User unchanged = userRepository.findById(provider.getId()).orElseThrow();
+        assertThat(unchanged.getPaypalMerchantId()).isEqualTo("verified-merchant");
+        assertThat(unchanged.getPaypalEmail()).isEqualTo("verified@example.com");
+        assertThat(unchanged.getPaypalPermissionsGranted()).isFalse();
+        assertThat(unchanged.getPaypalEmailConfirmed()).isFalse();
+        assertThat(unchanged.getPaypalOnboardingStatus()).isEqualTo("LINK_CREATED");
+    }
+
+    @Test
     void customerCannotPatchAdminStatusEvenWithDirectApiCall() throws Exception {
         mockMvc.perform(patch("/api/admin/users/{id}/status", provider.getId())
                         .header(HttpHeaders.AUTHORIZATION, bearer(customer))

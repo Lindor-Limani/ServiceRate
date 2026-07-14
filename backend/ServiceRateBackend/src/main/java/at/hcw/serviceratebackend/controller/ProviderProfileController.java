@@ -3,7 +3,6 @@ package at.hcw.serviceratebackend.controller;
 import at.hcw.serviceratebackend.dto.ProviderProfileResponse;
 import at.hcw.serviceratebackend.dto.PayPalOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.PayPalIdentityReturnRequest;
-import at.hcw.serviceratebackend.dto.PayPalOnboardingReturnRequest;
 import at.hcw.serviceratebackend.dto.StripeOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.service.ImageResource;
@@ -49,11 +48,6 @@ public class ProviderProfileController {
     @PostMapping("/me/paypal/onboarding-link")
     public PayPalOnboardingLinkResponse createPayPalOnboardingLink(Authentication authentication) {
         return payPalOnboardingService.createOnboardingLink((String) authentication.getPrincipal());
-    }
-
-    @PostMapping("/me/paypal/onboarding-return")
-    public UserResponse completePayPalOnboarding(@RequestBody PayPalOnboardingReturnRequest request, Authentication authentication) {
-        return payPalOnboardingService.completeOnboarding((String) authentication.getPrincipal(), request);
     }
 
     @PostMapping("/me/paypal/identity-return")

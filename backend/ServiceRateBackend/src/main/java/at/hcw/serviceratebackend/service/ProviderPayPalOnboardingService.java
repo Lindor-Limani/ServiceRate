@@ -2,7 +2,6 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.PayPalOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.PayPalIdentityReturnRequest;
-import at.hcw.serviceratebackend.dto.PayPalOnboardingReturnRequest;
 import at.hcw.serviceratebackend.dto.UserResponse;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.UserRepository;
@@ -61,34 +60,18 @@ public class ProviderPayPalOnboardingService {
         } catch (IllegalStateException e) {
             status = payPalService.getSellerOnboardingStatus(provider.getPaypalReferralSelfUrl());
         }
-        return applyOnboardingResult(provider, new PayPalOnboardingReturnRequest(
-                status.merchantIdInPayPal(),
-                null,
-                status.permissionsGranted(),
-                status.accountStatus(),
-                status.consentStatus(),
-                status.isEmailConfirmed()
-        ));
+        return applyOnboardingResult(provider, status);
     }
 
-    @Transactional
-    public UserResponse completeOnboarding(String providerEmail, PayPalOnboardingReturnRequest request) {
-        User provider = findProvider(providerEmail);
-        return applyOnboardingResult(provider, request);
-    }
-
-    private UserResponse applyOnboardingResult(User provider, PayPalOnboardingReturnRequest request) {
-        if (request.merchantIdInPayPal() != null && !request.merchantIdInPayPal().isBlank()) {
-            provider.setPaypalMerchantId(request.merchantIdInPayPal().trim());
+    private UserResponse applyOnboardingResult(User provider, PayPalService.PayPalSellerStatus status) {
+        if (status.merchantIdInPayPal() != null && !status.merchantIdInPayPal().isBlank()) {
+            provider.setPaypalMerchantId(status.merchantIdInPayPal().trim());
         }
-        if (request.paypalEmail() != null && !request.paypalEmail().isBlank()) {
-            provider.setPaypalEmail(request.paypalEmail().trim());
+        if (status.permissionsGranted() != null) {
+            provider.setPaypalPermissionsGranted(status.permissionsGranted());
         }
-        if (request.permissionsGranted() != null) {
-            provider.setPaypalPermissionsGranted(request.permissionsGranted());
-        }
-        if (request.isEmailConfirmed() != null) {
-            provider.setPaypalEmailConfirmed(request.isEmailConfirmed());
+        if (status.isEmailConfirmed() != null) {
+            provider.setPaypalEmailConfirmed(status.isEmailConfirmed());
         }
 
         boolean hasPayPalReceiver = (provider.getPaypalMerchantId() != null && !provider.getPaypalMerchantId().isBlank())

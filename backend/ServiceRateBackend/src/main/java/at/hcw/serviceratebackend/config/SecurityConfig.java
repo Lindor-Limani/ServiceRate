@@ -73,6 +73,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/paypal/capture").hasRole("CUSTOMER")
                         // Entfernte unsichere Legacy-Route bleibt explizit gesperrt, falls sie versehentlich wieder auftaucht.
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/mark-paid").denyAll()
+                        // Clientbehauptungen dürfen niemals PayPal-Empfänger oder Connected-Status setzen.
+                        .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/onboarding-return").denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/stripe/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/services").hasRole("PROVIDER")
