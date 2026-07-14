@@ -62,6 +62,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/reviews").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/bookings/customer/me").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/bookings/provider/me").hasRole("PROVIDER")
+                        // Identität für Buchungslisten stammt ausschließlich aus dem Principal.
+                        .requestMatchers(HttpMethod.GET, "/api/bookings/customer/*", "/api/bookings/provider/*").denyAll()
                         .requestMatchers(HttpMethod.PUT, "/api/bookings/*/status").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.PUT, "/api/bookings/*/work").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/bookings/*/time-entries").hasRole("PROVIDER")

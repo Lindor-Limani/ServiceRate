@@ -160,6 +160,64 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void bookingMeListsUseOnlyAuthenticatedPrincipalIdentity() throws Exception {
+        User otherCustomer = saveUser("other-customer@example.com", "CUSTOMER", "ACTIVE");
+        User otherProvider = saveUser("other-provider@example.com", "PROVIDER", "ACTIVE");
+        ServiceOffering ownProviderService = saveService(provider, "Own Provider Service");
+        ServiceOffering otherProviderService = saveService(otherProvider, "Other Provider Service");
+        Booking ownBooking = saveUnpaidBooking(customer, ownProviderService);
+        Booking otherBooking = saveUnpaidBooking(otherCustomer, otherProviderService);
+
+        mockMvc.perform(get("/api/bookings/customer/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(ownBooking.getId().toString()));
+
+        mockMvc.perform(get("/api/bookings/customer/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherCustomer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(otherBooking.getId().toString()));
+
+        mockMvc.perform(get("/api/bookings/provider/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(ownBooking.getId().toString()));
+
+        mockMvc.perform(get("/api/bookings/provider/me")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherProvider)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(otherBooking.getId().toString()));
+    }
+
+    @Test
+    void legacyBookingListsByUserIdAreDeniedForEveryRoleAndIdVariant() throws Exception {
+        User otherCustomer = saveUser("other-customer@example.com", "CUSTOMER", "ACTIVE");
+        User otherProvider = saveUser("other-provider@example.com", "PROVIDER", "ACTIVE");
+        UUID missingId = UUID.randomUUID();
+
+        assertLegacyBookingListDenied("customer", customer.getId(), customer);
+        assertLegacyBookingListDenied("customer", customer.getId(), otherCustomer);
+        assertLegacyBookingListDenied("customer", missingId, customer);
+        assertLegacyBookingListDenied("provider", provider.getId(), provider);
+        assertLegacyBookingListDenied("provider", provider.getId(), otherProvider);
+        assertLegacyBookingListDenied("provider", missingId, provider);
+
+        assertLegacyBookingListDenied("customer", customer.getId(), provider);
+        assertLegacyBookingListDenied("provider", provider.getId(), customer);
+        assertLegacyBookingListDenied("customer", customer.getId(), admin);
+        assertLegacyBookingListDenied("provider", provider.getId(), admin);
+
+        mockMvc.perform(get("/api/bookings/customer/{id}", customer.getId()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/bookings/provider/{id}", provider.getId()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void adminCanCallAdminEndpoint() throws Exception {
         mockMvc.perform(get("/api/admin/users")
                         .header(HttpHeaders.AUTHORIZATION, bearer(admin)))
@@ -481,6 +539,12 @@ class SecurityIntegrationTest {
 
     private String bearer(User user) {
         return "Bearer " + jwtUtil.generateToken(user.getEmail(), user.getAccountType());
+    }
+
+    private void assertLegacyBookingListDenied(String party, UUID id, User caller) throws Exception {
+        mockMvc.perform(get("/api/bookings/{party}/{id}", party, id)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(caller)))
+                .andExpect(status().isForbidden());
     }
 
     private ServiceOffering saveService(User owner, String title) {

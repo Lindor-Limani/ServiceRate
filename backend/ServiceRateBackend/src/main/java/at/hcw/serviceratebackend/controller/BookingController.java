@@ -34,12 +34,6 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.getBookingsForProviderEmail((String) authentication.getPrincipal()));
     }
 
-    // Holt die Buchungen für das Handwerker-Dashboard
-    @GetMapping("/provider/{providerId}")
-    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForProvider(@PathVariable("providerId") java.util.UUID providerId) {
-        return ResponseEntity.ok(bookingService.getBookingsForProvider(providerId));
-    }
-
     // Ändert den Status einer Buchung (PUT)
     @PutMapping("/{id}/status")
     public ResponseEntity<BookingResponse> updateStatus(
@@ -119,8 +113,4 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.getBookingsForCustomerEmail((String) authentication.getPrincipal()));
     }
 
-    @GetMapping("/customer/{customerId}")
-    public ResponseEntity<java.util.List<BookingResponse>> getBookingsForCustomer(@PathVariable("customerId") java.util.UUID customerId) {
-        return ResponseEntity.ok(bookingService.getBookingsForCustomer(customerId));
-    }
 }

@@ -289,9 +289,7 @@ Authorization: Bearer <token>
 | --- | --- | --- | --- |
 | `POST` | `/api/bookings` | Customer | Buchung erstellen |
 | `GET` | `/api/bookings/customer/me` | Customer | Eigene Kundenbuchungen abrufen |
-| `GET` | `/api/bookings/customer/{customerId}` | authentifiziert | Buchungen eines Kunden abrufen |
 | `GET` | `/api/bookings/provider/me` | Provider | Eigene Provider-Buchungen abrufen |
-| `GET` | `/api/bookings/provider/{providerId}` | authentifiziert | Buchungen eines Providers abrufen |
 | `PUT` | `/api/bookings/{id}/status` | Provider | Buchungsstatus aendern |
 | `PUT` | `/api/bookings/{id}/work` | Provider | Arbeitsnotizen und Ist-Stunden aktualisieren |
 | `POST` | `/api/bookings/{id}/time-entries` | Provider | Zeiteintrag zu einer Buchung erfassen |

@@ -94,10 +94,10 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 ### MR-AUTH-002 – Buchungs- und Review-IDOR vollständig schließen
 
 - **Status:** PARTIALLY COMPLETED
-- **Abschlussdatum:** 2026-07-14 (Review-Erstellung)
-- **Geänderte Komponenten:** `SecurityConfig`, `ReviewController`, `ReviewService` und zentrale Access-Denied-Fehlerbehandlung.
-- **Hinzugefügte Tests:** Service-Regressionen für Owner, fremden Customer, fehlende Buchung und unzulässigen Bookingstatus; HTTP-Matrix für Owner, fremden Customer, Provider, Admin, anonymen Zugriff und ungültige Eingaben mit Prüfung des persistenten Schreibeffekts.
-- **Verbleibende Einschränkungen:** Der abgegrenzte Review-Identitätsmissbrauch aus FINDING-006 ist serverseitig geschlossen: Rolle und authentifizierter Principal werden geprüft. Das Gesamtticket bleibt offen, weil die fremden Customer-/Provider-Booking-ID-Endpunkte aus FINDING-005 unverändert bestehen. Parallele Review-Deduplizierung, explizite DB-Migration/Constraint-Verifikation und ein Audit Event sind ebenfalls noch nicht nachgewiesen.
+- **Abschlussdatum:** 2026-07-14 (Review-Erstellung und UUID-basierte Buchungslisten)
+- **Geänderte Komponenten:** `SecurityConfig`, `ReviewController`, `ReviewService`, zentrale Access-Denied-Fehlerbehandlung sowie `BookingController` und `BookingService`.
+- **Hinzugefügte Tests:** Review-Service- und HTTP-Regressionen für Owner, Fremdzugriff, Rollen, Eingaben und Status; Booking-HTTP-Matrix für entfernte Customer-/Provider-ID-Pfade mit eigener, fremder und fehlender UUID sowie positive, datenseparierende `/me`-Regressionen für mehrere Customers und Provider.
+- **Verbleibende Einschränkungen:** Der Review-Identitätsmissbrauch aus FINDING-006 und die frei adressierbaren Buchungslisten aus FINDING-005 sind serverseitig geschlossen. Das Gesamtticket bleibt offen, weil rollenabhängige DTO-Minimierung, ein auditierter separater Admin-Zugriff, parallele Review-Deduplizierung, explizite DB-Constraint-Verifikation und ein vollständiges Inventar aller objektbezogenen Endpunkte noch nicht nachgewiesen sind.
 - **Priorität/Kategorie:** P0 / BOLA und Datenschutz
 - **Beschreibung:** Buchungslisten/-details akzeptieren fremde Nutzer-IDs; Reviews können ohne Prüfung der aufrufenden Person erstellt werden.
 - **Technische Lösung:** Principal als einzige Identitätsquelle verwenden; Beteiligung serverseitig prüfen; Admin-Zugriff separat autorisieren und auditieren; DTOs minimieren.

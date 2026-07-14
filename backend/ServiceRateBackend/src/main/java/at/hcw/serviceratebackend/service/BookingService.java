@@ -87,8 +87,7 @@ public class BookingService {
         return toResponse(saved, null, null);
     }
 
-    // Holt alle Buchungen für einen bestimmten Handwerker
-    public java.util.List<BookingResponse> getBookingsForProvider(UUID providerId) {
+    private java.util.List<BookingResponse> getBookingsForProvider(UUID providerId) {
         List<Booking> bookings = bookingRepository.findByServiceOffering_Provider_Id(providerId);
         Map<UUID, ReviewResponse> reviews = loadReviewsByBookingId(bookings);
 
@@ -331,8 +330,7 @@ public class BookingService {
         return booking.getDeliveryUrl();
     }
 
-    // Holt alle Buchungen für das Kunden-Dashboard
-    public java.util.List<BookingResponse> getBookingsForCustomer(UUID customerId) {
+    private java.util.List<BookingResponse> getBookingsForCustomer(UUID customerId) {
         List<Booking> bookings = bookingRepository.findByCustomer_Id(customerId);
         Map<UUID, ReviewResponse> reviews = loadReviewsByBookingId(bookings);
 

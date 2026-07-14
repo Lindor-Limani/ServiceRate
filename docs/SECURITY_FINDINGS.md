@@ -106,6 +106,12 @@ Die Ursache dieses Findings ist damit im tatsächlichen Anwendungspfad behoben u
 
 Das Finding bleibt Critical und Launch-Blocker: Der separate Endpunkt `/api/providers/me/paypal/onboarding-return` vertraut weiterhin clientgelieferten Merchant-/Permission-/E-Mail-Bestätigungswerten. Bis auch dieser Pfad ausschließlich serververifizierte PayPal-Daten akzeptiert und Checkout/Audit geprüft sind, besteht weiterhin eine bekannte Umgehungsmöglichkeit.
 
+### Statusaktualisierung SR-F005 / FINDING-005 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** Die frei adressierbaren Endpunkte `GET /api/bookings/customer/{customerId}` und `GET /api/bookings/provider/{providerId}` wurden aus dem Controller entfernt. Nur die principalbasierten `/customer/me`- und `/provider/me`-Routen bleiben verfügbar; die früheren ID-Pfade sind zusätzlich in `SecurityConfig` explizit gesperrt. HTTP-Regressionstests weisen die Sperre für Customer, Provider, Admin und anonyme Aufrufer mit eigener, fremder und fehlender UUID nach. Positive Mehrnutzer-Tests bestätigen, dass jede `/me`-Liste ausschließlich Buchungen der authentifizierten Identität enthält.
+
+Der konkrete UUID-IDOR und damit der unmittelbare Abfluss fremder Buchungslisten ist im aktiven Anwendungspfad behoben. Das Finding bleibt bis zur rollenabhängigen Minimierung der umfangreichen `BookingResponse`-Felder und zur Umsetzung eines getrennten, auditierbaren Admin-Zugriffs offen; Pagination und ein vollständiges Endpunktinventar verbleiben ebenfalls in MR-AUTH-002 beziehungsweise MR-PERF-001.
+
 ### Statusaktualisierung SR-F006 / FINDING-006 – 2026-07-14
 
 **Status: PARTIALLY COMPLETED.** `POST /api/reviews` ist nun auf die Customer-Rolle begrenzt. Der Controller leitet ausschließlich den authentifizierten Principal an den Service weiter; der Service vergleicht ihn vor Statusprüfung, Persistenz und Mailversand mit dem tatsächlichen Booking-Customer. Fremde Customers erhalten 403, während Provider, Admin und anonyme Aufrufer bereits durch die Security-Konfiguration abgewiesen werden. Service- und HTTP-Regressionstests bestätigen den Owner-Normalfall, die vollständige Rollen-/Fremdzugriffsmatrix, fehlende und nicht abgeschlossene Buchungen, ungültige Ratings und ausbleibende Schreibeffekte.
