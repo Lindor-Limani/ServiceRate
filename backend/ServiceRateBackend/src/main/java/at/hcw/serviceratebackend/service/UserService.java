@@ -111,6 +111,11 @@ public class UserService {
     // --- UPDATE (Profil) ---
     @Transactional
     public UserResponse update(UUID id, UpdateUserRequest request) {
+        if (request.paypalMerchantId() != null || request.paypalEmail() != null) {
+            throw new IllegalArgumentException(
+                    "PayPal-Zahlungsempfänger dürfen nur über das verifizierte PayPal-Onboarding geändert werden."
+            );
+        }
         User user = findOrThrow(id);
 
         if (request.email() != null && !request.email().isBlank()) {
@@ -127,8 +132,6 @@ public class UserService {
         if (request.lastName() != null) user.setLastName(request.lastName());
         if (request.profileImageUrl() != null) user.setProfileImageUrl(trimOrNull(request.profileImageUrl()));
         if (request.payoutIban() != null) user.setPayoutIban(trimOrNull(request.payoutIban()));
-        if (request.paypalMerchantId() != null) user.setPaypalMerchantId(trimOrNull(request.paypalMerchantId()));
-        if (request.paypalEmail() != null) user.setPaypalEmail(trimOrNull(request.paypalEmail()));
         if (request.accountType() != null && !request.accountType().isBlank()) {
             user.setAccountType(normalizeAllowedPublicAccountType(request.accountType()));
         }

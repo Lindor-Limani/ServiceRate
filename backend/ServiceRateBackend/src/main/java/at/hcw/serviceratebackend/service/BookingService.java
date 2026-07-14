@@ -271,26 +271,6 @@ public class BookingService {
         return toResponse(saved, null, findReviewResponse(saved));
     }
 
-    public BookingResponse markPaid(UUID bookingId, String customerEmail) {
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
-        User customer = userRepository.findByEmail(customerEmail)
-                .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
-        requireAccountType(customer, "CUSTOMER");
-        if (!booking.getCustomer().getId().equals(customer.getId())) {
-            throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
-        }
-        booking.setPaymentStatus("PAID");
-        booking.setPaymentNote("Online-Zahlung durch Kunden bestätigt.");
-        applyMarketplaceAmounts(booking);
-        booking.setSettlementStatus("PLATFORM_COLLECTED_PENDING_PROVIDER_PAYOUT");
-        booking.setSettlementNote("Plattform hat die Zahlung erfasst und muss den Provider-Netto-Betrag auszahlen.");
-        booking.setPaidAt(OffsetDateTime.now());
-        Booking saved = bookingRepository.save(booking);
-        mailService.sendPaymentRecordedMail(saved);
-        return toResponse(saved, null, findReviewResponse(saved));
-    }
-
     public BookingResponse recordProviderPayment(UUID bookingId, RecordPaymentRequest request, String providerEmail) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));

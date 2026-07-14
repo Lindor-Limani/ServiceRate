@@ -119,6 +119,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-PAY-001 – Clientseitiges `mark-paid` entfernen
 
+- **Status:** COMPLETED
+- **Abschlussdatum:** 2026-07-14
+- **Geänderte Komponenten:** `BookingController`, `BookingService` und `SecurityConfig`.
+- **Hinzugefügte Tests:** HTTP-Regression für anonymen Zugriff sowie Customer, Provider und Admin; wiederholter Request; persistente Prüfung, dass `paymentStatus`, `settlementStatus`, `paidAt` und `paymentNote` unverändert bleiben.
+- **Verbleibende Einschränkungen:** Der konkrete Customer-Bypass ist vollständig entfernt. Die legitimen, aber noch nicht gesamthaft als Ledger/State-Machine abgesicherten Stripe-, PayPal- und Provider-Offline-Zahlungspfade bleiben Gegenstand von MR-PAY-003 und MR-PAY-005.
 - **Priorität/Kategorie:** P0 / Payment Security
 - **Beschreibung:** Ein Customer kann eine Buchung ohne PSP-Nachweis auf `PAID` setzen und Leistungsauslieferung freischalten.
 - **Technische Lösung:** Endpunkt entfernen; Zahlung ausschließlich aus verifiziertem, idempotentem Provider-Webhook bzw. serverseitiger Capture-Bestätigung buchen.
@@ -131,6 +136,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-PAY-002 – PayPal-Provideridentität serverseitig verifizieren
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-14 (allgemeiner Profil-Update-Pfad)
+- **Geänderte Komponenten:** `UserService` und Provider-Profil-Frontend.
+- **Hinzugefügte Tests:** Service-Tests für Merchant-ID, PayPal-E-Mail, beide/leere Felder und Request-Wiederholung; HTTP-Test für Self-/Fremdzugriff und persistente Unverändertheit; Regression für normale Profilfelder.
+- **Verbleibende Einschränkungen:** Der allgemeine `PUT /api/users/{id}`-Mass-Assignment-Pfad ist vollständig geschlossen. Das Gesamtticket bleibt offen, weil `/api/providers/me/paypal/onboarding-return` weiterhin Merchant-ID und Verifikationsflags aus Clientdaten übernimmt; State/Nonce, serverseitige Seller-Verifikation, Audit und Sandbox-/Produktionsabnahme fehlen weiterhin.
 - **Priorität/Kategorie:** P0 / Payment Routing
 - **Beschreibung:** Provider können Merchant-ID und Bestätigungsflags selbst setzen; Auszahlungen können umgeleitet werden.
 - **Technische Lösung:** OAuth/Partner-Referral-Callback mit State/Nonce und serverseitiger PayPal-Abfrage nutzen; Merchant-Zuordnung unveränderbar auditieren; manuelle Änderung nur als Vier-Augen-Adminprozess.

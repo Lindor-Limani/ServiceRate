@@ -186,6 +186,65 @@ class UserServiceTest {
                 .hasMessage("Ungültiger Benutzerstatus");
     }
 
+    @Test
+    void update_rejectsPayPalReceiverFieldsWithoutChangingExistingValues() {
+        UUID userId = UUID.randomUUID();
+        User user = user(userId, "provider@example.com", "PROVIDER");
+        user.setPaypalMerchantId("verified-merchant");
+        user.setPaypalEmail("verified@example.com");
+
+        UpdateUserRequest[] attempts = {
+                updateRequest("attacker-merchant", null, null),
+                updateRequest(null, "attacker@example.com", null),
+                updateRequest("attacker-merchant", "attacker@example.com", null),
+                updateRequest("", "", null),
+                updateRequest("attacker-merchant", null, null)
+        };
+
+        for (UpdateUserRequest attempt : attempts) {
+            assertThatThrownBy(() -> userService.update(userId, attempt))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("PayPal-Zahlungsempfänger dürfen nur über das verifizierte PayPal-Onboarding geändert werden.");
+        }
+
+        assertThat(user.getPaypalMerchantId()).isEqualTo("verified-merchant");
+        assertThat(user.getPaypalEmail()).isEqualTo("verified@example.com");
+        verify(userRepository, never()).findById(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void update_withoutPayPalFieldsStillUpdatesOrdinaryProfileData() {
+        UUID userId = UUID.randomUUID();
+        User user = user(userId, "provider@example.com", "PROVIDER");
+        user.setPaypalMerchantId("verified-merchant");
+        user.setPaypalEmail("verified@example.com");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(userRepository.save(user)).thenReturn(user);
+
+        var response = userService.update(userId, updateRequest(null, null, "Neuer Name"));
+
+        assertThat(response.firstName()).isEqualTo("Neuer Name");
+        assertThat(user.getPaypalMerchantId()).isEqualTo("verified-merchant");
+        assertThat(user.getPaypalEmail()).isEqualTo("verified@example.com");
+        verify(userRepository).save(user);
+    }
+
+    private UpdateUserRequest updateRequest(String paypalMerchantId, String paypalEmail, String firstName) {
+        return new UpdateUserRequest(
+                null,
+                null,
+                firstName,
+                null,
+                null,
+                null,
+                paypalMerchantId,
+                paypalEmail,
+                null,
+                null
+        );
+    }
+
     private User verifiedCandidate(String accountType) {
         User user = user(UUID.randomUUID(), "user@example.com", accountType);
         user.setEmailVerified(false);

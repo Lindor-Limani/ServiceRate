@@ -97,13 +97,6 @@ public class BookingController {
         return ResponseEntity.ok(bookingService.createCheckout(id, request, (String) authentication.getPrincipal()));
     }
 
-    @PostMapping("/{id}/mark-paid")
-    public ResponseEntity<BookingResponse> markPaid(
-            @PathVariable("id") java.util.UUID id,
-            Authentication authentication) {
-        return ResponseEntity.ok(bookingService.markPaid(id, (String) authentication.getPrincipal()));
-    }
-
     @PostMapping("/{id}/paypal/capture")
     public ResponseEntity<BookingResponse> capturePayPalPayment(
             @PathVariable("id") java.util.UUID id,

@@ -94,6 +94,18 @@ Die Einstufung beschreibt die konkrete Anwendung, nicht nur die theoretische Sch
 
 Das Finding wird erst nach manueller Betriebsverifikation geschlossen: Ein neuer produktiver Schlüssel muss im Secret Store erzeugt und ausgerollt, der bekannte alte Schlüssel entfernt, alle alten Tokens müssen nachweislich ungültig und der Rotationsablauf muss in der Zielumgebung geprüft sein. Bis dahin bleibt der Launch-Blocker aktiv.
 
+### Statusaktualisierung SR-F003 / FINDING-003 – 2026-07-14
+
+**Status: COMPLETED.** `POST /api/bookings/{id}/mark-paid` wurde aus `BookingController` entfernt und die zugehörige `BookingService.markPaid`-Methode gelöscht. `SecurityConfig` sperrt den früheren Pfad zusätzlich mit `denyAll`, sodass auch eine versehentliche spätere Controller-Wiedereinführung nicht ohne bewusste Security-Änderung erreichbar wäre. Ein HTTP-Regressionstest weist für anonym, Customer, Provider und Admin sowie bei Wiederholung nach, dass jeder Request abgewiesen wird und Zahlungs-/Settlementstatus, `paidAt` und Zahlungsnotiz unverändert bleiben.
+
+Die Ursache dieses Findings ist damit im tatsächlichen Anwendungspfad behoben und ohne bekannte Umgehung geschlossen. Andere Payment-Pfade und das fehlende übergreifende Ledger bleiben separat unter SR-F009/SR-F017 offen.
+
+### Statusaktualisierung SR-F004 / FINDING-004 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** Der allgemeine Profilpfad `PUT /api/users/{id}` lehnt `paypalMerchantId` und `paypalEmail` nun vor jeder Entitätsänderung explizit ab. Das Provider-Frontend sendet diese Felder beim normalen Profilspeichern nicht mehr. Service- und HTTP-Regressionstests decken einzelne, kombinierte, leere und wiederholte Manipulationsversuche, Fremdzugriff, persistente Unverändertheit sowie normale Profiländerungen ab.
+
+Das Finding bleibt Critical und Launch-Blocker: Der separate Endpunkt `/api/providers/me/paypal/onboarding-return` vertraut weiterhin clientgelieferten Merchant-/Permission-/E-Mail-Bestätigungswerten. Bis auch dieser Pfad ausschließlich serververifizierte PayPal-Daten akzeptiert und Checkout/Audit geprüft sind, besteht weiterhin eine bekannte Umgehungsmöglichkeit.
+
 ### Statusaktualisierung SR-F002 / FINDING-002 – 2026-07-14
 
 **Status: PARTIALLY COMPLETED.** `PUT /api/services/{id}` und `DELETE /api/services/{id}` sind nun explizit auf die Provider-Rolle begrenzt. Der Controller leitet ausschließlich die Identität aus dem authentifizierten Principal weiter; der Service lädt den aktiven Provider und prüft vor Update oder Delete die Provider-ID des Angebots. HTTP- und Service-Regressionstests decken Owner, fremden Provider, Customer, anonymen Zugriff, gesperrten Provider und fehlende Ressource ab.

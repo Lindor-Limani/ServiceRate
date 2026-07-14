@@ -437,9 +437,7 @@ async function saveProviderProfile() {
     firstName: document.getElementById('providerSettingsFirstName').value.trim(),
     lastName: document.getElementById('providerSettingsLastName').value.trim(),
     profileImageUrl: document.getElementById('providerSettingsProfileImage').value.trim(),
-    payoutIban: document.getElementById('providerPayoutIban').value.trim(),
-    paypalMerchantId: document.getElementById('providerPaypalMerchantId').value.trim(),
-    paypalEmail: document.getElementById('providerPaypalEmail').value.trim()
+    payoutIban: document.getElementById('providerPayoutIban').value.trim()
   };
   try {
     const user = await fetchAPI(`/users/${userId}`, 'PUT', payload, 'provider_jwt');

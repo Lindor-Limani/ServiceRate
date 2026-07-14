@@ -27,8 +27,8 @@ Ein einziges zutreffendes Kriterium erzwingt **NO-GO**:
 
 - [ ] **SR-F001:** alter JWT-Key rotiert, sämtliche Tokens invalidiert, Key extern gespeichert; Rollen serverseitig; Forge-/Rotationstests grün. *(Code und Regressionstests am 2026-07-14 abgeschlossen; Gate bleibt bis zur nachgewiesenen Secret-Store-Rotation und Invalidierung in der Zielumgebung offen.)*
 - [ ] **SR-F002:** Service-Update/-Delete nur durch Owner-Provider bzw. explizit auditierte Admin-Policy; Rollenmatrix grün. *(Ownership und Rollenmatrix am 2026-07-14 umgesetzt und getestet; Gate bleibt bis zur Behebung des JWT-Identitätsbypasses SR-F001 offen.)*
-- [ ] **SR-F003:** `mark-paid` für Clients entfernt; bezahlter Zustand ausschließlich aus verifiziertem PSP-Ereignis.
-- [ ] **SR-F004:** PayPal-Merchant-Zuordnung ausschließlich serverseitig verifiziert; State/Nonce und Änderungs-Audit grün.
+- [ ] **SR-F003:** `mark-paid` für Clients entfernt; bezahlter Zustand ausschließlich aus verifiziertem PSP-Ereignis. *(Der konkrete Client-Bypass wurde am 2026-07-14 entfernt und regressionsgetestet; das Gate bleibt wegen der noch offenen übergreifenden Ledger-/Webhook-State-Machine MR-PAY-003 unmarkiert.)*
+- [ ] **SR-F004:** PayPal-Merchant-Zuordnung ausschließlich serverseitig verifiziert; State/Nonce und Änderungs-Audit grün. *(Direkte Änderung über `PUT /api/users/{id}` am 2026-07-14 gesperrt und getestet; clientvertrauender Onboarding-Return bleibt offen.)*
 - [ ] **SR-F007:** alle Stored-/DOM-XSS-Sinks behoben; keine Tokens in Web Storage/URL; CSP ohne unsichere notwendige Ausnahme.
 - [ ] **SR-F008/SR-F011:** Buchungszustandsmaschine und Slotreservierung sind atomar; Race-Suite bestanden.
 - [ ] **SR-F009/SR-F010/SR-F017:** Ledger, Idempotenz, Währung, Preis-Snapshot und Reconciliation fachlich/technisch abgenommen.

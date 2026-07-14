@@ -1,8 +1,10 @@
 package at.hcw.serviceratebackend.security;
 
 import at.hcw.serviceratebackend.config.JwtUtil;
+import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +17,8 @@ import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +48,9 @@ class SecurityIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
     private ServiceOfferingRepository serviceOfferingRepository;
 
     @Autowired
@@ -55,6 +62,7 @@ class SecurityIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        bookingRepository.deleteAll();
         serviceOfferingRepository.deleteAll();
         userRepository.deleteAll();
         customer = saveUser("customer@example.com", "CUSTOMER", "ACTIVE");
@@ -202,6 +210,41 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void providerProfileUpdateCannotReplaceVerifiedPayPalReceiver() throws Exception {
+        provider.setPaypalMerchantId("verified-merchant");
+        provider.setPaypalEmail("verified@example.com");
+        userRepository.saveAndFlush(provider);
+
+        mockMvc.perform(put("/api/users/{id}", provider.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paypalMerchantId": "attacker-merchant",
+                                  "paypalEmail": "attacker@example.com"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "PayPal-Zahlungsempfänger dürfen nur über das verifizierte PayPal-Onboarding geändert werden."
+                ));
+
+        mockMvc.perform(put("/api/users/{id}", provider.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "paypalMerchantId": "attacker-merchant"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        User unchanged = userRepository.findById(provider.getId()).orElseThrow();
+        assertThat(unchanged.getPaypalMerchantId()).isEqualTo("verified-merchant");
+        assertThat(unchanged.getPaypalEmail()).isEqualTo("verified@example.com");
+    }
+
+    @Test
     void customerCannotPatchAdminStatusEvenWithDirectApiCall() throws Exception {
         mockMvc.perform(patch("/api/admin/users/{id}/status", provider.getId())
                         .header(HttpHeaders.AUTHORIZATION, bearer(customer))
@@ -220,6 +263,34 @@ class SecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"type\":\"checkout.session.completed\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void removedMarkPaidRouteRejectsEveryRoleAndNeverChangesPaymentState() throws Exception {
+        ServiceOffering offering = saveService(provider, "Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+
+        mockMvc.perform(post("/api/bookings/{id}/mark-paid", booking.getId()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/mark-paid", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isForbidden());
+        // Wiederholung desselben Requests darf ebenfalls keinen Seiteneffekt erzeugen.
+        mockMvc.perform(post("/api/bookings/{id}/mark-paid", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/mark-paid", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/mark-paid", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isForbidden());
+
+        Booking unchanged = bookingRepository.findById(booking.getId()).orElseThrow();
+        assertThat(unchanged.getPaymentStatus()).isEqualTo("UNPAID");
+        assertThat(unchanged.getSettlementStatus()).isEqualTo("NOT_READY");
+        assertThat(unchanged.getPaidAt()).isNull();
+        assertThat(unchanged.getPaymentNote()).isNull();
     }
 
     @Test
@@ -334,6 +405,19 @@ class SecurityIntegrationTest {
         offering.setDeliverableType("ON_SITE");
         offering.setStatus("ACTIVE");
         return serviceOfferingRepository.saveAndFlush(offering);
+    }
+
+    private Booking saveUnpaidBooking(User bookingCustomer, ServiceOffering offering) {
+        Booking booking = new Booking();
+        booking.setId(UUID.randomUUID());
+        booking.setCustomer(bookingCustomer);
+        booking.setServiceOffering(offering);
+        booking.setServiceDate(OffsetDateTime.now().plusDays(1));
+        booking.setBookingDate(LocalDate.now().plusDays(1));
+        booking.setStatus("ACCEPTED");
+        booking.setPaymentStatus("UNPAID");
+        booking.setSettlementStatus("NOT_READY");
+        return bookingRepository.saveAndFlush(booking);
     }
 
     private String updateJson(String title) {
