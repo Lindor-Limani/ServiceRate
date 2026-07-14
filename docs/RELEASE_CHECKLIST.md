@@ -34,7 +34,7 @@ Ein einziges zutreffendes Kriterium erzwingt **NO-GO**:
 - [ ] **SR-F007:** alle Stored-/DOM-XSS-Sinks behoben; keine Tokens in Web Storage/URL; CSP ohne unsichere notwendige Ausnahme. *(Kategorie-Allowlist und Escaping aller bekannten Kategorie-Sinks am 2026-07-14 umgesetzt und auf Desktop/Mobile getestet; übrige Sinks, Tokenhaltung und CSP bleiben offen.)*
 - [ ] **SR-F008/SR-F011:** Buchungszustandsmaschine und Slotreservierung sind atomar; Race-Suite bestanden.
 - [ ] **SR-F009/SR-F010/SR-F017:** Ledger, Idempotenz, Währung, Preis-Snapshot und Reconciliation fachlich/technisch abgenommen.
-- [ ] **SR-F015:** finale SCA ohne anwendbare Critical/High-Befunde; SBOM archiviert.
+- [ ] **SR-F015:** finale SCA ohne anwendbare Critical/High-Befunde; SBOM archiviert. *(Framework-Runtime am 2026-07-14 auf Boot 4.0.7, Security 7.0.6, Jackson 3.1.4/2.21.5, Tomcat 11.0.24 und Logback 1.5.37 aktualisiert und per Gradle-Gate fixiert; reproduzierbare SBOM, kontinuierliches CI-SCA und Scan des finalen Artefakts bleiben offen.)*
 - [ ] **SR-F018:** versionierte Migrationen und sichere Lösch-/Archivierungssemantik im Staging bewiesen.
 - [ ] **SR-F019:** produktionssichere Konfiguration und nicht umgehbare CI/CD-Gates aktiv.
 

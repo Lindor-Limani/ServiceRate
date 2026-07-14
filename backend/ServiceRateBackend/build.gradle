@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0.5'
+	id 'org.springframework.boot' version '4.0.7'
 	id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -12,6 +12,12 @@ java {
 	toolchain {
 		languageVersion = JavaLanguageVersion.of(21)
 	}
+}
+
+ext {
+	set('tomcat.version', '11.0.24')
+	set('logback.version', '1.5.37')
+	set('jackson-2-bom.version', '2.21.5')
 }
 
 repositories {
@@ -55,4 +61,37 @@ tasks.named('test') {
 	new java.security.SecureRandom().nextBytes(jwtTestSecret)
 	systemProperty 'security.jwt.secret-base64', java.util.Base64.encoder.encodeToString(jwtTestSecret)
 	systemProperty 'security.jwt.key-id', 'test-' + java.util.UUID.randomUUID()
+}
+
+tasks.register('verifySecurityPatchedRuntime') {
+	group = 'verification'
+	description = 'Fails when security-patched framework runtime versions regress.'
+	doLast {
+		def expectedVersions = [
+			'org.springframework.boot:spring-boot'                  : '4.0.7',
+			'org.springframework.security:spring-security-core'    : '7.0.6',
+			'org.apache.tomcat.embed:tomcat-embed-core'             : '11.0.24',
+			'tools.jackson.core:jackson-databind'                   : '3.1.4',
+			'com.fasterxml.jackson.core:jackson-databind'           : '2.21.5',
+			'ch.qos.logback:logback-classic'                        : '1.5.37'
+		]
+		def resolvedVersions = [:]
+		def collectDependency
+		collectDependency = { dependency ->
+			resolvedVersions["${dependency.moduleGroup}:${dependency.moduleName}"] = dependency.moduleVersion
+			dependency.children.each(collectDependency)
+		}
+		configurations.runtimeClasspath.resolvedConfiguration.firstLevelModuleDependencies.each(collectDependency)
+
+		expectedVersions.each { coordinate, expectedVersion ->
+			def resolvedVersion = resolvedVersions[coordinate]
+			if (resolvedVersion != expectedVersion) {
+				throw new GradleException("${coordinate} must resolve to ${expectedVersion}, but resolved to ${resolvedVersion ?: 'missing'}")
+			}
+		}
+	}
+}
+
+tasks.named('check') {
+	dependsOn tasks.named('verifySecurityPatchedRuntime')
 }

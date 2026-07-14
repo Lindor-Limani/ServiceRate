@@ -67,6 +67,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-SEC-004 – Kritische/hohe Laufzeit-Abhängigkeiten aktualisieren
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-14 (Framework-Runtime und automatisches Versions-Gate)
+- **Geänderte Komponenten:** Gradle-Build mit Spring Boot 4.0.7, Spring Security 7.0.6, Jackson 3.1.4/2.21.5, Tomcat 11.0.24 und Logback 1.5.37.
+- **Hinzugefügte Tests:** `verifySecurityPatchedRuntime` prüft den tatsächlich aufgelösten Runtime-Classpath auf die festgelegten Patchversionen und ist an den Gradle-`check`-Lifecycle gebunden; vollständige Backend-Regression und Build werden zusätzlich ausgeführt.
+- **Verbleibende Einschränkungen:** Die im Audit konkret benannten verwundbaren Frameworkversionen sind aus dem Runtime-Classpath entfernt. Ein erneuter OSV-Batchscan über 104 ausgewählte Maven-Komponenten meldet keine anwendbare Critical-/High-Schwachstelle; der einzige zurückgelieferte Datensatz GHSA-5jmj-h7xm-6q6v nennt Jackson 2.21.5, obwohl die veröffentlichte betroffene Versionsspanne bei `< 2.21.5` endet. Das Gesamtticket bleibt offen, bis eine reproduzierbare SBOM, kontinuierliches SCA im nicht umgehbaren CI-Gate, Scan des finalen Artefakts und dokumentierte Advisory-Ausnahmen vorhanden sind.
 - **Priorität/Kategorie:** P0 / Supply Chain
 - **Beschreibung:** Der OSV-Abgleich meldet 34 Datensätze, darunter kritische Treffer für Tomcat und Spring Boot; Anwendbarkeit ist pro CVE zu bestätigen.
 - **Technische Lösung:** Spring Boot mindestens auf eine fehlerbereinigte 4.0.x-Version und transitiv Tomcat/Security/Jackson auf gepatchte Versionen aktualisieren; Dependency Locking, SBOM und kontinuierliches Scanning einführen.

@@ -130,6 +130,12 @@ Der bestätigte Kategorie-XSS-Pfad ist damit ohne bekannte Umgehung geschlossen.
 
 Das Finding wird noch nicht als geschlossen markiert: Die unmittelbare fehlende Objektprüfung ist behoben, aber FINDING-001 erlaubt weiterhin die Fälschung einer Provideridentität über den bekannten JWT-Schlüssel. Erst nach Behebung von FINDING-001 und erneuter kombinierter Security-Verifikation besteht keine bekannte Umgehungsmöglichkeit mehr.
 
+### Statusaktualisierung SR-F015 / FINDING-015 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** Der Runtime-Stack wurde von Spring Boot 4.0.5 auf 4.0.7 aktualisiert. Damit werden Spring Security 7.0.6 sowie Jackson 3.1.4 aufgelöst; ergänzende BOM-Overrides heben Tomcat auf 11.0.24, Logback auf 1.5.37 und den noch transitiv benötigten Jackson-2-Zweig auf 2.21.5. Ein an `check` gebundener Gradle-Test bricht den Build ab, sobald eine dieser tatsächlich aufgelösten Versionen abweicht.
+
+Der erneute OSV-Batchscan über 104 ausgewählte Maven-Komponenten liefert keine anwendbare Critical-/High-Meldung. OSV gibt noch GHSA-5jmj-h7xm-6q6v für Jackson 2.21.5 zurück; die veröffentlichte Advisory-Grenze weist jedoch ausschließlich Versionen `< 2.21.5` als betroffen aus. Die im ursprünglichen Audit konkret genannten verwundbaren Frameworkstände sind damit ersetzt. SR-F015 bleibt High und Launch-Blocker, bis eine reproduzierbare SBOM, kontinuierliches SCA als nicht umgehbares CI-Gate, ein Scan des finalen Releaseartefakts und nachvollziehbar freigegebene Advisory-Bewertungen vorliegen.
+
 ## Betroffene Angriffsflächen
 
 ### Authentifizierung und Session
