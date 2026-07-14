@@ -31,7 +31,7 @@ Ein einziges zutreffendes Kriterium erzwingt **NO-GO**:
 - [ ] **SR-F004:** PayPal-Merchant-Zuordnung ausschließlich serverseitig verifiziert; State/Nonce und Änderungs-Audit grün. *(Direkte Änderung über `PUT /api/users/{id}` am 2026-07-14 gesperrt und getestet; clientvertrauender Onboarding-Return bleibt offen.)*
 - [ ] **SR-F005:** Buchungslisten ausschließlich principalbasiert und rollenminimal; Adminzugriff getrennt auditiert. *(UUID-basierte Customer-/Provider-Listen am 2026-07-14 entfernt, explizit gesperrt und mit Mehrnutzer-Matrix getestet; DTO-Minimierung und Admin-Audit bleiben offen.)*
 - [ ] **SR-F006:** Reviews ausschließlich durch den authentifizierten Customer der abgeschlossenen Buchung und genau einmal erzeugbar. *(Rollen- und Ownership-Prüfung am 2026-07-14 umgesetzt und getestet; parallele Exactly-once-/DB-Constraint-Verifikation bleibt offen.)*
-- [ ] **SR-F007:** alle Stored-/DOM-XSS-Sinks behoben; keine Tokens in Web Storage/URL; CSP ohne unsichere notwendige Ausnahme.
+- [ ] **SR-F007:** alle Stored-/DOM-XSS-Sinks behoben; keine Tokens in Web Storage/URL; CSP ohne unsichere notwendige Ausnahme. *(Kategorie-Allowlist und Escaping aller bekannten Kategorie-Sinks am 2026-07-14 umgesetzt und auf Desktop/Mobile getestet; übrige Sinks, Tokenhaltung und CSP bleiben offen.)*
 - [ ] **SR-F008/SR-F011:** Buchungszustandsmaschine und Slotreservierung sind atomar; Race-Suite bestanden.
 - [ ] **SR-F009/SR-F010/SR-F017:** Ledger, Idempotenz, Währung, Preis-Snapshot und Reconciliation fachlich/technisch abgenommen.
 - [ ] **SR-F015:** finale SCA ohne anwendbare Critical/High-Befunde; SBOM archiviert.

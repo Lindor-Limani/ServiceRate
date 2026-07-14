@@ -33,7 +33,7 @@ function renderServiceDetail() {
       <div class="service-detail-main">
         ${catImage(s.category, s.imageUrl)}
         ${renderServiceGallery(s.imageUrls)}
-        <div class="service-detail-kicker">${CAT_LABELS[s.category] || s.category}</div>
+        <div class="service-detail-kicker">${esc(CAT_LABELS[s.category] || s.category)}</div>
         <h1>${esc(s.title)}</h1>
         <p class="service-detail-desc">${esc(s.description)}</p>
         ${trustBadge(s.trustScore)}

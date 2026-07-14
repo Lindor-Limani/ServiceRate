@@ -38,6 +38,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-SEC-002 – Stored XSS schließen und Browser-Sicherheitsmodell härten
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-14 (Service-Kategorie)
+- **Geänderte Komponenten:** `ServiceOfferingService` sowie Kategorieausgaben in Customer-App, Service-Detail, Provider-Profil und Provider-Dashboard.
+- **Hinzugefügte Tests:** Service-Regressionen für erlaubte/normalisierte, leere, unbekannte und XSS-Kategorien bei Create/Update; HTTP-Test mit wiederholtem direktem XSS-Update und Persistenzprüfung; Playwright-Test auf Desktop und Mobile für Listen- und Detailausgabe als reinen Text.
+- **Verbleibende Einschränkungen:** Der konkrete Stored-XSS-Vektor über `ServiceOffering.category` ist serverseitig und an allen bekannten Kategorie-Sinks geschlossen. Das Gesamtticket bleibt offen: weitere Freitext-/URL-/Attribut-Sinks müssen vollständig inventarisiert werden, JWTs liegen weiterhin in Web Storage beziehungsweise beim SSE in URLs, und CSP sowie eine HttpOnly-/BFF-Sessionarchitektur fehlen.
 - **Priorität/Kategorie:** P0 / Application Security
 - **Beschreibung:** Nicht vertrauenswürdige Kategorie- und Profildaten gelangen über `innerHTML` in mehrere Oberflächen; Tokens liegen in `localStorage`.
 - **Technische Lösung:** DOM-Ausgabe ausschließlich kontextgerecht escapen bzw. `textContent` nutzen, Kategorien serverseitig erlaubnislisten, starke CSP ohne Inline-Ausnahmen setzen und Authentifizierung auf sichere HttpOnly/Secure/SameSite-Cookies oder gleichwertige BFF-Sessions migrieren.

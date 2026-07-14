@@ -118,6 +118,12 @@ Der konkrete UUID-IDOR und damit der unmittelbare Abfluss fremder Buchungslisten
 
 Der konkrete Identitätsmissbrauch ist im aktiven Anwendungspfad behoben. Das Finding bleibt bis zur nachgewiesenen Exactly-once-Garantie bei parallelen Review-Requests und zur Verifikation eines eindeutigen Datenbank-Constraints offen; diese Nebenläufigkeits-/Migrationsarbeit war nicht Teil des abgegrenzten Durchlaufs. Die separaten Booking-IDORs aus SR-F005 bleiben vollständig offen.
 
+### Statusaktualisierung SR-F007 / FINDING-007 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** `ServiceOffering.category` wird bei Create und Update nun zentral gegen eine feste serverseitige Allowlist validiert und normalisiert. Null-, Leer-, unbekannte und HTML-/Scriptwerte werden vor externem PLZ-Aufruf beziehungsweise vor Entity-Mutation abgewiesen. Alle bekannten Kategorieausgaben in Customer-App, Service-Detail, Provider-Profil und Provider-Dashboard escapen zusätzlich den Fallbackwert, sodass auch bereits persistierte oder anderweitig eingespielte Altwerte nur als Text erscheinen. Service-, HTTP- und Playwright-Regressionen bestätigen Ablehnung, persistente Unverändertheit sowie sichere Listen- und Detaildarstellung auf Desktop und Mobile.
+
+Der bestätigte Kategorie-XSS-Pfad ist damit ohne bekannte Umgehung geschlossen. Das Finding bleibt High und Launch-Blocker, weil noch keine vollständige Inventarisierung aller DOM-/Attribut-/URL-Sinks vorliegt, JWTs weiterhin in `localStorage` und beim SSE in der URL verwendet werden und eine durchgesetzte CSP beziehungsweise sichere Cookie-/BFF-Sessionarchitektur fehlt.
+
 ### Statusaktualisierung SR-F002 / FINDING-002 – 2026-07-14
 
 **Status: PARTIALLY COMPLETED.** `PUT /api/services/{id}` und `DELETE /api/services/{id}` sind nun explizit auf die Provider-Rolle begrenzt. Der Controller leitet ausschließlich die Identität aus dem authentifizierten Principal weiter; der Service lädt den aktiven Provider und prüft vor Update oder Delete die Provider-ID des Angebots. HTTP- und Service-Regressionstests decken Owner, fremden Provider, Customer, anonymen Zugriff, gesperrten Provider und fehlende Ressource ab.

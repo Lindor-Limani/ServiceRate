@@ -30,12 +30,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class ServiceOfferingService {
+
+    private static final Set<String> ALLOWED_CATEGORIES = Set.of(
+            "CLEANING",
+            "PLUMBING",
+            "ELECTRICAL",
+            "PAINTING",
+            "GARDENING",
+            "OTHER",
+            "REPAIR"
+    );
 
     private final ServiceOfferingRepository serviceRepository;
     private final UserRepository userRepository;
@@ -67,6 +79,8 @@ public class ServiceOfferingService {
             throw new IllegalArgumentException("Bitte verifiziere zuerst deine E-Mail-Adresse.");
         }
 
+        String category = normalizeCategory(request.category());
+
         // PLZ über die externe Zippopotam.us-API in einen Ortsnamen auflösen (400, falls ungültig)
         String location = locationValidationService.resolveCityName(request.zipCode());
 
@@ -75,7 +89,7 @@ public class ServiceOfferingService {
         service.setProvider(provider);
         service.setTitle(request.title());
         service.setDescription(request.description());
-        service.setCategory(request.category());
+        service.setCategory(category);
         service.setPrice(request.price());
         service.setEstimatedHours(request.estimatedHours());
         List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
@@ -171,10 +185,11 @@ public class ServiceOfferingService {
     ) {
         User provider = requireActiveProvider(providerEmail);
         ServiceOffering service = requireOwnedService(id, provider);
+        String category = normalizeCategory(request.category());
 
         service.setTitle(request.title());
         service.setDescription(request.description());
-        service.setCategory(request.category());
+        service.setCategory(category);
         service.setPrice(request.price());
         service.setEstimatedHours(request.estimatedHours());
         List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
@@ -291,6 +306,17 @@ public class ServiceOfferingService {
                 : deliverableType.trim().toUpperCase();
         if (!normalized.equals("ON_SITE") && !normalized.equals("DIGITAL") && !normalized.equals("HYBRID")) {
             throw new IllegalArgumentException("Ungültige Lieferart.");
+        }
+        return normalized;
+    }
+
+    private String normalizeCategory(String category) {
+        if (category == null || category.isBlank()) {
+            throw new IllegalArgumentException("Ungültige Service-Kategorie.");
+        }
+        String normalized = category.trim().toUpperCase(Locale.ROOT);
+        if (!ALLOWED_CATEGORIES.contains(normalized)) {
+            throw new IllegalArgumentException("Ungültige Service-Kategorie.");
         }
         return normalized;
     }

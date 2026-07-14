@@ -489,6 +489,30 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void providerCannotPersistXssCategoryThroughDirectApiUpdate() throws Exception {
+        ServiceOffering offering = saveService(provider, "Original");
+        String payload = updateJson("Manipuliert", "<img src=x onerror=alert(1)>");
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Ungültige Service-Kategorie."));
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Ungültige Service-Kategorie."));
+
+        ServiceOffering unchanged = serviceOfferingRepository.findById(offering.getId()).orElseThrow();
+        assertThat(unchanged.getTitle()).isEqualTo("Original");
+        assertThat(unchanged.getCategory()).isEqualTo("REPAIR");
+    }
+
+    @Test
     void customerCannotUpdateOrDeleteService() throws Exception {
         ServiceOffering offering = saveService(provider, "Original");
 
@@ -575,17 +599,21 @@ class SecurityIntegrationTest {
     }
 
     private String updateJson(String title) {
+        return updateJson(title, "REPAIR");
+    }
+
+    private String updateJson(String title, String category) {
         return """
                 {
                   "title": "%s",
                   "description": "Aktualisierte Beschreibung",
-                  "category": "REPAIR",
+                  "category": "%s",
                   "price": 90.0,
                   "estimatedHours": 3.0,
                   "imageUrls": [],
                   "deliverableType": "ON_SITE"
                 }
-                """.formatted(title);
+                """.formatted(title, category);
     }
 
     private String reviewJson(UUID bookingId, int rating, String comment) {

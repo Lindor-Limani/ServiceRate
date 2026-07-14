@@ -245,7 +245,7 @@ function renderServices() {
       ${catImage(s.category, s.imageUrl)}
       <div class="list-card-body">
         <div class="card-top">
-          <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+          <span class="cat-badge">${esc(CAT_LABELS[s.category] || s.category)}</span>
           <span class="card-price">
             €${parseFloat(s.price).toFixed(2)}<small>/Std</small>
             <span class="list-rating-inline">${ratingHtml(s)}</span>
@@ -278,7 +278,7 @@ function renderCustomerServiceListCard(s) {
       <div class="sr-list-body">
         <div class="sr-list-top">
           <div class="sr-list-main">
-            <span class="cat-badge">${CAT_LABELS[s.category] || s.category}</span>
+            <span class="cat-badge">${esc(CAT_LABELS[s.category] || s.category)}</span>
             <div class="sr-list-title">${esc(s.title)}</div>
             <div class="sr-list-desc">${esc(s.description)}</div>
             <div class="sr-list-meta">${serviceMetaLine(s)}</div>
@@ -453,7 +453,7 @@ async function openServiceModal(id) {
     </div>
     <div class="modal-meta">
       <div class="meta-item">
-        <span class="meta-label">Kategorie</span>${CAT_LABELS[s.category] || s.category}
+        <span class="meta-label">Kategorie</span>${esc(CAT_LABELS[s.category] || s.category)}
       </div>
       <div class="meta-item">
         <span class="meta-label">Anbieter</span>${esc(s.providerName || '–')}

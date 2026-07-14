@@ -73,7 +73,7 @@ class ServiceOfferingServiceTest {
                 null,
                 "Bad sanieren",
                 "Komplettservice",
-                "REPAIR",
+                " plumbing ",
                 80.0,
                 2.5,
                 " https://fallback.example/image.jpg ",
@@ -87,6 +87,7 @@ class ServiceOfferingServiceTest {
         ServiceOffering saved = captor.getValue();
 
         assertThat(saved.getProvider()).isSameAs(provider);
+        assertThat(saved.getCategory()).isEqualTo("PLUMBING");
         assertThat(saved.getLocation()).isEqualTo("Wien, Innere Stadt");
         assertThat(saved.getStatus()).isEqualTo("ACTIVE");
         assertThat(saved.getDeliverableType()).isEqualTo("DIGITAL");
@@ -184,6 +185,33 @@ class ServiceOfferingServiceTest {
     }
 
     @Test
+    void createForProviderEmail_rejectsInvalidCategoriesBeforeExternalZipLookup() {
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
+
+        for (String category : new String[]{null, "", "   ", "UNKNOWN", "<img src=x onerror=alert(1)>"}) {
+            CreateServiceRequest request = new CreateServiceRequest(
+                    null,
+                    "Service",
+                    "Beschreibung",
+                    category,
+                    50.0,
+                    1.0,
+                    null,
+                    List.of(),
+                    "ON_SITE",
+                    "1010"
+            );
+
+            assertThatThrownBy(() -> service.createForProviderEmail(request, "provider@example.com"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Ungültige Service-Kategorie.");
+        }
+
+        verify(locationValidationService, never()).resolveCityName(any());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
     void createForProviderEmail_rejectsInvalidDeliverableType() {
         when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
         when(locationValidationService.resolveCityName("1010")).thenReturn("Wien");
@@ -274,6 +302,26 @@ class ServiceOfferingServiceTest {
     }
 
     @Test
+    void updateServiceForProviderEmail_rejectsXssCategoryWithoutMutatingService() {
+        User provider = provider(true);
+        ServiceOffering offering = offering(provider);
+        when(userRepository.findByEmail(provider.getEmail())).thenReturn(Optional.of(provider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        assertThatThrownBy(() -> service.updateServiceForProviderEmail(
+                offering.getId(),
+                updateRequest("Manipulierter Titel", "<svg onload=alert(1)></svg>"),
+                provider.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Ungültige Service-Kategorie.");
+
+        assertThat(offering.getTitle()).isEqualTo("Bad sanieren");
+        assertThat(offering.getCategory()).isEqualTo("REPAIR");
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
     void deleteForProviderEmail_deletesOwnedService() {
         User provider = provider(true);
         ServiceOffering offering = offering(provider);
@@ -350,10 +398,14 @@ class ServiceOfferingServiceTest {
     }
 
     private UpdateServiceRequest updateRequest(String title) {
+        return updateRequest(title, "REPAIR");
+    }
+
+    private UpdateServiceRequest updateRequest(String title, String category) {
         return new UpdateServiceRequest(
                 title,
                 "Aktualisierte Beschreibung",
-                "REPAIR",
+                category,
                 90.0,
                 3.0,
                 null,

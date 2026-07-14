@@ -1,5 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
+const categoryPayload = '<svg onload=alert("category-xss")></svg>';
+
 const service = {
   id: '11111111-1111-4111-8111-111111111111',
   providerId: '22222222-2222-4222-8222-222222222222',
@@ -7,7 +9,7 @@ const service = {
   providerProfileImageUrl: null,
   title: 'Rohr reparieren',
   description: '<img src=x onerror=alert(1)> Bad und Kueche professionell reparieren',
-  category: 'PLUMBING',
+  category: categoryPayload,
   price: 80,
   estimatedHours: 2,
   imageUrl: '',
@@ -137,11 +139,18 @@ test('customer can search services and XSS-like service text is rendered as text
   await expect(page.getByRole('heading', { name: /Finde den richtigen/i })).toBeVisible();
   await expect(page.getByText('Rohr reparieren')).toBeVisible();
   await expect(page.getByText('<img src=x onerror=alert(1)> Bad und Kueche professionell reparieren')).toBeVisible();
+  await expect(page.getByText(categoryPayload, { exact: true }).first()).toBeVisible();
   await expect(page.locator('img[src="x"]')).toHaveCount(0);
+  await expect(page.locator('svg[onload]')).toHaveCount(0);
 
   await page.getByPlaceholder(/Was brauchst du/i).fill('Rohr');
   await page.getByRole('button', { name: 'Suchen' }).click();
   await expect(page.getByText('1 gefunden')).toBeVisible();
+
+  await page.getByText('Rohr reparieren').first().click();
+  await page.waitForURL(/service-detail\.html/);
+  await expect(page.getByText(categoryPayload, { exact: true })).toBeVisible();
+  await expect(page.locator('svg[onload]')).toHaveCount(0);
 });
 
 test('registration and invalid login show understandable user feedback', async ({ page }) => {
