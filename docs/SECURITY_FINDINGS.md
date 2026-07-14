@@ -106,6 +106,12 @@ Die Ursache dieses Findings ist damit im tatsächlichen Anwendungspfad behoben u
 
 Das Finding bleibt Critical und Launch-Blocker: Der separate Endpunkt `/api/providers/me/paypal/onboarding-return` vertraut weiterhin clientgelieferten Merchant-/Permission-/E-Mail-Bestätigungswerten. Bis auch dieser Pfad ausschließlich serververifizierte PayPal-Daten akzeptiert und Checkout/Audit geprüft sind, besteht weiterhin eine bekannte Umgehungsmöglichkeit.
 
+### Statusaktualisierung SR-F006 / FINDING-006 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** `POST /api/reviews` ist nun auf die Customer-Rolle begrenzt. Der Controller leitet ausschließlich den authentifizierten Principal an den Service weiter; der Service vergleicht ihn vor Statusprüfung, Persistenz und Mailversand mit dem tatsächlichen Booking-Customer. Fremde Customers erhalten 403, während Provider, Admin und anonyme Aufrufer bereits durch die Security-Konfiguration abgewiesen werden. Service- und HTTP-Regressionstests bestätigen den Owner-Normalfall, die vollständige Rollen-/Fremdzugriffsmatrix, fehlende und nicht abgeschlossene Buchungen, ungültige Ratings und ausbleibende Schreibeffekte.
+
+Der konkrete Identitätsmissbrauch ist im aktiven Anwendungspfad behoben. Das Finding bleibt bis zur nachgewiesenen Exactly-once-Garantie bei parallelen Review-Requests und zur Verifikation eines eindeutigen Datenbank-Constraints offen; diese Nebenläufigkeits-/Migrationsarbeit war nicht Teil des abgegrenzten Durchlaufs. Die separaten Booking-IDORs aus SR-F005 bleiben vollständig offen.
+
 ### Statusaktualisierung SR-F002 / FINDING-002 – 2026-07-14
 
 **Status: PARTIALLY COMPLETED.** `PUT /api/services/{id}` und `DELETE /api/services/{id}` sind nun explizit auf die Provider-Rolle begrenzt. Der Controller leitet ausschließlich die Identität aus dem authentifizierten Principal weiter; der Service lädt den aktiven Provider und prüft vor Update oder Delete die Provider-ID des Angebots. HTTP- und Service-Regressionstests decken Owner, fremden Provider, Customer, anonymen Zugriff, gesperrten Provider und fehlende Ressource ab.

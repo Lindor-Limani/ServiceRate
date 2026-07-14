@@ -5,6 +5,7 @@ import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.BookingRepository;
+import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,9 @@ class SecurityIntegrationTest {
     private BookingRepository bookingRepository;
 
     @Autowired
+    private ReviewRepository reviewRepository;
+
+    @Autowired
     private ServiceOfferingRepository serviceOfferingRepository;
 
     @Autowired
@@ -62,6 +66,7 @@ class SecurityIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        reviewRepository.deleteAll();
         bookingRepository.deleteAll();
         serviceOfferingRepository.deleteAll();
         userRepository.deleteAll();
@@ -294,6 +299,91 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void reviewCreationRequiresCustomerRoleAndBookingOwnership() throws Exception {
+        User otherCustomer = saveUser("other-customer@example.com", "CUSTOMER", "ACTIVE");
+        ServiceOffering offering = saveService(provider, "Review Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+        booking.setStatus("COMPLETED");
+        bookingRepository.saveAndFlush(booking);
+        String payload = reviewJson(booking.getId(), 5, "Sehr gut");
+
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherCustomer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("Diese Buchung gehört nicht zu diesem Kunden."));
+
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/reviews")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+
+        assertThat(reviewRepository.count()).isZero();
+
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.bookingId").value(booking.getId().toString()))
+                .andExpect(jsonPath("$.reviewerName").value("CUSTOMER User"))
+                .andExpect(jsonPath("$.rating").value(5));
+
+        assertThat(reviewRepository.count()).isEqualTo(1);
+        assertThat(reviewRepository.findByBookingId(booking.getId()))
+                .singleElement()
+                .satisfies(review -> assertThat(review.getReviewer().getId()).isEqualTo(customer.getId()));
+    }
+
+    @Test
+    void reviewCreationRejectsInvalidInputMissingBookingAndIncompleteBooking() throws Exception {
+        ServiceOffering offering = saveService(provider, "Review Service");
+        Booking completed = saveUnpaidBooking(customer, offering);
+        completed.setStatus("COMPLETED");
+        bookingRepository.saveAndFlush(completed);
+
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson(completed.getId(), 6, "Ungültig")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(containsString("rating")));
+
+        UUID missingId = UUID.randomUUID();
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson(missingId, 4, "Fehlt")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Buchung nicht gefunden"));
+
+        Booking pending = saveUnpaidBooking(customer, offering);
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(reviewJson(pending.getId(), 4, "Zu früh")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "Eine Bewertung ist erst nach abgeschlossener Buchung möglich."
+                ));
+
+        assertThat(reviewRepository.count()).isZero();
+    }
+
+    @Test
     void securityHeadersArePresentOnResponses() throws Exception {
         mockMvc.perform(get("/api/services"))
                 .andExpect(status().isOk())
@@ -432,6 +522,16 @@ class SecurityIntegrationTest {
                   "deliverableType": "ON_SITE"
                 }
                 """.formatted(title);
+    }
+
+    private String reviewJson(UUID bookingId, int rating, String comment) {
+        return """
+                {
+                  "bookingId": "%s",
+                  "rating": %d,
+                  "comment": "%s"
+                }
+                """.formatted(bookingId, rating, comment);
     }
 
     private User saveUser(String email, String accountType, String status) {

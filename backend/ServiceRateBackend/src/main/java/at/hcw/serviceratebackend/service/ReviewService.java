@@ -9,6 +9,7 @@ import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,17 +24,20 @@ public class ReviewService {
     private final BookingRepository bookingRepository;
     private final MailService mailService;
 
-    public ReviewResponse create(CreateReviewRequest request) {
+    @Transactional
+    public ReviewResponse create(CreateReviewRequest request, String customerEmail) {
         Booking booking = bookingRepository.findById(request.bookingId())
                 .orElseThrow(() -> new IllegalArgumentException("Buchung nicht gefunden"));
+
+        User reviewer = booking.getCustomer();
+        if (reviewer == null || customerEmail == null || !customerEmail.equals(reviewer.getEmail())) {
+            throw new AccessDeniedException("Diese Buchung gehört nicht zu diesem Kunden.");
+        }
 
         // Bewerten ist erst erlaubt, wenn die Leistung abgeschlossen wurde.
         if (!BookingStatus.COMPLETED.name().equals(booking.getStatus())) {
             throw new IllegalArgumentException("Eine Bewertung ist erst nach abgeschlossener Buchung möglich.");
         }
-
-        // Der Bewerter ist der Kunde der Buchung
-        User reviewer = booking.getCustomer();
 
         Review review = new Review();
         review.setId(UUID.randomUUID());

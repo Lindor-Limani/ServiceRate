@@ -3,6 +3,7 @@ package at.hcw.serviceratebackend.model.common.exception;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -39,6 +40,12 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ErrorResponse handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return new ErrorResponse("Ungültiger Parameter: " + ex.getName());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ErrorResponse handleAccessDenied(AccessDeniedException ex) {
+        return new ErrorResponse(ex.getMessage());
     }
 
     // Übrige fachliche Laufzeitfehler (z.B. "nicht gefunden") -> 400

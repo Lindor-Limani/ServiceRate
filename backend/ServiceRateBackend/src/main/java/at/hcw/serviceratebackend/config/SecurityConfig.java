@@ -59,6 +59,7 @@ public class SecurityConfig {
                         // Doku & DB-Konsole
                         .requestMatchers("/h2-console/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/bookings").hasRole("CUSTOMER")
+                        .requestMatchers(HttpMethod.POST, "/api/reviews").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/bookings/customer/me").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/bookings/provider/me").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.PUT, "/api/bookings/*/status").hasRole("PROVIDER")

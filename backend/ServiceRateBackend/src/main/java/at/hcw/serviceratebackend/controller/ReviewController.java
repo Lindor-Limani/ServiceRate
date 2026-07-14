@@ -6,6 +6,7 @@ import at.hcw.serviceratebackend.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,8 +21,11 @@ public class ReviewController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ReviewResponse create(@Valid @RequestBody CreateReviewRequest request) {
-        return reviewService.create(request);
+    public ReviewResponse create(
+            @Valid @RequestBody CreateReviewRequest request,
+            Authentication authentication
+    ) {
+        return reviewService.create(request, (String) authentication.getPrincipal());
     }
 
     @GetMapping("/booking/{bookingId}")
