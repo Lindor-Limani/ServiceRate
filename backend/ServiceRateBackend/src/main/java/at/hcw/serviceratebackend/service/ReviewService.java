@@ -2,6 +2,7 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateReviewRequest;
 import at.hcw.serviceratebackend.dto.ReviewResponse;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.Review;
@@ -9,6 +10,7 @@ import at.hcw.serviceratebackend.model.entity.User;
 import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +28,7 @@ public class ReviewService {
 
     @Transactional
     public ReviewResponse create(CreateReviewRequest request, String customerEmail) {
-        Booking booking = bookingRepository.findById(request.bookingId())
+        Booking booking = bookingRepository.findByIdForReviewCreation(request.bookingId())
                 .orElseThrow(() -> new IllegalArgumentException("Buchung nicht gefunden"));
 
         User reviewer = booking.getCustomer();
@@ -39,6 +41,10 @@ public class ReviewService {
             throw new IllegalArgumentException("Eine Bewertung ist erst nach abgeschlossener Buchung möglich.");
         }
 
+        if (reviewRepository.existsByBookingId(booking.getId())) {
+            throw reviewAlreadyExists();
+        }
+
         Review review = new Review();
         review.setId(UUID.randomUUID());
         review.setBooking(booking);
@@ -46,7 +52,12 @@ public class ReviewService {
         review.setRating(request.rating());
         review.setComment(request.comment());
 
-        Review saved = reviewRepository.save(review);
+        Review saved;
+        try {
+            saved = reviewRepository.saveAndFlush(review);
+        } catch (DataIntegrityViolationException ex) {
+            throw reviewAlreadyExists();
+        }
         mailService.sendReviewCreatedMail(saved);
 
         return new ReviewResponse(
@@ -57,6 +68,10 @@ public class ReviewService {
                 saved.getRating(),
                 saved.getComment()
         );
+    }
+
+    private ConflictException reviewAlreadyExists() {
+        return new ConflictException("Für diese Buchung wurde bereits eine Bewertung erstellt.");
     }
 
 

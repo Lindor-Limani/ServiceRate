@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateReviewRequest;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.Review;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
@@ -45,8 +46,8 @@ class ReviewServiceTest {
     @Test
     void create_allowsAuthenticatedBookingCustomerForCompletedBooking() {
         Booking booking = completedBooking("owner@example.com");
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
-        when(reviewRepository.save(any(Review.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(bookingRepository.findByIdForReviewCreation(booking.getId())).thenReturn(Optional.of(booking));
+        when(reviewRepository.saveAndFlush(any(Review.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         var response = reviewService.create(
                 new CreateReviewRequest(booking.getId(), 5, "Sehr gut"),
@@ -54,7 +55,7 @@ class ReviewServiceTest {
         );
 
         ArgumentCaptor<Review> reviewCaptor = ArgumentCaptor.forClass(Review.class);
-        verify(reviewRepository).save(reviewCaptor.capture());
+        verify(reviewRepository).saveAndFlush(reviewCaptor.capture());
         Review saved = reviewCaptor.getValue();
         assertThat(saved.getBooking()).isSameAs(booking);
         assertThat(saved.getReviewer()).isSameAs(booking.getCustomer());
@@ -68,7 +69,7 @@ class ReviewServiceTest {
     @Test
     void create_rejectsForeignCustomerWithoutSavingOrSendingMail() {
         Booking booking = completedBooking("owner@example.com");
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForReviewCreation(booking.getId())).thenReturn(Optional.of(booking));
 
         assertThatThrownBy(() -> reviewService.create(
                 new CreateReviewRequest(booking.getId(), 5, "Manipuliert"),
@@ -77,14 +78,14 @@ class ReviewServiceTest {
                 .isInstanceOf(AccessDeniedException.class)
                 .hasMessage("Diese Buchung gehört nicht zu diesem Kunden.");
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
         verify(mailService, never()).sendReviewCreatedMail(any());
     }
 
     @Test
     void create_rejectsMissingBookingWithoutSavingOrSendingMail() {
         UUID missingId = UUID.randomUUID();
-        when(bookingRepository.findById(missingId)).thenReturn(Optional.empty());
+        when(bookingRepository.findByIdForReviewCreation(missingId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> reviewService.create(
                 new CreateReviewRequest(missingId, 4, "Nicht vorhanden"),
@@ -93,7 +94,7 @@ class ReviewServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Buchung nicht gefunden");
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
         verify(mailService, never()).sendReviewCreatedMail(any());
     }
 
@@ -101,7 +102,7 @@ class ReviewServiceTest {
     void create_rejectsOwnBookingBeforeCompletionWithoutSavingOrSendingMail() {
         Booking booking = completedBooking("owner@example.com");
         booking.setStatus("ACCEPTED");
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForReviewCreation(booking.getId())).thenReturn(Optional.of(booking));
 
         assertThatThrownBy(() -> reviewService.create(
                 new CreateReviewRequest(booking.getId(), 4, "Zu früh"),
@@ -110,7 +111,24 @@ class ReviewServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Eine Bewertung ist erst nach abgeschlossener Buchung möglich.");
 
-        verify(reviewRepository, never()).save(any());
+        verify(reviewRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendReviewCreatedMail(any());
+    }
+
+    @Test
+    void create_rejectsRepeatedReviewWithoutSavingOrSendingMail() {
+        Booking booking = completedBooking("owner@example.com");
+        when(bookingRepository.findByIdForReviewCreation(booking.getId())).thenReturn(Optional.of(booking));
+        when(reviewRepository.existsByBookingId(booking.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> reviewService.create(
+                new CreateReviewRequest(booking.getId(), 5, "Noch einmal"),
+                "owner@example.com"
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Für diese Buchung wurde bereits eine Bewertung erstellt.");
+
+        verify(reviewRepository, never()).saveAndFlush(any());
         verify(mailService, never()).sendReviewCreatedMail(any());
     }
 

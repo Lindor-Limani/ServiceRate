@@ -8,7 +8,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "reviews")
+@Table(name = "reviews", indexes = {
+        @Index(name = "ux_reviews_booking_id", columnList = "booking_id", unique = true)
+})
 public class Review extends AuditableEntity {
 
     // Jede Bewertung gehört zu einer konkreten Buchung

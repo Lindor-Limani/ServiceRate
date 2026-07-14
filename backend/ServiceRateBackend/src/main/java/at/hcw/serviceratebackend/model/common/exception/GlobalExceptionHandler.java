@@ -48,6 +48,12 @@ public class GlobalExceptionHandler {
         return new ErrorResponse(ex.getMessage());
     }
 
+    @ExceptionHandler(ConflictException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse handleConflict(ConflictException ex) {
+        return new ErrorResponse(ex.getMessage());
+    }
+
     // Übrige fachliche Laufzeitfehler (z.B. "nicht gefunden") -> 400
     // Achtung: NullPointerException ist auch eine RuntimeException und landet hier!
     @ExceptionHandler(RuntimeException.class)

@@ -96,6 +96,9 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_data_url TEXT");
         jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_name VARCHAR(255)");
         tryExecute("ALTER TABLE chat_messages ALTER COLUMN content DROP NOT NULL");
+
+        // Exactly-once-Garantie für Bewertungen; vorhandene Duplikate stoppen den Start fail-closed.
+        jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_booking_id ON reviews (booking_id)");
     }
 
     private void tryExecute(String sql) {

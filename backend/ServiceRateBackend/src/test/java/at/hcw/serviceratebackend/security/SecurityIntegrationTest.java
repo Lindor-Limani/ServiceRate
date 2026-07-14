@@ -441,6 +441,15 @@ class SecurityIntegrationTest {
                 .andExpect(jsonPath("$.reviewerName").value("CUSTOMER User"))
                 .andExpect(jsonPath("$.rating").value(5));
 
+        mockMvc.perform(post("/api/reviews")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(
+                        "Für diese Buchung wurde bereits eine Bewertung erstellt."
+                ));
+
         assertThat(reviewRepository.count()).isEqualTo(1);
         assertThat(reviewRepository.findByBookingId(booking.getId()))
                 .singleElement()
