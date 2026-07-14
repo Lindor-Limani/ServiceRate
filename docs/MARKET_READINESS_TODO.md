@@ -71,6 +71,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-AUTH-001 – Ownership für Service-Änderungen erzwingen
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-14
+- **Geänderte Komponenten:** `SecurityConfig`, `ServiceOfferingController`, `ServiceOfferingService`.
+- **Hinzugefügte Tests:** Service-Regressionen für Owner, Fremdzugriff, fehlende Ressource und gesperrten Provider; HTTP-Security-Integrationstests für Owner, fremden Provider, Customer, anonymen Zugriff und fehlende Ressource.
+- **Verbleibende Einschränkungen:** Der klar abgegrenzte Teil „serverseitige Rollen- und Ownership-Prüfung für PUT/DELETE“ ist vollständig umgesetzt. Das Gesamtticket bleibt teilweise offen: FINDING-001 ermöglicht weiterhin Identitätsübernahme; ein persistentes Audit Event und eine ergänzte API-Dokumentation sind noch nicht vorhanden. Admins erhalten über diese Provider-Endpunkte bewusst keine Ausnahme; der separate Admin-Statuspfad ist nicht Teil dieser Aufgabe.
 - **Priorität/Kategorie:** P0 / BOLA
 - **Beschreibung:** Jeder authentifizierte Account kann fremde Services ändern oder löschen.
 - **Technische Lösung:** Provider-Rolle und Eigentümerschaft zentral in Service/Policy prüfen; Objekt-ID niemals als Autorisierung verwenden; Admin-Ausnahme explizit auditieren.

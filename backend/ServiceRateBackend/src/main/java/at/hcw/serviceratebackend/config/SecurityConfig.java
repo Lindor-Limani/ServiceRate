@@ -72,6 +72,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/paypal/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/providers/me/stripe/**").hasRole("PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/services").hasRole("PROVIDER")
+                        .requestMatchers(HttpMethod.PUT, "/api/services/*").hasRole("PROVIDER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/services/*").hasRole("PROVIDER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // Alles andere (Services anlegen/ändern/löschen, Buchungen, ...) braucht ein gültiges Token
                         .anyRequest().authenticated()

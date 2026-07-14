@@ -1,7 +1,9 @@
 package at.hcw.serviceratebackend.security;
 
 import at.hcw.serviceratebackend.config.JwtUtil;
+import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,8 +17,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -40,6 +44,9 @@ class SecurityIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
+    private ServiceOfferingRepository serviceOfferingRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     private User customer;
@@ -48,6 +55,7 @@ class SecurityIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        serviceOfferingRepository.deleteAll();
         userRepository.deleteAll();
         customer = saveUser("customer@example.com", "CUSTOMER", "ACTIVE");
         provider = saveUser("provider@example.com", "PROVIDER", "ACTIVE");
@@ -194,8 +202,124 @@ class SecurityIntegrationTest {
                 .andExpect(header().string("X-Frame-Options", "DENY"));
     }
 
+    @Test
+    void providerCanUpdateAndDeleteOwnService() throws Exception {
+        ServiceOffering offering = saveService(provider, "Original");
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Aktualisiert")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Aktualisiert"));
+
+        mockMvc.perform(delete("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider)))
+                .andExpect(status().isOk());
+
+        assertThat(serviceOfferingRepository.existsById(offering.getId())).isFalse();
+    }
+
+    @Test
+    void foreignProviderCannotUpdateOrDeleteService() throws Exception {
+        User otherProvider = saveUser("other-provider@example.com", "PROVIDER", "ACTIVE");
+        ServiceOffering offering = saveService(provider, "Original");
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherProvider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Manipuliert")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Dieser Service gehört nicht zu diesem Anbieter."));
+
+        mockMvc.perform(delete("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherProvider)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Dieser Service gehört nicht zu diesem Anbieter."));
+
+        ServiceOffering unchanged = serviceOfferingRepository.findById(offering.getId()).orElseThrow();
+        assertThat(unchanged.getTitle()).isEqualTo("Original");
+    }
+
+    @Test
+    void customerCannotUpdateOrDeleteService() throws Exception {
+        ServiceOffering offering = saveService(provider, "Original");
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Manipuliert")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer)))
+                .andExpect(status().isForbidden());
+
+        assertThat(serviceOfferingRepository.existsById(offering.getId())).isTrue();
+    }
+
+    @Test
+    void anonymousUserCannotUpdateOrDeleteService() throws Exception {
+        ServiceOffering offering = saveService(provider, "Original");
+
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Manipuliert")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/services/{id}", offering.getId()))
+                .andExpect(status().isForbidden());
+
+        assertThat(serviceOfferingRepository.existsById(offering.getId())).isTrue();
+    }
+
+    @Test
+    void ownerGetsClientErrorForMissingService() throws Exception {
+        UUID missingId = UUID.randomUUID();
+
+        mockMvc.perform(put("/api/services/{id}", missingId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Aktualisiert")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Service nicht gefunden"));
+
+        mockMvc.perform(delete("/api/services/{id}", missingId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Service nicht gefunden"));
+    }
+
     private String bearer(User user) {
         return "Bearer " + jwtUtil.generateToken(user.getEmail(), user.getAccountType());
+    }
+
+    private ServiceOffering saveService(User owner, String title) {
+        ServiceOffering offering = new ServiceOffering();
+        offering.setId(UUID.randomUUID());
+        offering.setProvider(owner);
+        offering.setTitle(title);
+        offering.setDescription("Beschreibung");
+        offering.setCategory("REPAIR");
+        offering.setPrice(80.0);
+        offering.setEstimatedHours(2.0);
+        offering.setDeliverableType("ON_SITE");
+        offering.setStatus("ACTIVE");
+        return serviceOfferingRepository.saveAndFlush(offering);
+    }
+
+    private String updateJson(String title) {
+        return """
+                {
+                  "title": "%s",
+                  "description": "Aktualisierte Beschreibung",
+                  "category": "REPAIR",
+                  "price": 90.0,
+                  "estimatedHours": 3.0,
+                  "imageUrls": [],
+                  "deliverableType": "ON_SITE"
+                }
+                """.formatted(title);
     }
 
     private User saveUser(String email, String accountType, String status) {

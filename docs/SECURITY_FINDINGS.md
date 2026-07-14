@@ -88,6 +88,12 @@ Die Einstufung beschreibt die konkrete Anwendung, nicht nur die theoretische Sch
 | SR-F026 | Medium | Nein | Kritische Security-/Recovery-/Concurrency-Tests fehlen | Backend, Playwright, k6 | ASVS V14 |
 | SR-F027 | Low | Nein | Abhängigkeiten und Testartefakte in Git versioniert | Git-Index/`.gitignore` | Supply-chain hygiene |
 
+### Statusaktualisierung SR-F002 / FINDING-002 – 2026-07-14
+
+**Status: PARTIALLY COMPLETED.** `PUT /api/services/{id}` und `DELETE /api/services/{id}` sind nun explizit auf die Provider-Rolle begrenzt. Der Controller leitet ausschließlich die Identität aus dem authentifizierten Principal weiter; der Service lädt den aktiven Provider und prüft vor Update oder Delete die Provider-ID des Angebots. HTTP- und Service-Regressionstests decken Owner, fremden Provider, Customer, anonymen Zugriff, gesperrten Provider und fehlende Ressource ab.
+
+Das Finding wird noch nicht als geschlossen markiert: Die unmittelbare fehlende Objektprüfung ist behoben, aber FINDING-001 erlaubt weiterhin die Fälschung einer Provideridentität über den bekannten JWT-Schlüssel. Erst nach Behebung von FINDING-001 und erneuter kombinierter Security-Verifikation besteht keine bekannte Umgehungsmöglichkeit mehr.
+
 ## Betroffene Angriffsflächen
 
 ### Authentifizierung und Session

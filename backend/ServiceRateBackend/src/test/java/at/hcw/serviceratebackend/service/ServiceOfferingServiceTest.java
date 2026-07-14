@@ -2,6 +2,7 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.CreateServiceRequest;
 import at.hcw.serviceratebackend.dto.ReviewResponse;
+import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 import at.hcw.serviceratebackend.model.entity.Review;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -228,6 +229,111 @@ class ServiceOfferingServiceTest {
         verify(serviceRepository, never()).save(any());
     }
 
+    @Test
+    void updateServiceForProviderEmail_updatesOwnedService() {
+        User provider = provider(true);
+        ServiceOffering offering = offering(provider);
+        when(userRepository.findByEmail(provider.getEmail())).thenReturn(Optional.of(provider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+        when(serviceRepository.save(offering)).thenReturn(offering);
+        when(reviewRepository.findAverageRatingByServiceId(offering.getId())).thenReturn(null);
+        when(reviewRepository.findReviewCountByServiceId(offering.getId())).thenReturn(0L);
+        when(stripeConnectService.isProviderStripeAvailable(provider)).thenReturn(false);
+
+        var response = service.updateServiceForProviderEmail(
+                offering.getId(),
+                updateRequest("Neuer Titel"),
+                provider.getEmail()
+        );
+
+        assertThat(response.title()).isEqualTo("Neuer Titel");
+        assertThat(offering.getTitle()).isEqualTo("Neuer Titel");
+        verify(serviceRepository).save(offering);
+    }
+
+    @Test
+    void updateServiceForProviderEmail_rejectsForeignServiceWithoutSaving() {
+        User owner = provider(true);
+        User otherProvider = provider(true);
+        otherProvider.setId(UUID.randomUUID());
+        otherProvider.setEmail("other@example.com");
+        ServiceOffering offering = offering(owner);
+        when(userRepository.findByEmail(otherProvider.getEmail())).thenReturn(Optional.of(otherProvider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        assertThatThrownBy(() -> service.updateServiceForProviderEmail(
+                offering.getId(),
+                updateRequest("Manipulierter Titel"),
+                otherProvider.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Dieser Service gehört nicht zu diesem Anbieter.");
+
+        assertThat(offering.getTitle()).isEqualTo("Bad sanieren");
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
+    void deleteForProviderEmail_deletesOwnedService() {
+        User provider = provider(true);
+        ServiceOffering offering = offering(provider);
+        when(userRepository.findByEmail(provider.getEmail())).thenReturn(Optional.of(provider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        service.deleteForProviderEmail(offering.getId(), provider.getEmail());
+
+        verify(serviceRepository).delete(offering);
+    }
+
+    @Test
+    void deleteForProviderEmail_rejectsForeignServiceWithoutDeleting() {
+        User owner = provider(true);
+        User otherProvider = provider(true);
+        otherProvider.setId(UUID.randomUUID());
+        otherProvider.setEmail("other@example.com");
+        ServiceOffering offering = offering(owner);
+        when(userRepository.findByEmail(otherProvider.getEmail())).thenReturn(Optional.of(otherProvider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        assertThatThrownBy(() -> service.deleteForProviderEmail(offering.getId(), otherProvider.getEmail()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Dieser Service gehört nicht zu diesem Anbieter.");
+
+        verify(serviceRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteForProviderEmail_rejectsMissingServiceWithoutDeleting() {
+        User provider = provider(true);
+        UUID missingId = UUID.randomUUID();
+        when(userRepository.findByEmail(provider.getEmail())).thenReturn(Optional.of(provider));
+        when(serviceRepository.findById(missingId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.deleteForProviderEmail(missingId, provider.getEmail()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Service nicht gefunden");
+
+        verify(serviceRepository, never()).delete(any());
+    }
+
+    @Test
+    void updateServiceForProviderEmail_rejectsInactiveProviderBeforeLoadingService() {
+        User inactiveProvider = provider(true);
+        inactiveProvider.setStatus("BLOCKED");
+        when(userRepository.findByEmail(inactiveProvider.getEmail())).thenReturn(Optional.of(inactiveProvider));
+
+        assertThatThrownBy(() -> service.updateServiceForProviderEmail(
+                UUID.randomUUID(),
+                updateRequest("Aktualisiert"),
+                inactiveProvider.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Diese Aktion ist nur für aktive Anbieter erlaubt.");
+
+        verify(serviceRepository, never()).findById(any());
+        verify(serviceRepository, never()).save(any());
+    }
+
     private CreateServiceRequest validRequest() {
         return new CreateServiceRequest(
                 null,
@@ -240,6 +346,19 @@ class ServiceOfferingServiceTest {
                 List.of("https://example.com/image.jpg"),
                 "ON_SITE",
                 "1010"
+        );
+    }
+
+    private UpdateServiceRequest updateRequest(String title) {
+        return new UpdateServiceRequest(
+                title,
+                "Aktualisierte Beschreibung",
+                "REPAIR",
+                90.0,
+                3.0,
+                null,
+                List.of("https://example.com/updated.jpg"),
+                "ON_SITE"
         );
     }
 

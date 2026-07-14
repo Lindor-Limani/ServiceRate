@@ -17,6 +17,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.imageio.ImageIO;
 import java.awt.Graphics2D;
@@ -155,13 +156,21 @@ public class ServiceOfferingService {
                 .toList();
     }
 
-    public void delete(UUID id) {
-        serviceRepository.deleteById(id);
+    @Transactional
+    public void deleteForProviderEmail(UUID id, String providerEmail) {
+        User provider = requireActiveProvider(providerEmail);
+        ServiceOffering service = requireOwnedService(id, provider);
+        serviceRepository.delete(service);
     }
 
-    public ServiceOfferingResponse updateService(UUID id, UpdateServiceRequest request) {
-        ServiceOffering service = serviceRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
+    @Transactional
+    public ServiceOfferingResponse updateServiceForProviderEmail(
+            UUID id,
+            UpdateServiceRequest request,
+            String providerEmail
+    ) {
+        User provider = requireActiveProvider(providerEmail);
+        ServiceOffering service = requireOwnedService(id, provider);
 
         service.setTitle(request.title());
         service.setDescription(request.description());
@@ -174,6 +183,25 @@ public class ServiceOfferingService {
         service.setDeliverableType(normalizeDeliverableType(request.deliverableType()));
 
         return mapToSummaryResponse(serviceRepository.save(service));
+    }
+
+    private User requireActiveProvider(String providerEmail) {
+        User provider = userRepository.findByEmail(providerEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Provider nicht gefunden"));
+        if (!"PROVIDER".equals(provider.getAccountType()) || !"ACTIVE".equals(provider.getStatus())) {
+            throw new IllegalArgumentException("Diese Aktion ist nur für aktive Anbieter erlaubt.");
+        }
+        return provider;
+    }
+
+    private ServiceOffering requireOwnedService(UUID id, User provider) {
+        ServiceOffering service = serviceRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Service nicht gefunden"));
+        User owner = service.getProvider();
+        if (owner == null || !owner.getId().equals(provider.getId())) {
+            throw new IllegalArgumentException("Dieser Service gehört nicht zu diesem Anbieter.");
+        }
+        return service;
     }
 
     private ServiceOfferingResponse mapToSummaryResponse(ServiceOffering service) {
