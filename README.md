@@ -163,6 +163,10 @@ $env:PAYPAL_CANCEL_URL="http://localhost:5500/customer-app.html"
 Alternativ kann die lokale Datei `backend/ServiceRateBackend/src/.env` verwendet werden. Sie wird beim Backendstart automatisch geladen und ist durch `.gitignore` nicht fuer Git vorgesehen. Werte in dieser Datei am besten ohne Anfuehrungszeichen schreiben:
 
 ```properties
+# Nur fuer lokale Entwicklung: Spring erzeugt die Werte bei jedem Start neu.
+# Dadurch werden lokale Tokens bei einem Neustart absichtlich ungueltig.
+JWT_SECRET_BASE64=${random.value}${random.value}
+JWT_KEY_ID=local-${random.uuid}
 PAYPAL_MODE=sandbox
 PAYPAL_CLIENT_ID=deine_sandbox_client_id
 PAYPAL_CLIENT_SECRET=dein_sandbox_secret
