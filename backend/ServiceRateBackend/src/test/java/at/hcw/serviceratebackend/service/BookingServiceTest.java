@@ -3,6 +3,7 @@ package at.hcw.serviceratebackend.service;
 import at.hcw.serviceratebackend.dto.CreateBookingRequest;
 import at.hcw.serviceratebackend.dto.CreateCheckoutRequest;
 import at.hcw.serviceratebackend.dto.CreateTimeEntryRequest;
+import at.hcw.serviceratebackend.dto.BookingResponse;
 import at.hcw.serviceratebackend.dto.PublishDeliveryRequest;
 import at.hcw.serviceratebackend.dto.UpdateBookingWorkRequest;
 import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
@@ -296,6 +297,91 @@ class BookingServiceTest {
         assertThat(response.platformFeeAmount()).isEqualTo(21.0);
         assertThat(response.providerReceivableAmount()).isEqualTo(179.0);
         assertThat(response.settlementStatus()).isEqualTo("NOT_READY");
+    }
+
+    @Test
+    void createStripeCheckoutReturnsCommittedSessionForSequentialReplays() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(stripeConnectService.createCheckoutSession(any(Booking.class), anyBoolean()))
+                .thenAnswer(invocation -> {
+                    Booking changed = invocation.getArgument(0);
+                    changed.setStripeCheckoutSessionId("cs_booking_once");
+                    changed.setStripePaymentIntentId("pi_booking_once");
+                    changed.setCheckoutUrl("https://checkout.stripe.test/once");
+                    changed.setPaymentProvider("CARD");
+                    changed.setPaymentStatus("CHECKOUT_CREATED");
+                    changed.setSettlementStatus("STRIPE_DESTINATION_CHARGE_PENDING");
+                    return new StripeConnectService.StripeCheckout(
+                            changed.getStripeCheckoutSessionId(), changed.getCheckoutUrl()
+                    );
+                });
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId()))
+                .thenReturn(List.of());
+
+        BookingResponse first = bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        );
+        BookingResponse replay = bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", true), customer.getEmail()
+        );
+        booking.setPaymentStatus("FAILED");
+        BookingResponse failedRetry = bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        );
+
+        assertThat(first.stripeCheckoutSessionId()).isEqualTo("cs_booking_once");
+        assertThat(replay.stripeCheckoutSessionId()).isEqualTo(first.stripeCheckoutSessionId());
+        assertThat(replay.checkoutUrl()).isEqualTo(first.checkoutUrl());
+        assertThat(failedRetry.stripeCheckoutSessionId()).isEqualTo(first.stripeCheckoutSessionId());
+        assertThat(booking.getStripePaymentIntentId()).isEqualTo("pi_booking_once");
+        verify(stripeConnectService, times(1)).createCheckoutSession(booking, false);
+        verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    void createStripeCheckoutRejectsOtherActiveOrInconsistentPaymentState() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Für diese Buchung wurde bereits eine Zahlung gestartet.");
+
+        booking.setPaymentProvider("CARD");
+        booking.setStripeCheckoutSessionId(null);
+        booking.setCheckoutUrl(null);
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Der vorhandene Stripe-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
+
+        booking.setPaymentProvider("MANUAL");
+        booking.setPaymentStatus("UNPAID");
+        booking.setStripeCheckoutSessionId("cs_stale");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Die Buchung enthält bereits Stripe-Checkout-Daten.");
+
+        verify(stripeConnectService, never()).createCheckoutSession(any(), anyBoolean());
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

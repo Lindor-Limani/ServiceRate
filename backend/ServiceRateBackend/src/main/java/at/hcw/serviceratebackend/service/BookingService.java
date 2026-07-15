@@ -208,6 +208,13 @@ public class BookingService {
         String provider = request.provider() == null || request.provider().isBlank()
                 ? "MANUAL"
                 : request.provider().trim().toUpperCase();
+        if ("CARD".equals(provider)) {
+            BookingResponse existingCheckout = existingStripeCheckout(booking);
+            if (existingCheckout != null) {
+                return existingCheckout;
+            }
+            requireStripeCheckoutMayStart(booking);
+        }
         applyMarketplaceAmounts(booking);
         booking.setPaymentProvider(provider);
         if ("PAYPAL".equals(provider)) {
@@ -555,6 +562,30 @@ public class BookingService {
         User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
         if (!payPalService.isProviderCheckoutEligible(provider)) {
             throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
+        }
+    }
+
+    private BookingResponse existingStripeCheckout(Booking booking) {
+        boolean reusableStatus = "CHECKOUT_CREATED".equals(booking.getPaymentStatus())
+                || "FAILED".equals(booking.getPaymentStatus());
+        if (!"CARD".equals(booking.getPaymentProvider()) || !reusableStatus) {
+            return null;
+        }
+        if (booking.getStripeCheckoutSessionId() == null || booking.getStripeCheckoutSessionId().isBlank()
+                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()) {
+            throw new ConflictException("Der vorhandene Stripe-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
+        }
+        return toResponse(booking, providerName(booking.getServiceOffering()), findReviewResponse(booking));
+    }
+
+    private void requireStripeCheckoutMayStart(Booking booking) {
+        if (!"UNPAID".equals(booking.getPaymentStatus())) {
+            throw new ConflictException("Für diese Buchung wurde bereits eine Zahlung gestartet.");
+        }
+        if ((booking.getStripeCheckoutSessionId() != null && !booking.getStripeCheckoutSessionId().isBlank())
+                || (booking.getStripePaymentIntentId() != null && !booking.getStripePaymentIntentId().isBlank())
+                || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {
+            throw new ConflictException("Die Buchung enthält bereits Stripe-Checkout-Daten.");
         }
     }
 

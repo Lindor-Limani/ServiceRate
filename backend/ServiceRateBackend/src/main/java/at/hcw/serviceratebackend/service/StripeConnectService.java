@@ -18,6 +18,7 @@ import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.checkout.Session;
+import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
 import com.stripe.param.AccountCreateParams;
 import com.stripe.param.AccountLinkCreateParams;
@@ -115,6 +116,9 @@ public class StripeConnectService {
     @Transactional
     public StripeCheckout createCheckoutSession(Booking booking, boolean savePaymentMethod) {
         configure();
+        if (booking == null || booking.getId() == null) {
+            throw new IllegalArgumentException("Stripe Checkout benötigt eine persistierte Buchung.");
+        }
         User customer = booking.getCustomer();
         User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
         if (!isProviderStripeAvailable(provider)) {
@@ -138,7 +142,7 @@ public class StripeConnectService {
                 paymentIntent.setSetupFutureUsage(SessionCreateParams.PaymentIntentData.SetupFutureUsage.OFF_SESSION);
             }
 
-            Session session = Session.create(SessionCreateParams.builder()
+            SessionCreateParams params = SessionCreateParams.builder()
                     .setMode(SessionCreateParams.Mode.PAYMENT)
                     .setCustomer(customerId)
                     .setSuccessUrl(checkoutSuccessUrl)
@@ -156,7 +160,11 @@ public class StripeConnectService {
                                             .build())
                                     .build())
                             .build())
-                    .build());
+                    .build();
+            RequestOptions requestOptions = RequestOptions.builder()
+                    .setIdempotencyKey(checkoutIdempotencyKey(booking.getId()))
+                    .build();
+            Session session = Session.create(params, requestOptions);
 
             booking.setStripeCustomerId(customerId);
             booking.setStripeConnectedAccountId(provider.getStripeConnectedAccountId());
@@ -402,6 +410,10 @@ public class StripeConnectService {
         String name = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
                 + (user.getLastName() == null ? "" : user.getLastName())).trim();
         return name.isBlank() ? user.getEmail() : name;
+    }
+
+    private String checkoutIdempotencyKey(UUID bookingId) {
+        return "servicerate-checkout-" + bookingId;
     }
 
     private void configure() {
