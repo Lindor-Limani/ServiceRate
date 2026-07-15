@@ -178,10 +178,14 @@ class PayPalServiceTest {
             server.expect(requestTo("https://api-m.sandbox.paypal.com/v2/checkout/orders/ORDER-1/capture"))
                     .andExpect(method(HttpMethod.POST))
                     .andExpect(header("PayPal-Request-Id", "servicerate-capture-" + bookingId))
+                    .andExpect(header("Prefer", "return=representation"))
                     .andRespond(withSuccess("""
                             {
+                              "id":"ORDER-1",
                               "status":"COMPLETED",
                               "purchase_units":[{
+                                "reference_id":"11111111-1111-4111-8111-111111111111",
+                                "custom_id":"11111111-1111-4111-8111-111111111111",
                                 "payments":{"captures":[{"id":"CAPTURE-1"}]}
                               }]
                             }
@@ -193,6 +197,9 @@ class PayPalServiceTest {
 
         assertThat(first.status()).isEqualTo("COMPLETED");
         assertThat(first.captureId()).isEqualTo("CAPTURE-1");
+        assertThat(first.orderId()).isEqualTo("ORDER-1");
+        assertThat(first.bookingReferenceId()).isEqualTo(bookingId.toString());
+        assertThat(first.bookingCustomId()).isEqualTo(bookingId.toString());
         assertThat(retry).isEqualTo(first);
         server.verify();
     }

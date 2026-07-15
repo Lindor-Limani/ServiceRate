@@ -136,6 +136,7 @@ public class PayPalService {
                 .headers(headers -> {
                     headers.setBearerAuth(accessToken());
                     headers.set("PayPal-Request-Id", "servicerate-capture-" + bookingId);
+                    headers.set("Prefer", "return=representation");
                 })
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of())
@@ -148,7 +149,14 @@ public class PayPalService {
 
         String status = String.valueOf(response.getOrDefault("status", ""));
         String captureId = extractCaptureId(response);
-        return new PayPalCapture(status, captureId);
+        Map<?, ?> purchaseUnit = firstPurchaseUnit(response);
+        return new PayPalCapture(
+                status,
+                captureId,
+                stringOrNull(response.get("id")),
+                purchaseUnit == null ? null : stringOrNull(purchaseUnit.get("reference_id")),
+                purchaseUnit == null ? null : stringOrNull(purchaseUnit.get("custom_id"))
+        );
     }
 
     public PayPalReferral createSellerOnboardingLink(User provider, String onboardingState) {
@@ -478,12 +486,8 @@ public class PayPalService {
 
     @SuppressWarnings("unchecked")
     private String extractCaptureId(Map<String, Object> response) {
-        Object purchaseUnitsValue = response.get("purchase_units");
-        if (!(purchaseUnitsValue instanceof List<?> purchaseUnits) || purchaseUnits.isEmpty()) {
-            return null;
-        }
-        Object firstUnit = purchaseUnits.get(0);
-        if (!(firstUnit instanceof Map<?, ?> purchaseUnit)) {
+        Map<?, ?> purchaseUnit = firstPurchaseUnit(response);
+        if (purchaseUnit == null) {
             return null;
         }
         Object paymentsValue = purchaseUnit.get("payments");
@@ -501,8 +505,27 @@ public class PayPalService {
         return null;
     }
 
+    private Map<?, ?> firstPurchaseUnit(Map<String, Object> response) {
+        Object purchaseUnitsValue = response.get("purchase_units");
+        if (!(purchaseUnitsValue instanceof List<?> purchaseUnits) || purchaseUnits.isEmpty()) {
+            return null;
+        }
+        Object firstUnit = purchaseUnits.get(0);
+        return firstUnit instanceof Map<?, ?> purchaseUnit ? purchaseUnit : null;
+    }
+
+    private String stringOrNull(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
     public record PayPalOrder(String orderId, String approveUrl) {}
-    public record PayPalCapture(String status, String captureId) {}
+    public record PayPalCapture(
+            String status,
+            String captureId,
+            String orderId,
+            String bookingReferenceId,
+            String bookingCustomId
+    ) {}
     public record PayPalReferral(String actionUrl, String selfUrl) {}
     public record PayPalSellerStatus(String merchantIdInPayPal, Boolean permissionsGranted, String accountStatus, Boolean consentStatus, Boolean isEmailConfirmed) {}
 

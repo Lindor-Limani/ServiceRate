@@ -275,6 +275,7 @@ public class BookingService {
         if (capture == null) {
             throw new IllegalStateException("PayPal Capture lieferte keine gültige Antwort.");
         }
+        requirePayPalCaptureMatchesBooking(booking, orderId, capture);
         if (!"COMPLETED".equalsIgnoreCase(capture.status())) {
             throw new IllegalStateException("PayPal Zahlung wurde nicht abgeschlossen. Status: " + capture.status());
         }
@@ -568,6 +569,23 @@ public class BookingService {
         User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
         if (!payPalService.isProviderCheckoutEligible(provider)) {
             throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
+        }
+    }
+
+    private void requirePayPalCaptureMatchesBooking(
+            Booking booking,
+            String expectedOrderId,
+            PayPalService.PayPalCapture capture
+    ) {
+        if (!expectedOrderId.equals(capture.orderId())) {
+            throw new IllegalStateException("PayPal Capture ist nicht der erwarteten Order zugeordnet.");
+        }
+        String expectedBookingId = booking.getId().toString();
+        if (!expectedBookingId.equals(capture.bookingReferenceId())) {
+            throw new IllegalStateException("PayPal Capture enthält keine passende Buchungsreferenz.");
+        }
+        if (!expectedBookingId.equals(capture.bookingCustomId())) {
+            throw new IllegalStateException("PayPal Capture enthält keine passende Buchungskennung.");
         }
     }
 

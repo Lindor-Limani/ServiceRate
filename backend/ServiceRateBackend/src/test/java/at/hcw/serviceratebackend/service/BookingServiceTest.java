@@ -543,7 +543,10 @@ class BookingServiceTest {
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
         when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
-                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-1"));
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1",
+                        booking.getId().toString(), booking.getId().toString()
+                ));
         when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
         when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
@@ -600,9 +603,18 @@ class BookingServiceTest {
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
         when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(null)
-                .thenReturn(new PayPalService.PayPalCapture("PENDING", "CAPTURE-PENDING"))
-                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", null))
-                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", " "));
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "PENDING", "CAPTURE-PENDING", "ORDER-1",
+                        booking.getId().toString(), booking.getId().toString()
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", null, "ORDER-1",
+                        booking.getId().toString(), booking.getId().toString()
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", " ", "ORDER-1",
+                        booking.getId().toString(), booking.getId().toString()
+                ));
 
         assertThatThrownBy(() -> bookingService.capturePayPalPayment(
                 booking.getId(), "ORDER-1", customer.getEmail()
@@ -614,6 +626,70 @@ class BookingServiceTest {
             assertThatThrownBy(() -> bookingService.capturePayPalPayment(
                     booking.getId(), "ORDER-1", customer.getEmail()
             )).hasMessage("PayPal Capture lieferte keine Capture-ID.");
+        }
+
+        assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(booking.getPaypalCaptureId()).isNull();
+        assertThat(booking.getPaidAt()).isNull();
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendPaymentRecordedMail(any());
+    }
+
+    @Test
+    void capturePayPalPayment_rejectsMismatchedProviderBindingWithoutMutation() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-1");
+        String bookingId = booking.getId().toString();
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", null, bookingId, bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", " ", bookingId, bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-OTHER", bookingId, bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", null, bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", " ", bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", UUID.randomUUID().toString(), bookingId
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, null
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, " "
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, UUID.randomUUID().toString()
+                ));
+
+        String[] expectedErrors = {
+                "PayPal Capture ist nicht der erwarteten Order zugeordnet.",
+                "PayPal Capture ist nicht der erwarteten Order zugeordnet.",
+                "PayPal Capture ist nicht der erwarteten Order zugeordnet.",
+                "PayPal Capture enthält keine passende Buchungsreferenz.",
+                "PayPal Capture enthält keine passende Buchungsreferenz.",
+                "PayPal Capture enthält keine passende Buchungsreferenz.",
+                "PayPal Capture enthält keine passende Buchungskennung.",
+                "PayPal Capture enthält keine passende Buchungskennung.",
+                "PayPal Capture enthält keine passende Buchungskennung."
+        };
+        for (String expectedError : expectedErrors) {
+            assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                    booking.getId(), "ORDER-1", customer.getEmail()
+            )).hasMessage(expectedError);
         }
 
         assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");

@@ -258,7 +258,10 @@ class SecurityIntegrationTest {
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking = bookingRepository.saveAndFlush(booking);
         when(payPalService.captureOrder(booking.getId(), "ORDER-HTTP"))
-                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-HTTP"));
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-HTTP", "ORDER-HTTP",
+                        booking.getId().toString(), booking.getId().toString()
+                ));
         for (int request = 0; request < 2; request++) {
             mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
                             .header(HttpHeaders.AUTHORIZATION, bearer(customer))

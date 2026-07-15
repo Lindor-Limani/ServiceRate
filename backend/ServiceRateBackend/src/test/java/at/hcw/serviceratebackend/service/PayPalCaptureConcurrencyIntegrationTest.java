@@ -88,7 +88,10 @@ class PayPalCaptureConcurrencyIntegrationTest {
             if (!releaseCapture.await(10, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Capture-Testfreigabe fehlgeschlagen");
             }
-            return new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-RACE");
+            return new PayPalService.PayPalCapture(
+                    "COMPLETED", "CAPTURE-RACE", "ORDER-RACE",
+                    booking.getId().toString(), booking.getId().toString()
+            );
         });
 
         List<Future<BookingResponse>> results = new ArrayList<>();
