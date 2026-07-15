@@ -20,6 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -195,6 +196,9 @@ class SecurityIntegrationTest {
         booking.setPaymentProvider("PAYPAL");
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setPaypalOrderId("ORDER-HTTP");
+        booking.setPaypalExpectedAmount(new BigDecimal("80.00"));
+        booking.setPaypalCurrencyCode("EUR");
+        booking.setPaypalPayeeMerchantId("verified-merchant");
         booking = bookingRepository.saveAndFlush(booking);
         String payload = "{\"orderId\":\"ORDER-HTTP\"}";
 
@@ -260,7 +264,8 @@ class SecurityIntegrationTest {
         when(payPalService.captureOrder(booking.getId(), "ORDER-HTTP"))
                 .thenReturn(new PayPalService.PayPalCapture(
                         "COMPLETED", "CAPTURE-HTTP", "ORDER-HTTP",
-                        booking.getId().toString(), booking.getId().toString()
+                        booking.getId().toString(), booking.getId().toString(),
+                        new BigDecimal("80.00"), "EUR", "verified-merchant"
                 ));
         for (int request = 0; request < 2; request++) {
             mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())

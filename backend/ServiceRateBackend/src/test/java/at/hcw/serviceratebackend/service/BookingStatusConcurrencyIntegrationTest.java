@@ -125,6 +125,8 @@ class BookingStatusConcurrencyIntegrationTest {
     void checkoutAndCompletionAreSerializedWithoutLosingEitherChange() throws Exception {
         User customer = saveUser("checkout-race-customer@example.com", "CUSTOMER");
         User provider = saveUser("checkout-race-provider@example.com", "PROVIDER");
+        provider.setPaypalMerchantId("verified-merchant");
+        userRepository.saveAndFlush(provider);
         Booking booking = savePendingBooking(customer, saveService(provider));
         booking.setStatus("ACCEPTED");
         booking = bookingRepository.saveAndFlush(booking);

@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -90,7 +91,8 @@ class PayPalCaptureConcurrencyIntegrationTest {
             }
             return new PayPalService.PayPalCapture(
                     "COMPLETED", "CAPTURE-RACE", "ORDER-RACE",
-                    booking.getId().toString(), booking.getId().toString()
+                    booking.getId().toString(), booking.getId().toString(),
+                    new BigDecimal("80.00"), "EUR", "verified-merchant"
             );
         });
 
@@ -173,6 +175,9 @@ class PayPalCaptureConcurrencyIntegrationTest {
         booking.setPaymentProvider("PAYPAL");
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setPaypalOrderId("ORDER-RACE");
+        booking.setPaypalExpectedAmount(new BigDecimal("80.00"));
+        booking.setPaypalCurrencyCode("EUR");
+        booking.setPaypalPayeeMerchantId("verified-merchant");
         booking.setSettlementStatus("PAYPAL_PLATFORM_FEE_PENDING");
         return bookingRepository.saveAndFlush(booking);
     }

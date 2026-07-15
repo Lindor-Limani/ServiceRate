@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.test.web.client.MockRestServiceServer;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -81,6 +82,10 @@ class PayPalServiceTest {
         provider.setPaypalMerchantId(" verified-merchant ");
         provider.setPaypalEmail("legacy-fallback@example.com");
         Booking booking = booking(provider);
+        booking.setPaypalExpectedAmount(new BigDecimal("123.45"));
+        booking.setPaypalCurrencyCode("EUR");
+        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setCurrencyCode("USD");
 
         server.expect(requestTo("https://api-m.sandbox.paypal.com/v1/oauth2/token"))
                 .andExpect(method(HttpMethod.POST))
@@ -90,6 +95,7 @@ class PayPalServiceTest {
         server.expect(requestTo("https://api-m.sandbox.paypal.com/v2/checkout/orders"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("PayPal-Request-Id", "servicerate-order-" + booking.getId()))
+                .andExpect(content().string(containsString("\"amount\":{\"currency_code\":\"EUR\",\"value\":\"123.45\"}")))
                 .andExpect(content().string(containsString("\"payee\":{\"merchant_id\":\"verified-merchant\"}")))
                 .andExpect(content().string(not(containsString("email_address"))))
                 .andExpect(content().string(not(containsString("legacy-fallback@example.com"))))
@@ -163,6 +169,27 @@ class PayPalServiceTest {
     }
 
     @Test
+    void createOrder_rejectsMissingOrMismatchedSnapshotBeforePayPalCall() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PayPalService service = payPalService(builder);
+        Booking booking = booking(verifiedProvider());
+
+        booking.setPaypalExpectedAmount(null);
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Für die PayPal-Order fehlen vollständige Zahlungs-Sollwerte.");
+
+        booking.setPaypalExpectedAmount(new BigDecimal("100.00"));
+        booking.setPaypalPayeeMerchantId("other-merchant");
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Der PayPal-Zahlungsempfänger entspricht nicht dem verifizierten Anbieter.");
+
+        server.verify();
+    }
+
+    @Test
     void captureOrder_reusesBookingBoundRequestIdAcrossRetries() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -186,7 +213,11 @@ class PayPalServiceTest {
                               "purchase_units":[{
                                 "reference_id":"11111111-1111-4111-8111-111111111111",
                                 "custom_id":"11111111-1111-4111-8111-111111111111",
-                                "payments":{"captures":[{"id":"CAPTURE-1"}]}
+                                "payee":{"merchant_id":"verified-merchant"},
+                                "payments":{"captures":[{
+                                  "id":"CAPTURE-1",
+                                  "amount":{"value":"100.00","currency_code":"EUR"}
+                                }]}
                               }]
                             }
                             """, MediaType.APPLICATION_JSON));
@@ -200,6 +231,9 @@ class PayPalServiceTest {
         assertThat(first.orderId()).isEqualTo("ORDER-1");
         assertThat(first.bookingReferenceId()).isEqualTo(bookingId.toString());
         assertThat(first.bookingCustomId()).isEqualTo(bookingId.toString());
+        assertThat(first.amount()).isEqualByComparingTo("100.00");
+        assertThat(first.currencyCode()).isEqualTo("EUR");
+        assertThat(first.payeeMerchantId()).isEqualTo("verified-merchant");
         assertThat(retry).isEqualTo(first);
         server.verify();
     }
@@ -259,6 +293,12 @@ class PayPalServiceTest {
         Booking booking = new Booking();
         booking.setId(UUID.randomUUID());
         booking.setServiceOffering(offering);
+        booking.setPaypalExpectedAmount(new BigDecimal("100.00"));
+        booking.setPaypalCurrencyCode("EUR");
+        booking.setPaypalPayeeMerchantId(provider == null || provider.getPaypalMerchantId() == null
+                || provider.getPaypalMerchantId().isBlank()
+                ? "verified-merchant"
+                : provider.getPaypalMerchantId().trim());
         return booking;
     }
 }

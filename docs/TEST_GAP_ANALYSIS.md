@@ -34,7 +34,7 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
 | Stripe Checkout/Webhook | Teil | Nein | Nein | Teil Signatur | Nein | **P0** |
-| PayPal Checkout/Onboarding | Ja/Teil | Nein | Nein | Teil inkl. Capture-Providerbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
+| PayPal Checkout/Onboarding | Ja/Teil inkl. Order-Snapshot und Capture-Betrag/Währung/Payee | Nein | Nein | Teil inkl. Capture-Provider- und Finanzbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
 | Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Provider-Key-Retry plus Teil/H2 | **P0** |
 | Refund/Chargeback/Payout/Reconciliation | Nein | Nein | Nein | Nein | Nein | P1-Lücke |
 | Delivery nach Zahlung | Teil | Nein | Nein | Nein | Nein | **P0** |
@@ -75,7 +75,7 @@ Die Tests müssen UUID-Austausch in Pfad, Query und Body kombinieren. Ein bloße
 ### 3. Payment und Ledger
 
 - `mark-paid` direkt als Customer, Provider und anonym aufrufen: kein Client darf einen bezahlten Zustand erzeugen.
-- Gültige/ungültige Stripe- und PayPal-Signatur sowie falscher Provider, Payee, Betrag, Währung, Booking-ID und Payment-ID.
+- Gültige/ungültige Stripe- und PayPal-Signatur sowie falscher Provider, Payee, Betrag, Währung, Booking-ID und Payment-ID. Für PayPal sind Order-/Booking-ID, Betrag, Währung und Payee einschließlich fehlender/leerer/fremder Werte im Service- und Adapterpfad abgedeckt; Stripe und echte PSP-Sandbox-Abnahme bleiben offen.
 - Dasselbe Ereignis 1, 2 und 100 Mal senden: exakt ein Ledger-Effekt.
 - Ereignisse `completed`, `failed`, `refunded`, `disputed` in jeder Reihenfolge senden: deterministischer Endzustand.
 - Timeout/Prozessabsturz vor und nach DB-Commit simulieren: keine verlorene oder doppelte Buchung.

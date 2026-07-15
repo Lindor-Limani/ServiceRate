@@ -24,6 +24,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -388,6 +389,7 @@ class BookingServiceTest {
     void createCheckoutForPayPal_usesOnlyEligibleBookingProvider() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         User provider = user("provider@example.com", "PROVIDER", true);
+        provider.setPaypalMerchantId("verified-merchant");
         Booking booking = booking(provider);
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
@@ -418,6 +420,9 @@ class BookingServiceTest {
         assertThat(replay.paypalOrderId()).isEqualTo(response.paypalOrderId());
         assertThat(replay.checkoutUrl()).isEqualTo(response.checkoutUrl());
         assertThat(response.providerPaypalAvailable()).isTrue();
+        assertThat(booking.getPaypalExpectedAmount()).isEqualByComparingTo("100.00");
+        assertThat(booking.getPaypalCurrencyCode()).isEqualTo("EUR");
+        assertThat(booking.getPaypalPayeeMerchantId()).isEqualTo("verified-merchant");
         verify(payPalService, times(1)).createOrder(booking);
         verify(bookingRepository, times(1)).save(booking);
     }
@@ -489,6 +494,40 @@ class BookingServiceTest {
     }
 
     @Test
+    void createCheckoutForPayPal_rejectsInvalidFinancialSnapshotBeforeCreatingOrder() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        User provider = user("provider@example.com", "PROVIDER", true);
+        provider.setPaypalMerchantId("verified-merchant");
+        Booking booking = booking(provider);
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
+
+        booking.getServiceOffering().setPrice(0.0);
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout erfordert einen positiven Buchungsbetrag.");
+
+        booking.getServiceOffering().setPrice(100.0);
+        booking.getServiceOffering().setCurrencyCode("EURO");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout erfordert einen gültigen ISO-Währungscode.");
+
+        assertThat(booking.getPaypalExpectedAmount()).isNull();
+        assertThat(booking.getPaypalCurrencyCode()).isNull();
+        assertThat(booking.getPaypalPayeeMerchantId()).isNull();
+        verify(payPalService, never()).createOrder(any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
     void createCheckout_rejectsEveryNonAcceptedStatusBeforeMutationOrExternalCall() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         Booking booking = booking(user("provider@example.com", "PROVIDER", true));
@@ -540,12 +579,14 @@ class BookingServiceTest {
         booking.setPaymentProvider("PAYPAL");
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setPaypalOrderId("ORDER-1");
+        setPayPalSnapshot(booking);
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
         when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(new PayPalService.PayPalCapture(
                         "COMPLETED", "CAPTURE-1", "ORDER-1",
-                        booking.getId().toString(), booking.getId().toString()
+                        booking.getId().toString(), booking.getId().toString(),
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ));
         when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
@@ -599,21 +640,25 @@ class BookingServiceTest {
         booking.setPaymentProvider("PAYPAL");
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setPaypalOrderId("ORDER-1");
+        setPayPalSnapshot(booking);
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
         when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(null)
                 .thenReturn(new PayPalService.PayPalCapture(
                         "PENDING", "CAPTURE-PENDING", "ORDER-1",
-                        booking.getId().toString(), booking.getId().toString()
+                        booking.getId().toString(), booking.getId().toString(),
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
                         "COMPLETED", null, "ORDER-1",
-                        booking.getId().toString(), booking.getId().toString()
+                        booking.getId().toString(), booking.getId().toString(),
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
                         "COMPLETED", " ", "ORDER-1",
-                        booking.getId().toString(), booking.getId().toString()
+                        booking.getId().toString(), booking.getId().toString(),
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ));
 
         assertThatThrownBy(() -> bookingService.capturePayPalPayment(
@@ -636,6 +681,97 @@ class BookingServiceTest {
     }
 
     @Test
+    void capturePayPalPayment_rejectsMissingCheckoutSnapshotBeforeExternalCall() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-1");
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                booking.getId(), "ORDER-1", customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Der PayPal-Checkout enthält keine vollständigen unveränderlichen Zahlungs-Sollwerte.");
+
+        verify(payPalService, never()).captureOrder(any(), any());
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendPaymentRecordedMail(any());
+    }
+
+    @Test
+    void capturePayPalPayment_rejectsMismatchedFinancialValuesWithoutMutation() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-1");
+        setPayPalSnapshot(booking);
+        String bookingId = booking.getId().toString();
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        null, "EUR", "verified-merchant"
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("99.99"), "EUR", "verified-merchant"
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), null, "verified-merchant"
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), " ", "verified-merchant"
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), "USD", "verified-merchant"
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", null
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", " "
+                ))
+                .thenReturn(new PayPalService.PayPalCapture(
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", "other-merchant"
+                ));
+
+        String[] expectedErrors = {
+                "PayPal Capture enthält nicht den erwarteten Betrag.",
+                "PayPal Capture enthält nicht den erwarteten Betrag.",
+                "PayPal Capture enthält nicht die erwartete Währung.",
+                "PayPal Capture enthält nicht die erwartete Währung.",
+                "PayPal Capture enthält nicht die erwartete Währung.",
+                "PayPal Capture enthält nicht den erwarteten Zahlungsempfänger.",
+                "PayPal Capture enthält nicht den erwarteten Zahlungsempfänger.",
+                "PayPal Capture enthält nicht den erwarteten Zahlungsempfänger."
+        };
+        for (String expectedError : expectedErrors) {
+            assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                    booking.getId(), "ORDER-1", customer.getEmail()
+            )).hasMessage(expectedError);
+        }
+
+        assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(booking.getPaypalCaptureId()).isNull();
+        assertThat(booking.getPaidAt()).isNull();
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendPaymentRecordedMail(any());
+    }
+
+    @Test
     void capturePayPalPayment_rejectsMismatchedProviderBindingWithoutMutation() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         Booking booking = booking(user("provider@example.com", "PROVIDER", true));
@@ -643,36 +779,46 @@ class BookingServiceTest {
         booking.setPaymentProvider("PAYPAL");
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setPaypalOrderId("ORDER-1");
+        setPayPalSnapshot(booking);
         String bookingId = booking.getId().toString();
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
         when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", null, bookingId, bookingId
+                        "COMPLETED", "CAPTURE-1", null, bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", " ", bookingId, bookingId
+                        "COMPLETED", "CAPTURE-1", " ", bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-OTHER", bookingId, bookingId
+                        "COMPLETED", "CAPTURE-1", "ORDER-OTHER", bookingId, bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", null, bookingId
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", null, bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", " ", bookingId
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", " ", bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", UUID.randomUUID().toString(), bookingId
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", UUID.randomUUID().toString(), bookingId,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, null
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, null,
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, " "
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, " ",
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ))
                 .thenReturn(new PayPalService.PayPalCapture(
-                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, UUID.randomUUID().toString()
+                        "COMPLETED", "CAPTURE-1", "ORDER-1", bookingId, UUID.randomUUID().toString(),
+                        new BigDecimal("100.00"), "EUR", "verified-merchant"
                 ));
 
         String[] expectedErrors = {
@@ -754,6 +900,12 @@ class BookingServiceTest {
         ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Bitte einen Liefer-Link angeben.");
+    }
+
+    private void setPayPalSnapshot(Booking booking) {
+        booking.setPaypalExpectedAmount(new BigDecimal("100.00"));
+        booking.setPaypalCurrencyCode("EUR");
+        booking.setPaypalPayeeMerchantId("verified-merchant");
     }
 
     private Booking booking(User provider) {

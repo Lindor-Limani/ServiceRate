@@ -4,6 +4,7 @@ import at.hcw.serviceratebackend.model.common.entity.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -69,6 +70,15 @@ public class Booking extends AuditableEntity {
 
     @Column(name = "paypal_capture_id")
     private String paypalCaptureId;
+
+    @Column(name = "paypal_expected_amount", precision = 19, scale = 2)
+    private BigDecimal paypalExpectedAmount;
+
+    @Column(name = "paypal_currency_code", length = 3)
+    private String paypalCurrencyCode;
+
+    @Column(name = "paypal_payee_merchant_id")
+    private String paypalPayeeMerchantId;
 
     @Column(name = "stripe_checkout_session_id")
     private String stripeCheckoutSessionId;

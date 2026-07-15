@@ -54,6 +54,9 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP WITH TIME ZONE");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_order_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_capture_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_expected_amount NUMERIC(19,2)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_currency_code VARCHAR(3)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS paypal_payee_merchant_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_checkout_session_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_method_id VARCHAR(255)");

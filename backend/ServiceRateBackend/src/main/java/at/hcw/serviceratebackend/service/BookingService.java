@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -225,6 +226,7 @@ public class BookingService {
         booking.setPaymentProvider(provider);
         if ("PAYPAL".equals(provider)) {
             requireProviderPayPalAccount(booking);
+            applyPayPalCheckoutSnapshot(booking);
             booking.setPaymentStatus("CHECKOUT_CREATED");
             PayPalService.PayPalOrder order = payPalService.createOrder(booking);
             booking.setPaypalOrderId(order.orderId());
@@ -270,6 +272,7 @@ public class BookingService {
         if (!"CHECKOUT_CREATED".equals(booking.getPaymentStatus())) {
             throw new ConflictException("PayPal-Capture ist nur für einen gestarteten Checkout möglich.");
         }
+        requireCompletePayPalCheckoutSnapshot(booking);
 
         PayPalService.PayPalCapture capture = payPalService.captureOrder(booking.getId(), orderId);
         if (capture == null) {
@@ -587,6 +590,56 @@ public class BookingService {
         if (!expectedBookingId.equals(capture.bookingCustomId())) {
             throw new IllegalStateException("PayPal Capture enthält keine passende Buchungskennung.");
         }
+        if (capture.amount() == null
+                || booking.getPaypalExpectedAmount().compareTo(capture.amount()) != 0) {
+            throw new IllegalStateException("PayPal Capture enthält nicht den erwarteten Betrag.");
+        }
+        if (!booking.getPaypalCurrencyCode().equals(capture.currencyCode())) {
+            throw new IllegalStateException("PayPal Capture enthält nicht die erwartete Währung.");
+        }
+        if (!booking.getPaypalPayeeMerchantId().equals(capture.payeeMerchantId())) {
+            throw new IllegalStateException("PayPal Capture enthält nicht den erwarteten Zahlungsempfänger.");
+        }
+    }
+
+    private void applyPayPalCheckoutSnapshot(Booking booking) {
+        ServiceOffering offering = booking.getServiceOffering();
+        User provider = offering == null ? null : offering.getProvider();
+        String merchantId = provider == null ? null : provider.getPaypalMerchantId();
+        if (merchantId == null || merchantId.isBlank()) {
+            throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
+        }
+        if (booking.getGrossAmount() == null || booking.getGrossAmount() <= 0) {
+            throw new IllegalArgumentException("PayPal-Checkout erfordert einen positiven Buchungsbetrag.");
+        }
+        String currencyCode = offering.getCurrencyCode() == null || offering.getCurrencyCode().isBlank()
+                ? "EUR"
+                : offering.getCurrencyCode().trim().toUpperCase(Locale.ROOT);
+        if (!currencyCode.matches("[A-Z]{3}")) {
+            throw new IllegalArgumentException("PayPal-Checkout erfordert einen gültigen ISO-Währungscode.");
+        }
+        booking.setPaypalExpectedAmount(BigDecimal.valueOf(booking.getGrossAmount()).setScale(2, RoundingMode.HALF_UP));
+        booking.setPaypalCurrencyCode(currencyCode);
+        booking.setPaypalPayeeMerchantId(merchantId.trim());
+    }
+
+    private void requireCompletePayPalCheckoutSnapshot(Booking booking) {
+        if (!hasCompletePayPalCheckoutSnapshot(booking)) {
+            throw new ConflictException(
+                    "Der PayPal-Checkout enthält keine vollständigen unveränderlichen Zahlungs-Sollwerte."
+            );
+        }
+    }
+
+    private boolean hasCompletePayPalCheckoutSnapshot(Booking booking) {
+        return booking.getPaypalExpectedAmount() != null
+                && booking.getPaypalExpectedAmount().signum() > 0
+                && booking.getPaypalExpectedAmount().scale() <= 2
+                && booking.getPaypalCurrencyCode() != null
+                && booking.getPaypalCurrencyCode().matches("[A-Z]{3}")
+                && booking.getPaypalPayeeMerchantId() != null
+                && !booking.getPaypalPayeeMerchantId().isBlank()
+                && booking.getPaypalPayeeMerchantId().equals(booking.getPaypalPayeeMerchantId().trim());
     }
 
     private BookingResponse existingStripeCheckout(Booking booking) {
@@ -608,7 +661,8 @@ public class BookingService {
             return null;
         }
         if (booking.getPaypalOrderId() == null || booking.getPaypalOrderId().isBlank()
-                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()) {
+                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()
+                || !hasCompletePayPalCheckoutSnapshot(booking)) {
             throw new ConflictException("Der vorhandene PayPal-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
         }
         return toResponse(booking, providerName(booking.getServiceOffering()), findReviewResponse(booking));
@@ -631,6 +685,9 @@ public class BookingService {
         }
         if ((booking.getPaypalOrderId() != null && !booking.getPaypalOrderId().isBlank())
                 || (booking.getPaypalCaptureId() != null && !booking.getPaypalCaptureId().isBlank())
+                || booking.getPaypalExpectedAmount() != null
+                || booking.getPaypalCurrencyCode() != null
+                || booking.getPaypalPayeeMerchantId() != null
                 || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {
             throw new ConflictException("Die Buchung enthält bereits PayPal-Checkout-Daten.");
         }

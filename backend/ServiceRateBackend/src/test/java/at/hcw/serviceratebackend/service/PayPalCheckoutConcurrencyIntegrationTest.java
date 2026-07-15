@@ -136,6 +136,9 @@ class PayPalCheckoutConcurrencyIntegrationTest {
         assertThat(persisted.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(persisted.getPaypalOrderId()).isEqualTo("ORDER-parallel-once");
         assertThat(persisted.getCheckoutUrl()).isEqualTo("https://paypal.example/parallel");
+        assertThat(persisted.getPaypalExpectedAmount()).isEqualByComparingTo("80.00");
+        assertThat(persisted.getPaypalCurrencyCode()).isEqualTo("EUR");
+        assertThat(persisted.getPaypalPayeeMerchantId()).isEqualTo("verified-merchant");
         verify(payPalService, times(1)).createOrder(any(Booking.class));
     }
 

@@ -19,7 +19,6 @@ import java.nio.charset.StandardCharsets;
 import java.net.URLEncoder;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -83,12 +82,11 @@ public class PayPalService {
         }
         requireConfigured();
 
-        ServiceOffering offering = booking == null ? null : booking.getServiceOffering();
+        ServiceOffering offering = booking.getServiceOffering();
         String providerMerchantId = requireVerifiedProviderMerchantId(offering);
-        String currency = offering.getCurrencyCode() == null || offering.getCurrencyCode().isBlank()
-                ? "EUR"
-                : offering.getCurrencyCode().trim().toUpperCase(Locale.ROOT);
-        String amount = amountFor(booking).toPlainString();
+        requirePayPalCheckoutSnapshot(booking, providerMerchantId);
+        String currency = booking.getPaypalCurrencyCode();
+        String amount = booking.getPaypalExpectedAmount().setScale(2, RoundingMode.UNNECESSARY).toPlainString();
 
         Map<String, Object> response = restClient.post()
                 .uri(baseUrl + "/v2/checkout/orders")
@@ -148,14 +146,19 @@ public class PayPalService {
         }
 
         String status = String.valueOf(response.getOrDefault("status", ""));
-        String captureId = extractCaptureId(response);
         Map<?, ?> purchaseUnit = firstPurchaseUnit(response);
+        Map<?, ?> capturedPayment = firstCapture(purchaseUnit);
+        Map<?, ?> capturedAmount = childMap(capturedPayment, "amount");
+        Map<?, ?> payee = childMap(purchaseUnit, "payee");
         return new PayPalCapture(
                 status,
-                captureId,
+                capturedPayment == null ? null : stringOrNull(capturedPayment.get("id")),
                 stringOrNull(response.get("id")),
                 purchaseUnit == null ? null : stringOrNull(purchaseUnit.get("reference_id")),
-                purchaseUnit == null ? null : stringOrNull(purchaseUnit.get("custom_id"))
+                purchaseUnit == null ? null : stringOrNull(purchaseUnit.get("custom_id")),
+                capturedAmount == null ? null : decimalOrNull(capturedAmount.get("value")),
+                capturedAmount == null ? null : stringOrNull(capturedAmount.get("currency_code")),
+                payee == null ? null : stringOrNull(payee.get("merchant_id"))
         );
     }
 
@@ -335,16 +338,19 @@ public class PayPalService {
         }
     }
 
-    private BigDecimal amountFor(Booking booking) {
-        double basePrice = booking.getServiceOffering() == null || booking.getServiceOffering().getPrice() == null
-                ? 0.0
-                : booking.getServiceOffering().getPrice();
-        double hours = booking.getActualHours() != null && booking.getActualHours() > 0
-                ? booking.getActualHours()
-                : 1.0;
-        return BigDecimal.valueOf(basePrice)
-                .multiply(BigDecimal.valueOf(hours))
-                .setScale(2, RoundingMode.HALF_UP);
+    private void requirePayPalCheckoutSnapshot(Booking booking, String verifiedMerchantId) {
+        if (booking.getPaypalExpectedAmount() == null
+                || booking.getPaypalExpectedAmount().signum() <= 0
+                || booking.getPaypalExpectedAmount().scale() > 2
+                || booking.getPaypalCurrencyCode() == null
+                || !booking.getPaypalCurrencyCode().matches("[A-Z]{3}")
+                || booking.getPaypalPayeeMerchantId() == null
+                || booking.getPaypalPayeeMerchantId().isBlank()) {
+            throw new IllegalArgumentException("Für die PayPal-Order fehlen vollständige Zahlungs-Sollwerte.");
+        }
+        if (!verifiedMerchantId.equals(booking.getPaypalPayeeMerchantId())) {
+            throw new IllegalArgumentException("Der PayPal-Zahlungsempfänger entspricht nicht dem verifizierten Anbieter.");
+        }
     }
 
     private Map<String, Object> customerData(User provider) {
@@ -484,12 +490,8 @@ public class PayPalService {
         return null;
     }
 
-    @SuppressWarnings("unchecked")
-    private String extractCaptureId(Map<String, Object> response) {
-        Map<?, ?> purchaseUnit = firstPurchaseUnit(response);
-        if (purchaseUnit == null) {
-            return null;
-        }
+    private Map<?, ?> firstCapture(Map<?, ?> purchaseUnit) {
+        if (purchaseUnit == null) return null;
         Object paymentsValue = purchaseUnit.get("payments");
         if (!(paymentsValue instanceof Map<?, ?> payments)) {
             return null;
@@ -499,10 +501,13 @@ public class PayPalService {
             return null;
         }
         Object firstCapture = captures.get(0);
-        if (firstCapture instanceof Map<?, ?> capture && capture.get("id") != null) {
-            return String.valueOf(capture.get("id"));
-        }
-        return null;
+        return firstCapture instanceof Map<?, ?> capture ? capture : null;
+    }
+
+    private Map<?, ?> childMap(Map<?, ?> parent, String key) {
+        if (parent == null) return null;
+        Object value = parent.get(key);
+        return value instanceof Map<?, ?> map ? map : null;
     }
 
     private Map<?, ?> firstPurchaseUnit(Map<String, Object> response) {
@@ -518,13 +523,25 @@ public class PayPalService {
         return value == null ? null : String.valueOf(value);
     }
 
+    private BigDecimal decimalOrNull(Object value) {
+        if (value == null) return null;
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     public record PayPalOrder(String orderId, String approveUrl) {}
     public record PayPalCapture(
             String status,
             String captureId,
             String orderId,
             String bookingReferenceId,
-            String bookingCustomId
+            String bookingCustomId,
+            BigDecimal amount,
+            String currencyCode,
+            String payeeMerchantId
     ) {}
     public record PayPalReferral(String actionUrl, String selfUrl) {}
     public record PayPalSellerStatus(String merchantIdInPayPal, Boolean permissionsGranted, String accountStatus, Boolean consentStatus, Boolean isEmailConfirmed) {}

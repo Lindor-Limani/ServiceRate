@@ -248,10 +248,10 @@ Launch-blockierend fehlen bzw. sind fehlerhaft:
 - Payment darf nur aus einem definierten, akzeptierten Bookingzustand starten.
 - `/mark-paid` muss entfernt oder ausschließlich provider-signiertem Testcode außerhalb Produktion vorbehalten werden.
 - PayPal-Onboarding muss ausschließlich aus serverseitig verifiziertem Providerstatus stammen.
-- Booking muss Betrag, Währung, Preisgrundlage, Gebührenversion, Steuer-/Rechnungsdaten unveränderlich snapshotten.
+- Booking muss Betrag, Währung, Preisgrundlage, Gebührenversion, Steuer-/Rechnungsdaten unveränderlich snapshotten. Für den PayPal-Teilpfad werden seit 2026-07-15 erwarteter Capture-Betrag, ISO-Währung und Payee-Merchant-ID beim Checkout gespeichert; der vollständige fachliche Preis-/Gebühren-/Steuer-/Rechnungssnapshot bleibt offen.
 - Payment Attempts, eindeutige Provider-Transaktions-IDs, Idempotency Keys, Event-Inbox und atomare Statusübergänge fehlen.
 - Stripe `checkout.session.completed` wird nicht gegen die gespeicherte Session, Betrag, Währung, Paymentstatus und Connected Account geprüft; alte/fremde Reihenfolgen können den Zustand überschreiben (`StripeConnectService.java:205-243`).
-- PayPal Capture prüft nur `COMPLETED` und Capture-ID, nicht Betrag/Währung/Payee/Custom-ID aus der Antwort.
+- PayPal Capture fordert die vollständige Repräsentation an und prüft Order-ID, Booking-Referenzen, erwarteten Betrag, Währung und Payee gegen die beim Checkout gespeicherten PayPal-Sollwerte, bevor `PAID` gesetzt wird. Offen bleiben die vollständige Preisgrundlage, versionierte Migration sowie PostgreSQL-/PayPal-Sandbox-Verifikation.
 - Refund, Teilrefund, Chargeback, fehlgeschlagene Auszahlung, Gebührenrücknahme, Reconciliation und Recovery Job fehlen.
 - Settlement ist nur ein manuell änderbarer String; kein Ledger/Audit-Log.
 
