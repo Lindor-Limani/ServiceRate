@@ -10,6 +10,7 @@ import at.hcw.serviceratebackend.dto.ReviewResponse;
 import at.hcw.serviceratebackend.dto.TimeEntryResponse;
 import at.hcw.serviceratebackend.dto.UpdateBookingWorkRequest;
 import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.TimeEntry;
@@ -203,6 +204,7 @@ public class BookingService {
         if (!booking.getCustomer().getId().equals(customer.getId())) {
             throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
         }
+        requireAcceptedForCheckout(booking);
 
         String provider = request.provider() == null || request.provider().isBlank()
                 ? "MANUAL"
@@ -543,20 +545,19 @@ public class BookingService {
 
     private void requireProviderPayPalAccount(Booking booking) {
         User provider = booking.getServiceOffering() != null ? booking.getServiceOffering().getProvider() : null;
-        if (!isProviderPaypalAvailable(provider)) {
-            throw new IllegalArgumentException("Dieser Anbieter hat noch kein PayPal-Konto fuer Marketplace-Zahlungen hinterlegt.");
+        if (!payPalService.isProviderCheckoutEligible(provider)) {
+            throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
+        }
+    }
+
+    private void requireAcceptedForCheckout(Booking booking) {
+        if (!BookingStatus.ACCEPTED.name().equals(booking.getStatus())) {
+            throw new ConflictException("Checkout ist nur für angenommene Buchungen möglich.");
         }
     }
 
     private boolean isProviderPaypalAvailable(User provider) {
-        if (provider == null) {
-            return false;
-        }
-        boolean hasReceiver = (provider.getPaypalMerchantId() != null && !provider.getPaypalMerchantId().isBlank())
-                || (provider.getPaypalEmail() != null && !provider.getPaypalEmail().isBlank());
-        boolean connected = "CONNECTED".equals(provider.getPaypalOnboardingStatus())
-                || "ACTION_REQUIRED".equals(provider.getPaypalOnboardingStatus());
-        return hasReceiver && connected;
+        return payPalService.isProviderCheckoutEligible(provider);
     }
 
     private String trimOrNull(String value) {

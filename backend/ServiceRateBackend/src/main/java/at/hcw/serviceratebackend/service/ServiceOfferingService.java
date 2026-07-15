@@ -54,6 +54,7 @@ public class ServiceOfferingService {
     private final ReviewRepository reviewRepository;
     private final ReviewService reviewService;
     private final LocationValidationService locationValidationService;
+    private final PayPalService payPalService;
     private final StripeConnectService stripeConnectService;
 
     @Value("${app.backend-base-url:http://localhost:8081}")
@@ -273,14 +274,7 @@ public class ServiceOfferingService {
     }
 
     private boolean isProviderPaypalAvailable(User provider) {
-        if (provider == null) {
-            return false;
-        }
-        boolean hasReceiver = (provider.getPaypalMerchantId() != null && !provider.getPaypalMerchantId().isBlank())
-                || (provider.getPaypalEmail() != null && !provider.getPaypalEmail().isBlank());
-        boolean connected = "CONNECTED".equals(provider.getPaypalOnboardingStatus())
-                || "ACTION_REQUIRED".equals(provider.getPaypalOnboardingStatus());
-        return hasReceiver && connected;
+        return payPalService.isProviderCheckoutEligible(provider);
     }
 
     private int calculateTrustScore(double averageRating, long reviewCount, String status) {

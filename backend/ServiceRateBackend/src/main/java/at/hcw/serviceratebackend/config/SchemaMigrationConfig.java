@@ -22,6 +22,8 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_permissions_granted BOOLEAN");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_email_confirmed BOOLEAN");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_referral_self_url VARCHAR(1000)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_onboarding_state_hash VARCHAR(64)");
+        jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS paypal_onboarding_state_expires_at TIMESTAMP WITH TIME ZONE");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_default_payment_method_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_connected_account_id VARCHAR(255)");

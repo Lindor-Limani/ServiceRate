@@ -6,6 +6,7 @@ import at.hcw.serviceratebackend.dto.CreateTimeEntryRequest;
 import at.hcw.serviceratebackend.dto.PublishDeliveryRequest;
 import at.hcw.serviceratebackend.dto.UpdateBookingWorkRequest;
 import at.hcw.serviceratebackend.model.common.enums.BookingStatus;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -31,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -225,6 +227,7 @@ class BookingServiceTest {
     void createCheckoutForOfflinePayment_calculatesMarketplaceAmountsAndSetsSettlementStatus() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
         booking.setActualHours(2.5);
         booking.getServiceOffering().setPrice(80.0);
@@ -246,6 +249,106 @@ class BookingServiceTest {
         assertThat(response.platformFeeAmount()).isEqualTo(21.0);
         assertThat(response.providerReceivableAmount()).isEqualTo(179.0);
         assertThat(response.settlementStatus()).isEqualTo("NOT_READY");
+    }
+
+    @Test
+    void createCheckoutForPayPal_usesOnlyEligibleBookingProvider() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        User provider = user("provider@example.com", "PROVIDER", true);
+        Booking booking = booking(provider);
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
+        when(payPalService.createOrder(booking))
+                .thenReturn(new PayPalService.PayPalOrder("ORDER-1", "https://paypal.example/approve"));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
+
+        var response = bookingService.createCheckout(
+                booking.getId(),
+                new CreateCheckoutRequest("paypal", false),
+                "customer@example.com"
+        );
+
+        assertThat(response.paymentProvider()).isEqualTo("PAYPAL");
+        assertThat(response.paymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(response.paypalOrderId()).isEqualTo("ORDER-1");
+        assertThat(response.checkoutUrl()).isEqualTo("https://paypal.example/approve");
+        assertThat(response.providerPaypalAvailable()).isTrue();
+        verify(payPalService).createOrder(booking);
+    }
+
+    @Test
+    void createCheckoutForPayPal_rejectsIncompleteProviderBeforeCreatingOrder() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        User provider = user("provider@example.com", "PROVIDER", true);
+        provider.setPaypalMerchantId("stale-merchant");
+        provider.setPaypalOnboardingStatus("ACTION_REQUIRED");
+        provider.setPaypalPermissionsGranted(true);
+        provider.setPaypalEmailConfirmed(true);
+        Booking booking = booking(provider);
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+        when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(false);
+
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(),
+                new CreateCheckoutRequest("paypal", false),
+                "customer@example.com"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
+
+        verify(payPalService, never()).createOrder(any());
+        verify(bookingRepository, never()).save(any());
+    }
+
+    @Test
+    void createCheckout_rejectsEveryNonAcceptedStatusBeforeMutationOrExternalCall() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
+
+        String[] rejectedStatuses = {
+                BookingStatus.PENDING.name(),
+                BookingStatus.REJECTED.name(),
+                BookingStatus.COMPLETED.name(),
+                BookingStatus.CANCELLED.name(),
+                null,
+                "",
+                "UNKNOWN",
+                BookingStatus.REJECTED.name()
+        };
+        for (String rejectedStatus : rejectedStatuses) {
+            booking.setStatus(rejectedStatus);
+
+            assertThatThrownBy(() -> bookingService.createCheckout(
+                    booking.getId(),
+                    new CreateCheckoutRequest("PAYPAL", false),
+                    "customer@example.com"
+            ))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Checkout ist nur für angenommene Buchungen möglich.");
+
+            assertThat(booking.getPaymentStatus()).isEqualTo("UNPAID");
+            assertThat(booking.getPaymentProvider()).isEqualTo("MANUAL");
+            assertThat(booking.getGrossAmount()).isNull();
+            assertThat(booking.getPlatformFeeAmount()).isNull();
+            assertThat(booking.getProviderReceivableAmount()).isNull();
+            assertThat(booking.getPaypalOrderId()).isNull();
+            assertThat(booking.getCheckoutUrl()).isNull();
+        }
+
+        verify(payPalService, never()).createOrder(any());
+        verify(stripeConnectService, never()).createCheckoutSession(any(), anyBoolean());
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

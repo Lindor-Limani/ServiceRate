@@ -8,6 +8,7 @@ import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.ReviewRepository;
 import at.hcw.serviceratebackend.repository.ServiceOfferingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
+import at.hcw.serviceratebackend.service.PayPalService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +17,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -25,6 +27,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -60,6 +65,9 @@ class SecurityIntegrationTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @MockitoBean
+    private PayPalService payPalService;
+
     private User customer;
     private User provider;
     private User admin;
@@ -86,6 +94,95 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/api/bookings/customer/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer this.is.not.valid"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void payPalCheckout_rejectsAnonymousWrongRolesForeignCustomerMissingBookingAndIncompleteMerchant() throws Exception {
+        User otherCustomer = saveUser("other-checkout-customer@example.com", "CUSTOMER", "ACTIVE");
+        ServiceOffering offering = saveService(provider, "PayPal Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+        String payload = "{\"provider\":\"PAYPAL\",\"savePaymentMethod\":false}";
+
+        mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherCustomer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Diese Buchung gehört nicht zu diesem Kunden."));
+        mockMvc.perform(post("/api/bookings/{id}/checkout", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Buchung nicht gefunden"));
+        mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert."
+                ));
+
+        verify(payPalService, never()).createOrder(any());
+        Booking unchanged = bookingRepository.findById(booking.getId()).orElseThrow();
+        assertThat(unchanged.getPaymentStatus()).isEqualTo("UNPAID");
+        assertThat(unchanged.getPaypalOrderId()).isNull();
+    }
+
+    @Test
+    void checkoutRejectsEveryNonAcceptedPersistedStatusWithConflictAndNoSideEffect() throws Exception {
+        ServiceOffering offering = saveService(provider, "Checkout Status Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+        String payload = "{\"provider\":\"BANK_TRANSFER\",\"savePaymentMethod\":false}";
+        String[] rejectedStatuses = {
+                "PENDING",
+                "REJECTED",
+                "COMPLETED",
+                "CANCELLED",
+                "",
+                "UNKNOWN",
+                "REJECTED"
+        };
+
+        for (String rejectedStatus : rejectedStatuses) {
+            booking.setStatus(rejectedStatus);
+            booking = bookingRepository.saveAndFlush(booking);
+
+            mockMvc.perform(post("/api/bookings/{id}/checkout", booking.getId())
+                            .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.error").value(
+                            "Checkout ist nur für angenommene Buchungen möglich."
+                    ));
+
+            booking = bookingRepository.findById(booking.getId()).orElseThrow();
+            assertThat(booking.getStatus()).isEqualTo(rejectedStatus);
+            assertThat(booking.getPaymentStatus()).isEqualTo("UNPAID");
+            assertThat(booking.getPaymentProvider()).isEqualTo("MANUAL");
+            assertThat(booking.getGrossAmount()).isNull();
+            assertThat(booking.getPlatformFeeAmount()).isNull();
+            assertThat(booking.getProviderReceivableAmount()).isNull();
+            assertThat(booking.getCheckoutUrl()).isNull();
+        }
+
+        verify(payPalService, never()).createOrder(any());
     }
 
     @Test

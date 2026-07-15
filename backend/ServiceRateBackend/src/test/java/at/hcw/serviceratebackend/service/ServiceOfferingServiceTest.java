@@ -42,6 +42,8 @@ class ServiceOfferingServiceTest {
     @Mock
     private LocationValidationService locationValidationService;
     @Mock
+    private PayPalService payPalService;
+    @Mock
     private StripeConnectService stripeConnectService;
 
     private ServiceOfferingService service;
@@ -54,6 +56,7 @@ class ServiceOfferingServiceTest {
                 reviewRepository,
                 reviewService,
                 locationValidationService,
+                payPalService,
                 stripeConnectService
         );
         ReflectionTestUtils.setField(service, "backendBaseUrl", "http://localhost:8081");
@@ -67,6 +70,7 @@ class ServiceOfferingServiceTest {
         when(serviceRepository.save(any(ServiceOffering.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviewRepository.findAverageRatingByServiceId(any())).thenReturn(null);
         when(reviewRepository.findReviewCountByServiceId(any())).thenReturn(0L);
+        when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
         when(stripeConnectService.isProviderStripeAvailable(provider)).thenReturn(false);
 
         var response = service.createForProviderEmail(new CreateServiceRequest(
@@ -96,6 +100,7 @@ class ServiceOfferingServiceTest {
         assertThat(response.location()).isEqualTo("Wien, Innere Stadt");
         assertThat(response.imageUrls()).containsExactly("https://example.com/one.jpg", "https://example.com/two.jpg");
         assertThat(response.trustScore()).isEqualTo(10);
+        assertThat(response.providerPaypalAvailable()).isTrue();
         assertThat(response.reviews()).isEmpty();
         verify(reviewRepository, never()).findByBookingServiceOfferingId(any());
     }

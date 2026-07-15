@@ -1,6 +1,7 @@
 package at.hcw.serviceratebackend.controller;
 
 import at.hcw.serviceratebackend.dto.ProviderProfileResponse;
+import at.hcw.serviceratebackend.dto.PayPalOnboardingCompleteRequest;
 import at.hcw.serviceratebackend.dto.PayPalOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.StripeOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.UserResponse;
@@ -8,6 +9,7 @@ import at.hcw.serviceratebackend.service.ImageResource;
 import at.hcw.serviceratebackend.service.ProviderPayPalOnboardingService;
 import at.hcw.serviceratebackend.service.ProviderProfileService;
 import at.hcw.serviceratebackend.service.StripeConnectService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -16,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -51,6 +54,17 @@ public class ProviderProfileController {
     @PostMapping("/me/paypal/onboarding-status")
     public UserResponse refreshPayPalOnboardingStatus(Authentication authentication) {
         return payPalOnboardingService.refreshOnboardingStatus((String) authentication.getPrincipal());
+    }
+
+    @PostMapping("/me/paypal/onboarding-complete")
+    public UserResponse completePayPalOnboarding(
+            @Valid @RequestBody PayPalOnboardingCompleteRequest request,
+            Authentication authentication
+    ) {
+        return payPalOnboardingService.completeOnboarding(
+                (String) authentication.getPrincipal(),
+                request.state()
+        );
     }
 
     @PostMapping("/me/stripe/onboarding-link")

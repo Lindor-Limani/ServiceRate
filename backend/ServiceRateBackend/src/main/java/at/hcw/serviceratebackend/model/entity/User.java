@@ -52,6 +52,12 @@ public class User extends AuditableEntity {
     @Column(name = "paypal_referral_self_url", length = 1000)
     private String paypalReferralSelfUrl;
 
+    @Column(name = "paypal_onboarding_state_hash", length = 64)
+    private String paypalOnboardingStateHash;
+
+    @Column(name = "paypal_onboarding_state_expires_at")
+    private OffsetDateTime paypalOnboardingStateExpiresAt;
+
     @Column(name = "stripe_customer_id")
     private String stripeCustomerId;
 

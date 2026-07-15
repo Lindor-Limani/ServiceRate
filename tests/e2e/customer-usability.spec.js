@@ -208,12 +208,15 @@ test('main customer UI is usable on desktop and mobile viewports', async ({ page
   }
 });
 
-test('PayPal return parameters trigger only a server-side status refresh', async ({ page }) => {
+test('PayPal return sends only the bound state to the completion endpoint', async ({ page }) => {
   const requests = [];
   await page.route('http://localhost:8081/api/**', route => {
     const pathname = new URL(route.request().url()).pathname;
-    requests.push(pathname);
-    if (pathname === '/api/providers/me/paypal/onboarding-status') {
+    const body = pathname === '/api/providers/me/paypal/onboarding-complete'
+      ? route.request().postDataJSON()
+      : null;
+    requests.push({ pathname, body });
+    if (pathname === '/api/providers/me/paypal/onboarding-complete') {
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -238,11 +241,37 @@ test('PayPal return parameters trigger only a server-side status refresh', async
     localStorage.setItem('provider_paypal_onboarding_started', 'true');
   }, fakeJwt('PROVIDER'));
 
-  await page.goto('/provider-dashboard.html?paypalOnboarding=return&merchantIdInPayPal=attacker-merchant&permissionsGranted=true&isEmailConfirmed=true');
+  await page.goto('/provider-dashboard.html?paypalOnboarding=return&state=bound-state&merchantIdInPayPal=attacker-merchant&permissionsGranted=true&isEmailConfirmed=true');
 
-  await expect.poll(() => requests.filter(path => path === '/api/providers/me/paypal/onboarding-status').length).toBe(1);
-  expect(requests).not.toContain('/api/providers/me/paypal/onboarding-return');
+  await expect.poll(() => requests.filter(request => request.pathname === '/api/providers/me/paypal/onboarding-complete').length).toBe(1);
+  const completion = requests.find(request => request.pathname === '/api/providers/me/paypal/onboarding-complete');
+  expect(completion.body).toEqual({ state: 'bound-state' });
+  expect(requests.map(request => request.pathname)).not.toContain('/api/providers/me/paypal/onboarding-status');
+  expect(requests.map(request => request.pathname)).not.toContain('/api/providers/me/paypal/onboarding-return');
   await expect(page.locator('#providerPaypalConfirmBtn')).toHaveCount(0);
+});
+
+test('PayPal return without state is rejected without an API callback', async ({ page }) => {
+  const requests = [];
+  await page.route('http://localhost:8081/api/**', route => {
+    requests.push(new URL(route.request().url()).pathname);
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([])
+    });
+  });
+  await page.addInitScript(token => {
+    localStorage.setItem('provider_jwt', token);
+    localStorage.setItem('provider_paypal_onboarding_started', 'true');
+  }, fakeJwt('PROVIDER'));
+
+  await page.goto('/provider-dashboard.html?paypalOnboarding=return&merchantIdInPayPal=attacker-merchant');
+
+  await expect(page).toHaveURL(/provider-dashboard\.html$/);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('provider_paypal_onboarding_started'))).toBeNull();
+  expect(requests).not.toContain('/api/providers/me/paypal/onboarding-complete');
+  expect(requests).not.toContain('/api/providers/me/paypal/onboarding-status');
 });
 
 test('unbound PayPal identity codes are discarded without an API callback', async ({ page }) => {

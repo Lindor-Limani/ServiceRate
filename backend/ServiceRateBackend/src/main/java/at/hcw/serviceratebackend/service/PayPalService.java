@@ -67,10 +67,20 @@ public class PayPalService {
                 && clientSecret != null && !clientSecret.isBlank();
     }
 
+    public boolean isProviderCheckoutEligible(User provider) {
+        return provider != null
+                && "CONNECTED".equals(provider.getPaypalOnboardingStatus())
+                && Boolean.TRUE.equals(provider.getPaypalPermissionsGranted())
+                && Boolean.TRUE.equals(provider.getPaypalEmailConfirmed())
+                && provider.getPaypalMerchantId() != null
+                && !provider.getPaypalMerchantId().isBlank();
+    }
+
     public PayPalOrder createOrder(Booking booking) {
         requireConfigured();
 
-        ServiceOffering offering = booking.getServiceOffering();
+        ServiceOffering offering = booking == null ? null : booking.getServiceOffering();
+        String providerMerchantId = requireVerifiedProviderMerchantId(offering);
         String currency = offering.getCurrencyCode() == null || offering.getCurrencyCode().isBlank()
                 ? "EUR"
                 : offering.getCurrencyCode().trim().toUpperCase(Locale.ROOT);
@@ -82,7 +92,7 @@ public class PayPalService {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of(
                         "intent", "CAPTURE",
-                        "purchase_units", List.of(purchaseUnit(booking, offering, currency, amount)),
+                        "purchase_units", List.of(purchaseUnit(booking, offering, currency, amount, providerMerchantId)),
                         "application_context", Map.of(
                                 "brand_name", "ServiceRate",
                                 "user_action", "PAY_NOW",
@@ -125,10 +135,13 @@ public class PayPalService {
         return new PayPalCapture(status, captureId);
     }
 
-    public PayPalReferral createSellerOnboardingLink(User provider) {
+    public PayPalReferral createSellerOnboardingLink(User provider, String onboardingState) {
         requireConfigured();
         if (provider == null || provider.getId() == null) {
             throw new IllegalArgumentException("Provider fehlt.");
+        }
+        if (onboardingState == null || onboardingState.isBlank()) {
+            throw new IllegalArgumentException("PayPal-Onboarding-State fehlt.");
         }
 
         Map<String, Object> response;
@@ -162,7 +175,7 @@ public class PayPalService {
                                     "granted", true
                             )),
                             "partner_config_override", Map.of(
-                                    "return_url", appendProviderReturnParams(provider),
+                                    "return_url", appendProviderReturnParams(onboardingState),
                                     "return_url_description", "Zurueck zu ServiceRate",
                                     "show_add_credit_card", true
                             ),
@@ -325,16 +338,22 @@ public class PayPalService {
         return data;
     }
 
-    private String appendProviderReturnParams(User provider) {
+    private String appendProviderReturnParams(String onboardingState) {
         String separator = sellerReturnUrl.contains("?") ? "&" : "?";
-        return sellerReturnUrl + separator + "paypalOnboarding=return&providerId=" + provider.getId();
+        return sellerReturnUrl + separator + "paypalOnboarding=return&state=" + encode(onboardingState);
     }
 
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    private Map<String, Object> purchaseUnit(Booking booking, ServiceOffering offering, String currency, String amount) {
+    private Map<String, Object> purchaseUnit(
+            Booking booking,
+            ServiceOffering offering,
+            String currency,
+            String amount,
+            String providerMerchantId
+    ) {
         Map<String, Object> unit = new java.util.LinkedHashMap<>();
         unit.put("reference_id", booking.getId().toString());
         unit.put("description", safeDescription(offering));
@@ -344,10 +363,7 @@ public class PayPalService {
                 "value", amount
         ));
 
-        UserPayee payee = providerPayee(offering);
-        if (payee != null) {
-            unit.put("payee", payee.asMap());
-        }
+        unit.put("payee", Map.of("merchant_id", providerMerchantId));
 
         if (booking.getPlatformFeeAmount() != null && booking.getPlatformFeeAmount() > 0) {
             unit.put("payment_instruction", Map.of(
@@ -363,19 +379,14 @@ public class PayPalService {
         return unit;
     }
 
-    private UserPayee providerPayee(ServiceOffering offering) {
-        if (offering == null || offering.getProvider() == null) {
-            return null;
+    private String requireVerifiedProviderMerchantId(ServiceOffering offering) {
+        User provider = offering == null ? null : offering.getProvider();
+        if (!isProviderCheckoutEligible(provider)) {
+            throw new IllegalArgumentException(
+                    "PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert."
+            );
         }
-        String merchantId = offering.getProvider().getPaypalMerchantId();
-        if (merchantId != null && !merchantId.isBlank()) {
-            return new UserPayee("merchant_id", merchantId.trim());
-        }
-        String email = offering.getProvider().getPaypalEmail();
-        if (email != null && !email.isBlank()) {
-            return new UserPayee("email_address", email.trim());
-        }
-        return null;
+        return provider.getPaypalMerchantId().trim();
     }
 
     private String safeDescription(ServiceOffering offering) {
@@ -478,12 +489,6 @@ public class PayPalService {
     public record PayPalCapture(String status, String captureId) {}
     public record PayPalReferral(String actionUrl, String selfUrl) {}
     public record PayPalSellerStatus(String merchantIdInPayPal, Boolean permissionsGranted, String accountStatus, Boolean consentStatus, Boolean isEmailConfirmed) {}
-
-    private record UserPayee(String key, String value) {
-        Map<String, String> asMap() {
-            return Map.of(key, value);
-        }
-    }
 
     @SuppressWarnings("unchecked")
     private String findString(Object value, String... keys) {

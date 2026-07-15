@@ -230,6 +230,18 @@ async function refreshPayPalOnboardingStatus() {
   }
 }
 
+async function completePayPalOnboarding(state) {
+  try {
+    const user = await fetchAPI('/providers/me/paypal/onboarding-complete', 'POST', { state }, 'provider_jwt');
+    renderProviderPayPalStatus(user);
+    notify(user.paypalOnboardingStatus === 'CONNECTED'
+      ? 'PayPal-Verbindung wurde sicher bestätigt.'
+      : 'PayPal-Rückkehr wurde bestätigt. Eventuell ist noch ein Schritt bei PayPal offen.', 'success');
+  } catch (e) {
+    notify(e.message || 'PayPal-Rückkehr ist ungültig oder abgelaufen. Bitte starte die Verbindung erneut.', 'error');
+  }
+}
+
 function wireProviderFormatting() {
   document.getElementById('providerPayoutIban')?.addEventListener('input', e => {
     e.target.value = formatIbanValue(e.target.value);
@@ -497,7 +509,12 @@ function handleAuthLinks() {
   const paypalOnboarding = params.get('paypalOnboarding');
   if (!paypalCode && (paypalOnboarding === 'return' || hasPayPalReturnParams(params))) {
     localStorage.removeItem('provider_paypal_onboarding_started');
-    refreshPayPalOnboardingStatus();
+    const paypalState = params.get('state');
+    if (paypalState) {
+      completePayPalOnboarding(paypalState);
+    } else {
+      notify('PayPal-Rückkehr enthält keinen gültigen Sicherheitsnachweis. Bitte starte die Verbindung erneut.', 'error');
+    }
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
