@@ -186,6 +186,95 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void bookingStatusEndpointEnforcesRolesOwnershipInputsAndTransitionPolicy() throws Exception {
+        User otherProvider = saveUser("other-status-provider@example.com", "PROVIDER", "ACTIVE");
+        ServiceOffering offering = saveService(provider, "Status Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+        booking.setStatus("PENDING");
+        booking = bookingRepository.saveAndFlush(booking);
+        String acceptPayload = "{\"status\":\"ACCEPTED\"}";
+
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherProvider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Diese Buchung gehört nicht zu diesem Anbieter."));
+        mockMvc.perform(put("/api/bookings/{id}/status", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Buchung nicht gefunden"));
+
+        for (String invalidPayload : new String[]{"{}", "{\"status\":\"\"}", "{\"status\":\"UNKNOWN\"}"}) {
+            mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                            .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidPayload))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("Ungültiger Buchungsstatus."));
+        }
+
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED"));
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(acceptPayload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(
+                        "Statuswechsel ist für den aktuellen Buchungsstatus nicht erlaubt."
+                ));
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+        mockMvc.perform(put("/api/bookings/{id}/status", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REJECTED\"}"))
+                .andExpect(status().isConflict());
+        assertThat(bookingRepository.findById(booking.getId()).orElseThrow().getStatus()).isEqualTo("COMPLETED");
+
+        Booking rejected = saveUnpaidBooking(customer, offering);
+        rejected.setStatus("PENDING");
+        rejected = bookingRepository.saveAndFlush(rejected);
+        mockMvc.perform(put("/api/bookings/{id}/status", rejected.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"REJECTED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+        mockMvc.perform(put("/api/bookings/{id}/status", rejected.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isConflict());
+        assertThat(bookingRepository.findById(rejected.getId()).orElseThrow().getStatus()).isEqualTo("REJECTED");
+    }
+
+    @Test
     void tamperedTokenDoesNotAuthenticateUser() throws Exception {
         String token = jwtUtil.generateToken(customer.getEmail(), customer.getAccountType());
         String tampered = token.substring(0, token.length() - 2) + "xx";

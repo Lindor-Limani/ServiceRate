@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -171,23 +172,69 @@ class BookingServiceTest {
     }
 
     @Test
-    void updateBookingStatus_allowsOnlyOwningProviderAndAllowedStatuses() {
+    void updateBookingStatus_enforcesCompleteProviderTransitionMatrix() {
         User provider = user("provider@example.com", "PROVIDER", true);
         Booking booking = booking(provider);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
         when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
 
-        var response = bookingService.updateBookingStatus(booking.getId(), "ACCEPTED", "provider@example.com");
+        for (BookingStatus source : BookingStatus.values()) {
+            for (BookingStatus target : BookingStatus.values()) {
+                booking.setStatus(source.name());
+                boolean allowed = (source == BookingStatus.PENDING
+                        && (target == BookingStatus.ACCEPTED || target == BookingStatus.REJECTED))
+                        || (source == BookingStatus.ACCEPTED && target == BookingStatus.COMPLETED);
 
-        assertThat(response.status()).isEqualTo("ACCEPTED");
-        verify(mailService).sendBookingStatusMail(booking);
+                if (allowed) {
+                    var response = bookingService.updateBookingStatus(
+                            booking.getId(), target.name(), "provider@example.com"
+                    );
+                    assertThat(response.status()).isEqualTo(target.name());
+                } else {
+                    assertThatThrownBy(() -> bookingService.updateBookingStatus(
+                            booking.getId(), target.name(), "provider@example.com"
+                    ))
+                            .isInstanceOf(ConflictException.class)
+                            .hasMessage("Statuswechsel ist für den aktuellen Buchungsstatus nicht erlaubt.");
+                    assertThat(booking.getStatus()).isEqualTo(source.name());
+                }
+            }
+        }
 
-        assertThatThrownBy(() -> bookingService.updateBookingStatus(booking.getId(), "PENDING", "provider@example.com"))
+        verify(bookingRepository, times(3)).save(booking);
+        verify(mailService, times(3)).sendBookingStatusMail(booking);
+    }
+
+    @Test
+    void updateBookingStatus_rejectsInvalidTargetAndInvalidPersistedSourceWithoutSideEffect() {
+        User provider = user("provider@example.com", "PROVIDER", true);
+        Booking booking = booking(provider);
+        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
+
+        for (String invalidTarget : new String[]{null, "", "UNKNOWN"}) {
+            booking.setStatus(BookingStatus.PENDING.name());
+            assertThatThrownBy(() -> bookingService.updateBookingStatus(
+                    booking.getId(), invalidTarget, "provider@example.com"
+            ))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Ungültiger Buchungsstatus.");
+        }
+        for (String invalidSource : new String[]{null, "", "UNKNOWN"}) {
+            booking.setStatus(invalidSource);
+            assertThatThrownBy(() -> bookingService.updateBookingStatus(
+                    booking.getId(), BookingStatus.ACCEPTED.name(), "provider@example.com"
+            ))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Statuswechsel ist für den aktuellen Buchungsstatus nicht erlaubt.");
+            assertThat(booking.getStatus()).isEqualTo(invalidSource);
+        }
+
+        verify(bookingRepository, never()).save(any());
+        verify(mailService, never()).sendBookingStatusMail(any());
     }
 
     @Test
@@ -195,7 +242,7 @@ class BookingServiceTest {
         User owner = user("owner@example.com", "PROVIDER", true);
         User otherProvider = user("other@example.com", "PROVIDER", true);
         Booking booking = booking(owner);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("other@example.com")).thenReturn(Optional.of(otherProvider));
 
         assertThatThrownBy(() -> bookingService.updateBookingStatus(booking.getId(), "ACCEPTED", "other@example.com"))

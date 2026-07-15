@@ -106,7 +106,7 @@ public class BookingService {
 
     // Ändert den Status einer Buchung
     public BookingResponse updateBookingStatus(UUID bookingId, String newStatus, String providerEmail) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForStatusUpdate(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
 
         User provider = userRepository.findByEmail(providerEmail)
@@ -115,10 +115,9 @@ public class BookingService {
         requireProviderOwnsBooking(provider, booking);
 
         BookingStatus targetStatus = parseStatus(newStatus);
-        if (targetStatus != BookingStatus.ACCEPTED
-                && targetStatus != BookingStatus.REJECTED
-                && targetStatus != BookingStatus.COMPLETED) {
-            throw new IllegalArgumentException("Ungültiger Buchungsstatus.");
+        BookingStatus sourceStatus = parsePersistedStatus(booking.getStatus());
+        if (!isAllowedProviderTransition(sourceStatus, targetStatus)) {
+            throw new ConflictException("Statuswechsel ist für den aktuellen Buchungsstatus nicht erlaubt.");
         }
 
         booking.setStatus(targetStatus.name());
@@ -548,6 +547,20 @@ public class BookingService {
         if (!payPalService.isProviderCheckoutEligible(provider)) {
             throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
         }
+    }
+
+    private BookingStatus parsePersistedStatus(String status) {
+        try {
+            return BookingStatus.valueOf(status);
+        } catch (Exception e) {
+            throw new ConflictException("Statuswechsel ist für den aktuellen Buchungsstatus nicht erlaubt.");
+        }
+    }
+
+    private boolean isAllowedProviderTransition(BookingStatus source, BookingStatus target) {
+        return (source == BookingStatus.PENDING
+                && (target == BookingStatus.ACCEPTED || target == BookingStatus.REJECTED))
+                || (source == BookingStatus.ACCEPTED && target == BookingStatus.COMPLETED);
     }
 
     private void requireAcceptedForCheckout(Booking booking) {

@@ -23,4 +23,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("select b from Booking b where b.id = :id")
     Optional<Booking> findByIdForReviewCreation(@Param("id") UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Booking b where b.id = :id")
+    Optional<Booking> findByIdForStatusUpdate(@Param("id") UUID id);
+
 }
