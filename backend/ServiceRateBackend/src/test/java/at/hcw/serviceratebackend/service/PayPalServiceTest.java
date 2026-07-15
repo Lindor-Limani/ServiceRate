@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -88,6 +89,7 @@ class PayPalServiceTest {
                         """, MediaType.APPLICATION_JSON));
         server.expect(requestTo("https://api-m.sandbox.paypal.com/v2/checkout/orders"))
                 .andExpect(method(HttpMethod.POST))
+                .andExpect(header("PayPal-Request-Id", "servicerate-order-" + booking.getId()))
                 .andExpect(content().string(containsString("\"payee\":{\"merchant_id\":\"verified-merchant\"}")))
                 .andExpect(content().string(not(containsString("email_address"))))
                 .andExpect(content().string(not(containsString("legacy-fallback@example.com"))))
@@ -102,6 +104,21 @@ class PayPalServiceTest {
 
         assertThat(order.orderId()).isEqualTo("ORDER-1");
         assertThat(order.approveUrl()).isEqualTo("https://paypal.example/approve");
+        server.verify();
+    }
+
+    @Test
+    void createOrder_rejectsMissingBookingIdBeforePayPalCall() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PayPalService service = payPalService(builder);
+        Booking booking = booking(verifiedProvider());
+        booking.setId(null);
+
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Für die PayPal-Order ist eine persistierte Buchung erforderlich.");
+
         server.verify();
     }
 
@@ -140,7 +157,7 @@ class PayPalServiceTest {
         }
         assertThatThrownBy(() -> service.createOrder(null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(CHECKOUT_ERROR);
+                .hasMessage("Für die PayPal-Order ist eine persistierte Buchung erforderlich.");
 
         server.verify();
     }

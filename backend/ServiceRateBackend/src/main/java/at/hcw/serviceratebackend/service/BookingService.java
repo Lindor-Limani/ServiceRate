@@ -214,6 +214,12 @@ public class BookingService {
                 return existingCheckout;
             }
             requireStripeCheckoutMayStart(booking);
+        } else if ("PAYPAL".equals(provider)) {
+            BookingResponse existingCheckout = existingPayPalCheckout(booking);
+            if (existingCheckout != null) {
+                return existingCheckout;
+            }
+            requirePayPalCheckoutMayStart(booking);
         }
         applyMarketplaceAmounts(booking);
         booking.setPaymentProvider(provider);
@@ -578,6 +584,18 @@ public class BookingService {
         return toResponse(booking, providerName(booking.getServiceOffering()), findReviewResponse(booking));
     }
 
+    private BookingResponse existingPayPalCheckout(Booking booking) {
+        if (!"PAYPAL".equals(booking.getPaymentProvider())
+                || !"CHECKOUT_CREATED".equals(booking.getPaymentStatus())) {
+            return null;
+        }
+        if (booking.getPaypalOrderId() == null || booking.getPaypalOrderId().isBlank()
+                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()) {
+            throw new ConflictException("Der vorhandene PayPal-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
+        }
+        return toResponse(booking, providerName(booking.getServiceOffering()), findReviewResponse(booking));
+    }
+
     private void requireStripeCheckoutMayStart(Booking booking) {
         if (!"UNPAID".equals(booking.getPaymentStatus())) {
             throw new ConflictException("Für diese Buchung wurde bereits eine Zahlung gestartet.");
@@ -586,6 +604,17 @@ public class BookingService {
                 || (booking.getStripePaymentIntentId() != null && !booking.getStripePaymentIntentId().isBlank())
                 || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {
             throw new ConflictException("Die Buchung enthält bereits Stripe-Checkout-Daten.");
+        }
+    }
+
+    private void requirePayPalCheckoutMayStart(Booking booking) {
+        if (!"UNPAID".equals(booking.getPaymentStatus())) {
+            throw new ConflictException("Für diese Buchung wurde bereits eine Zahlung gestartet.");
+        }
+        if ((booking.getPaypalOrderId() != null && !booking.getPaypalOrderId().isBlank())
+                || (booking.getPaypalCaptureId() != null && !booking.getPaypalCaptureId().isBlank())
+                || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {
+            throw new ConflictException("Die Buchung enthält bereits PayPal-Checkout-Daten.");
         }
     }
 

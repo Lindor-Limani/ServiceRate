@@ -548,8 +548,8 @@ Die Detailfindings werden zusätzlich in `docs/SECURITY_FINDINGS.md` gespiegelt.
 * betroffene Rollen: Customer, Provider, System
 * betroffene Dateien: `repository/BookingRepository.java:7-16`; `service/BookingService.java:41,148-174,198-323`; `service/StripeConnectService.java:177-243`; `service/PayPalService.java:136-183`
 * betroffene Endpunkte: Booking Create/Transitions, Checkout/Capture, Stripe Webhook
-* Beschreibung: Keine `@Version`, DB-Locks, Idempotency Keys, Event-ID-Inbox oder eindeutigen Payment-ID-Constraints.
-* konkreter Nachweis: Webhook setzt Completed/Failed ohne Event-Deduplikation oder gespeicherte Session-/Betragsprüfung; PayPal sendet keinen Request-Idempotency-Key.
+* Beschreibung: Das Gesamtmodell besitzt weiterhin keine `@Version`, allgemeine Idempotency-Key-Tabelle oder eindeutigen Payment-ID-Constraints; einzelne Checkout-/Webhook-Pfade sind inzwischen gezielt abgesichert.
+* konkreter Nachweis: PayPal-Order-Erzeugung und Stripe-Checkout werden bookinggebunden pessimistisch serialisiert, geben vollständig persistierte Checkouts bei Replay ohne neuen Provideraufruf zurück und senden stabile Provider-Idempotency-Keys. Ein Zehnfach-Race ist je Provider grün. Offen bleiben insbesondere Ledger/Outbox, allgemeine Payment-ID-Constraints, Betrag-/Währungs-/Payee-Abgleich, weitere Eventtypen und Recovery nach Parameteränderungen.
 * realistisches Angriffs- oder Fehlerszenario: Doppelklick erzeugt mehrere Checkouts; verspätetes Failed überschreibt Paid; parallele Zeiteinträge verlieren Summen; Webhook-Replay sendet mehrfach Mail.
 * Auswirkung: Doppelcharges, falsche Auszahlungen, verlorene Updates und nicht reproduzierbare Zustände.
 * empfohlene Lösung: Idempotency-Key-Tabelle, Unique Provider IDs/Event IDs, optimistic/pessimistic locking, Inbox/Outbox, monotone Eventpolicy, Reconciliation.

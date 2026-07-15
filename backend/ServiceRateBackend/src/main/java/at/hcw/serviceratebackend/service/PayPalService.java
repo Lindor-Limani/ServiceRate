@@ -77,6 +77,9 @@ public class PayPalService {
     }
 
     public PayPalOrder createOrder(Booking booking) {
+        if (booking == null || booking.getId() == null) {
+            throw new IllegalArgumentException("Für die PayPal-Order ist eine persistierte Buchung erforderlich.");
+        }
         requireConfigured();
 
         ServiceOffering offering = booking == null ? null : booking.getServiceOffering();
@@ -88,7 +91,10 @@ public class PayPalService {
 
         Map<String, Object> response = restClient.post()
                 .uri(baseUrl + "/v2/checkout/orders")
-                .headers(headers -> headers.setBearerAuth(accessToken()))
+                .headers(headers -> {
+                    headers.setBearerAuth(accessToken());
+                    headers.set("PayPal-Request-Id", "servicerate-order-" + booking.getId());
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of(
                         "intent", "CAPTURE",

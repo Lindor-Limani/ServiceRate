@@ -405,13 +405,60 @@ class BookingServiceTest {
                 new CreateCheckoutRequest("paypal", false),
                 "customer@example.com"
         );
+        var replay = bookingService.createCheckout(
+                booking.getId(),
+                new CreateCheckoutRequest("PAYPAL", false),
+                "customer@example.com"
+        );
 
         assertThat(response.paymentProvider()).isEqualTo("PAYPAL");
         assertThat(response.paymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(response.paypalOrderId()).isEqualTo("ORDER-1");
         assertThat(response.checkoutUrl()).isEqualTo("https://paypal.example/approve");
+        assertThat(replay.paypalOrderId()).isEqualTo(response.paypalOrderId());
+        assertThat(replay.checkoutUrl()).isEqualTo(response.checkoutUrl());
         assertThat(response.providerPaypalAvailable()).isTrue();
-        verify(payPalService).createOrder(booking);
+        verify(payPalService, times(1)).createOrder(booking);
+        verify(bookingRepository, times(1)).save(booking);
+    }
+
+    @Test
+    void createPayPalCheckoutRejectsOtherActiveOrInconsistentPaymentState() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        booking.setPaymentProvider("CARD");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Für diese Buchung wurde bereits eine Zahlung gestartet.");
+
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaypalOrderId(null);
+        booking.setCheckoutUrl(null);
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Der vorhandene PayPal-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
+
+        booking.setPaymentProvider("MANUAL");
+        booking.setPaymentStatus("UNPAID");
+        booking.setPaypalOrderId("ORDER-stale");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Die Buchung enthält bereits PayPal-Checkout-Daten.");
+
+        verify(payPalService, never()).createOrder(any());
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
