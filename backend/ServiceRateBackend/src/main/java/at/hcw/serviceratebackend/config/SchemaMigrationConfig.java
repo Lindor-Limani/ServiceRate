@@ -42,6 +42,8 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("UPDATE service_offerings SET deliverable_type = 'ON_SITE' WHERE deliverable_type IS NULL");
 
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS actual_hours DOUBLE PRECISION");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booked_unit_price NUMERIC(19,2)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_currency_code VARCHAR(3)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_notes TEXT");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_notes TEXT");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS delivery_url VARCHAR(1000)");

@@ -22,6 +22,12 @@ public class Booking extends AuditableEntity {
     @JoinColumn(name = "service_offering_id", nullable = false)
     private ServiceOffering serviceOffering;
 
+    @Column(name = "booked_unit_price", precision = 19, scale = 2)
+    private BigDecimal bookedUnitPrice;
+
+    @Column(name = "booking_currency_code", length = 3)
+    private String bookingCurrencyCode;
+
     @Column(name = "service_date", nullable = false)
     private OffsetDateTime serviceDate;
 

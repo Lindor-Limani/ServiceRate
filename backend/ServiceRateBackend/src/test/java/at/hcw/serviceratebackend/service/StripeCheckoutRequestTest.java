@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -69,7 +70,6 @@ class StripeCheckoutRequestTest {
                 stripeWebhookEventService
         );
         ReflectionTestUtils.setField(stripeConnectService, "secretKey", "sk_test_local_adapter");
-        ReflectionTestUtils.setField(stripeConnectService, "currency", "eur");
         ReflectionTestUtils.setField(stripeConnectService, "checkoutSuccessUrl", "https://example.test/success");
         ReflectionTestUtils.setField(stripeConnectService, "checkoutCancelUrl", "https://example.test/cancel");
     }
@@ -88,6 +88,7 @@ class StripeCheckoutRequestTest {
     @Test
     void checkoutRequestUsesStableBookingScopedIdempotencyKey() {
         Booking booking = checkoutBooking(UUID.randomUUID());
+        booking.setBookingCurrencyCode("USD");
 
         StripeConnectService.StripeCheckout checkout =
                 stripeConnectService.createCheckoutSession(booking, false);
@@ -100,11 +101,11 @@ class StripeCheckoutRequestTest {
         assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(booking.getStripeExpectedAmountMinor()).isEqualTo(10000L);
         assertThat(booking.getStripeExpectedApplicationFeeMinor()).isEqualTo(1100L);
-        assertThat(booking.getStripeCurrencyCode()).isEqualTo("EUR");
+        assertThat(booking.getStripeCurrencyCode()).isEqualTo("USD");
         assertThat(booking.getStripeConnectedAccountId()).isEqualTo("acct_local");
         assertThat(requestBody.get()).contains(
                 "line_items[0][price_data][unit_amount]=10000",
-                "line_items[0][price_data][currency]=eur",
+                "line_items[0][price_data][currency]=usd",
                 "payment_intent_data[application_fee_amount]=1100",
                 "payment_intent_data[transfer_data][destination]=acct_local"
         );
@@ -182,7 +183,7 @@ class StripeCheckoutRequestTest {
         }
 
         booking.setGrossAmount(100.0);
-        ReflectionTestUtils.setField(stripeConnectService, "currency", "EURO");
+        booking.setBookingCurrencyCode("EURO");
         assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Stripe Checkout erfordert einen gueltigen ISO-Waehrungscode.");
@@ -222,6 +223,8 @@ class StripeCheckoutRequestTest {
         booking.setId(bookingId);
         booking.setCustomer(customer);
         booking.setServiceOffering(offering);
+        booking.setBookedUnitPrice(new BigDecimal("100.00"));
+        booking.setBookingCurrencyCode("EUR");
         booking.setGrossAmount(100.0);
         booking.setPlatformFeeAmount(11.0);
         return booking;

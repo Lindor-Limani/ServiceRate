@@ -963,6 +963,8 @@ class SecurityIntegrationTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(bookingCustomer);
         booking.setServiceOffering(offering);
+        booking.setBookedUnitPrice(BigDecimal.valueOf(offering.getPrice()).setScale(2));
+        booking.setBookingCurrencyCode(offering.getCurrencyCode());
         booking.setServiceDate(OffsetDateTime.now().plusDays(1));
         booking.setBookingDate(LocalDate.now().plusDays(1));
         booking.setStatus("ACCEPTED");

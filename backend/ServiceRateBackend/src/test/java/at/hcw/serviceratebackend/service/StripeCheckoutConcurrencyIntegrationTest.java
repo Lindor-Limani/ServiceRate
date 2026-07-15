@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -143,6 +144,8 @@ class StripeCheckoutConcurrencyIntegrationTest {
         assertThat(persisted.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(persisted.getStripeCheckoutSessionId()).isEqualTo("cs_parallel_once");
         assertThat(persisted.getStripePaymentIntentId()).isEqualTo("pi_parallel_once");
+        assertThat(persisted.getBookedUnitPrice()).isEqualByComparingTo("80.00");
+        assertThat(persisted.getBookingCurrencyCode()).isEqualTo("EUR");
         assertThat(persisted.getStripeExpectedAmountMinor()).isEqualTo(8000L);
         assertThat(persisted.getStripeExpectedApplicationFeeMinor()).isEqualTo(800L);
         assertThat(persisted.getStripeCurrencyCode()).isEqualTo("EUR");
@@ -180,6 +183,8 @@ class StripeCheckoutConcurrencyIntegrationTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(customer);
         booking.setServiceOffering(offering);
+        booking.setBookedUnitPrice(BigDecimal.valueOf(offering.getPrice()).setScale(2));
+        booking.setBookingCurrencyCode(offering.getCurrencyCode());
         booking.setServiceDate(OffsetDateTime.now().plusDays(1));
         booking.setBookingDate(LocalDate.now().plusDays(1));
         booking.setStatus("ACCEPTED");

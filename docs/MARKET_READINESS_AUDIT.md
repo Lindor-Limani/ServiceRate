@@ -133,10 +133,10 @@ Legende: **vollständig**, **teilweise**, **fehlerhaft**, **nur Frontend**, **nu
 
 ## 2. Geschäftslogik und Datenintegrität
 
-- Preise werden bei Stripe/PayPal grundsätzlich serverseitig aus Servicepreis und gemeldeten Stunden berechnet (`BookingService.java:514-536`), aber es gibt keinen unveränderlichen Preis-Snapshot. Eine spätere Serviceänderung ändert den Rechnungsbetrag.
+- Neue Buchungen speichern den bei Abschluss geltenden Unit Price als `NUMERIC(19,2)` und die normalisierte ISO-Währung. Checkout und Buchungsanzeige verwenden diesen Snapshot statt des später veränderbaren Angebots; die Bruttosumme wird mit den fachlich erst später bekannten Iststunden gebildet. Ein vollständiger Vertrags-/Steuer-/Gebührenversionssnapshot fehlt weiterhin.
 - Clientfelder `customerId` und `providerId` werden im geschützten Create-Pfad ignoriert bzw. durch den JWT-Nutzer ersetzt. Positiv: `createBooking` lädt den Customer per E-Mail (`BookingService.java:63-84`), `createForProviderEmail` den Provider per E-Mail (`ServiceOfferingService.java:55-59`).
 - Clientmanipulation bleibt bei Paymentstatus (`mark-paid`), PayPal-Empfänger, Arbeitsstunden, Servicepreis und Statusübergängen möglich.
-- Geld wird als `Double` gespeichert (`Booking.java:88-95`, `ServiceOffering.java:28-32`); Booking hat keine Währung. Stripe-Währung kommt separat aus Konfiguration, PayPal aus dem aktuellen Service.
+- Geld und Stunden werden außerhalb des neuen Unit-Price-Snapshots weiterhin überwiegend als `Double` gespeichert. Neue Bookings besitzen eine eigene Währung; Stripe und PayPal übernehmen sie in ihre providergebundenen Checkout-Sollwerte. Legacy-Buchungen ohne Snapshot werden beim Checkout fail-closed blockiert.
 - Es existieren weder `@Version`, pessimistische Locks, Unique-/Exclusion-Constraints für Termine noch Idempotency Keys. Transaktionen allein verhindern Lost Updates nicht.
 - Payment-/Booking-Status sind freie Strings, ohne Check Constraints und ohne gekoppelte Invarianten. Abgelehnte oder Pending-Buchungen können bezahlt werden.
 - `@Transactional` umschließt externe Stripe-/PayPal-/Mail-Aufrufe, wodurch lange DB-Transaktionen und unklare Teilfehler entstehen (`BookingService.java:41`, `198-271`).
@@ -248,7 +248,7 @@ Launch-blockierend fehlen bzw. sind fehlerhaft:
 - Payment darf nur aus einem definierten, akzeptierten Bookingzustand starten.
 - `/mark-paid` muss entfernt oder ausschließlich provider-signiertem Testcode außerhalb Produktion vorbehalten werden.
 - PayPal-Onboarding muss ausschließlich aus serverseitig verifiziertem Providerstatus stammen.
-- Booking muss Betrag, Währung, Preisgrundlage, Gebührenversion, Steuer-/Rechnungsdaten unveränderlich snapshotten. Für PayPal werden erwarteter Capture-Betrag, ISO-Währung und Payee-Merchant-ID gespeichert; Stripe speichert erwartete Payment- und Application-Fee-Minor-Units, ISO-Währung und Connected Account. Der vollständige fachliche Preis-/Gebühren-/Steuer-/Rechnungssnapshot bleibt offen.
+- Booking muss Betrag, Währung, Preisgrundlage, Gebührenversion, Steuer-/Rechnungsdaten unveränderlich snapshotten. Neue Buchungen speichern Unit Price und ISO-Währung; PayPal speichert erwarteten Capture-Betrag, Währung und Payee-Merchant-ID, Stripe erwartete Payment-/Application-Fee-Minor-Units, dieselbe Buchungswährung und den Connected Account. Der vollständige fachliche Gebührenversions-/Steuer-/Rechnungssnapshot bleibt offen.
 - Payment Attempts, eindeutige Provider-Transaktions-IDs, Idempotency Keys, Event-Inbox und atomare Statusübergänge fehlen.
 - Stripe `checkout.session.completed` bindet die gespeicherte Session und den PaymentIntent, verlangt `paid`/`succeeded` und prüft Session-Gesamtbetrag/-Währung sowie PaymentIntent-Betrag, tatsächlich empfangenen Betrag, `application_fee_amount`, Währung und `transfer_data.destination` gegen die unveränderlichen Checkout-Sollwerte, bevor `PAID` gesetzt wird. Andere Eventtypen, vollständige Preis-/Gebührenbasis und Sandbox-Abnahme bleiben offen.
 - PayPal Capture fordert die vollständige Repräsentation an und prüft Order-ID, Booking-Referenzen, erwarteten Betrag, Währung und Payee gegen die beim Checkout gespeicherten PayPal-Sollwerte, bevor `PAID` gesetzt wird. Offen bleiben die vollständige Preisgrundlage, versionierte Migration sowie PostgreSQL-/PayPal-Sandbox-Verifikation.
@@ -567,9 +567,9 @@ Die Detailfindings werden zusätzlich in `docs/SECURITY_FINDINGS.md` gespiegelt.
 * betroffene Rollen: Customer, Provider, Admin
 * betroffene Dateien: `model/entity/ServiceOffering.java:28-44`; `model/entity/Booking.java:88-95`; `service/BookingService.java:514-536`; `service/PayPalService.java:367-376`; `service/StripeConnectService.java:53-54,149-152`
 * betroffene Endpunkte: Service Create/Update, Booking Checkout, Settlement
-* Beschreibung: Geld/Stunden sind weiterhin überwiegend `Double`; Booking besitzt nur providerbezogene Checkout-Sollwerte, aber keinen vollständigen Preis-/Steuer-/Gebührenversions- oder Vertragssnapshot. Stripe-Konfigurationswährung kann vom Service abweichen.
-* konkreter Nachweis: PayPal und Stripe frieren die unmittelbar an den PSP gesendeten Finanzwerte ein; die vorgelagerte Berechnung liest jedoch weiterhin aktuellen `serviceOffering.price`, `actualHours` und eine unversionierte Gebührenkonfiguration. Negative/überlange Werte werden serverseitig nicht durchgängig verhindert.
-* realistisches Angriffs- oder Fehlerszenario: Servicepreis wird nach Buchung geändert; paralleler Checkout erzeugt unterschiedliche Beträge; Rundung/Infinity korrumpiert Abrechnung.
+* Beschreibung: Neue Buchungen besitzen einen währungsgebundenen `BigDecimal`-Unit-Price-Snapshot; Brutto, Provision, Providerforderung, Iststunden und Servicepreise sind jedoch weiterhin teilweise `Double`, und Steuer-/Gebührenversion sowie vollständiger Vertragssnapshot fehlen.
+* konkreter Nachweis: `createBooking` validiert und speichert `bookedUnitPrice`/`bookingCurrencyCode`; Checkout multipliziert ausschließlich den gebuchten Unit Price mit den Iststunden und reicht dieselbe Währung an PayPal/Stripe weiter. Preis-/Währungsänderungs-, Legacy-, Grenzwert-, Adapter- und Parallelitätsregressionen sind grün. Die Gebührenberechnung liest weiterhin eine unversionierte Laufzeitkonfiguration.
+* realistisches Angriffs- oder Fehlerszenario: Eine Gebührenkonfiguration wird zwischen Buchung und Checkout geändert; extreme oder parallele Stundenwerte erzeugen abweichende Provisionen; Rundung/Infinity kann außerhalb des abgesicherten Checkoutpfads weiterhin Daten korrumpieren.
 * Auswirkung: Falsche Charges, Provision, Rechnung und Providerforderung.
 * empfohlene Lösung: `BigDecimal`/DECIMAL und ISO-Währung; unveränderlicher Booking-/Quote-Snapshot; Preisart/Einheit/Steuer/Gebührenversion; Wertebereiche/Checks.
 * empfohlene Tests: Rundungsgrenzen, Währungsmismatch, Preisänderung, Null/negativ/extrem, Snapshot-Replay.

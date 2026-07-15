@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -136,6 +137,8 @@ class PayPalCheckoutConcurrencyIntegrationTest {
         assertThat(persisted.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(persisted.getPaypalOrderId()).isEqualTo("ORDER-parallel-once");
         assertThat(persisted.getCheckoutUrl()).isEqualTo("https://paypal.example/parallel");
+        assertThat(persisted.getBookedUnitPrice()).isEqualByComparingTo("80.00");
+        assertThat(persisted.getBookingCurrencyCode()).isEqualTo("EUR");
         assertThat(persisted.getPaypalExpectedAmount()).isEqualByComparingTo("80.00");
         assertThat(persisted.getPaypalCurrencyCode()).isEqualTo("EUR");
         assertThat(persisted.getPaypalPayeeMerchantId()).isEqualTo("verified-merchant");
@@ -173,6 +176,8 @@ class PayPalCheckoutConcurrencyIntegrationTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(customer);
         booking.setServiceOffering(offering);
+        booking.setBookedUnitPrice(BigDecimal.valueOf(offering.getPrice()).setScale(2));
+        booking.setBookingCurrencyCode(offering.getCurrencyCode());
         booking.setServiceDate(OffsetDateTime.now().plusDays(1));
         booking.setBookingDate(LocalDate.now().plusDays(1));
         booking.setStatus("ACCEPTED");

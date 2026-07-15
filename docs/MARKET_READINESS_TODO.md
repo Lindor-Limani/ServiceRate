@@ -185,6 +185,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-PAY-004 – Geldwerte und Preis-Snapshots korrekt modellieren
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-15 (unveränderlicher Unit-Price- und Währungssnapshot für neue Buchungen)
+- **Geänderte Komponenten:** `Booking` und Startup-Schema um `bookedUnitPrice` als `NUMERIC(19,2)` sowie `bookingCurrencyCode`; `BookingService.createBooking`, Anzeige und Checkout-Betragsberechnung; PayPal-/Stripe-Währungsableitung; Stripe-Konfiguration; Booking-, Security-, Adapter- und Checkout-Parallelitätstests.
+- **Hinzugefügte Tests:** Persistenz und Normalisierung beim Buchungserstellen; nuller, nichtpositiver, nichtendlicher, übergenauer oder außerhalb des unterstützten ISO-Codes liegender Quellwert; Preis-/Währungsänderung nach Buchung; fehlender oder korrupter Legacy-Snapshot; nichtendliche Iststunden; Stripe-Request und PayPal-Snapshot aus der Buchungswährung; bestehende Rollen-/Ownership-, Replay- und Zehnfach-Races.
+- **Verbleibende Einschränkungen:** Der gebuchte Unit Price und die Währung sind gegen spätere Angebotsänderungen stabil; Legacy-Buchungen ohne belastbaren historischen Wert werden sicher blockiert statt spekulativ rückbefüllt. Das Gesamtticket bleibt offen: Brutto, Provision, Providerforderung, Servicepreis und Stunden sind weiterhin teilweise `Double`; Gebührenregel, Steuer, Preisart/Einheit und Rechnung sind nicht versioniert beziehungsweise vollständig gesnapshottet. Versionierte Migration, PostgreSQL-/PSP-Sandbox- und Finance-Abnahme fehlen.
 - **Priorität/Kategorie:** P0 / Financial Correctness
 - **Beschreibung:** `Double`, fehlende Buchungswährung und aktueller statt gebuchter Servicepreis erlauben Rundungs- und Preisänderungsfehler.
 - **Technische Lösung:** Minor Units als Integer oder `BigDecimal` mit fester Skala, ISO-Währung, unveränderlichen Angebots-/Steuer-/Gebührensnapshot und zentraler Rundungsregel verwenden.

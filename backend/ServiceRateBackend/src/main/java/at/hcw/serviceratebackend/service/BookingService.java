@@ -31,6 +31,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Currency;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -82,6 +83,7 @@ public class BookingService {
         booking.setServiceDate(OffsetDateTime.now().plusDays(3));
         booking.setBookingDate(request.bookingDate()); // vom Kunden gewählter Wunschtermin
         booking.setStatus(BookingStatus.PENDING.name());
+        applyBookingFinancialSnapshot(booking, service);
 
         Booking saved = bookingRepository.save(booking);
         mailService.sendBookingCreatedMail(saved);
@@ -205,6 +207,7 @@ public class BookingService {
             throw new IllegalArgumentException("Diese Buchung gehört nicht zu diesem Kunden.");
         }
         requireAcceptedForCheckout(booking);
+        requireCompleteBookingFinancialSnapshot(booking);
 
         String provider = request.provider() == null || request.provider().isBlank()
                 ? "MANUAL"
@@ -384,7 +387,7 @@ public class BookingService {
                 provider != null ? provider.getProfileImageUrl() : null,
                 booking.getServiceOffering() != null ? booking.getServiceOffering().getId() : null,
                 serviceTitle(booking.getServiceOffering()),
-                servicePrice(booking.getServiceOffering()),
+                bookedServicePrice(booking),
                 serviceCategory(booking.getServiceOffering()),
                 serviceImageUrl(booking.getServiceOffering()),
                 serviceHasImage(booking.getServiceOffering()),
@@ -512,7 +515,11 @@ public class BookingService {
         return offering.getTitle();
     }
 
-    private Double servicePrice(ServiceOffering offering) {
+    private Double bookedServicePrice(Booking booking) {
+        if (booking.getBookedUnitPrice() != null) {
+            return booking.getBookedUnitPrice().doubleValue();
+        }
+        ServiceOffering offering = booking.getServiceOffering();
         return offering == null ? 0.0 : offering.getPrice();
     }
 
@@ -528,13 +535,71 @@ public class BookingService {
     }
 
     private double calculateGrossAmount(Booking booking) {
-        double price = booking.getServiceOffering() == null || booking.getServiceOffering().getPrice() == null
-                ? 0.0
-                : booking.getServiceOffering().getPrice();
-        double hours = booking.getActualHours() != null && booking.getActualHours() > 0
-                ? booking.getActualHours()
-                : 1.0;
-        return roundMoney(price * hours);
+        requireCompleteBookingFinancialSnapshot(booking);
+        Double actualHours = booking.getActualHours();
+        if (actualHours != null && !Double.isFinite(actualHours)) {
+            throw new IllegalArgumentException("Checkout erfordert eine endliche Stundenanzahl.");
+        }
+        BigDecimal hours = actualHours != null && actualHours > 0
+                ? BigDecimal.valueOf(actualHours)
+                : BigDecimal.ONE;
+        return booking.getBookedUnitPrice()
+                .multiply(hours)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
+    }
+
+    private void applyBookingFinancialSnapshot(Booking booking, ServiceOffering service) {
+        Double price = service == null ? null : service.getPrice();
+        if (price == null || !Double.isFinite(price) || price <= 0) {
+            throw new IllegalArgumentException("Buchungen erfordern einen positiven endlichen Angebotspreis.");
+        }
+        BigDecimal bookedUnitPrice;
+        try {
+            bookedUnitPrice = BigDecimal.valueOf(price).setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException("Angebotspreise dürfen höchstens zwei Nachkommastellen besitzen.");
+        }
+        if (bookedUnitPrice.precision() > 19) {
+            throw new IllegalArgumentException("Der Angebotspreis überschreitet den unterstützten Wertebereich.");
+        }
+
+        String currencyCode = service.getCurrencyCode() == null
+                ? ""
+                : service.getCurrencyCode().trim().toUpperCase(Locale.ROOT);
+        if (!isIsoCurrencyCode(currencyCode)) {
+            throw new IllegalArgumentException("Buchungen erfordern einen gültigen ISO-Währungscode.");
+        }
+        booking.setBookedUnitPrice(bookedUnitPrice);
+        booking.setBookingCurrencyCode(currencyCode);
+    }
+
+    private void requireCompleteBookingFinancialSnapshot(Booking booking) {
+        BigDecimal price = booking.getBookedUnitPrice();
+        String currencyCode = booking.getBookingCurrencyCode();
+        if (price == null
+                || price.signum() <= 0
+                || price.scale() > 2
+                || price.precision() > 19
+                || currencyCode == null
+                || !isIsoCurrencyCode(currencyCode)
+                || !currencyCode.equals(currencyCode.trim())) {
+            throw new ConflictException(
+                    "Die Buchung enthält keinen vollständigen unveränderlichen Preis- und Währungssnapshot."
+            );
+        }
+    }
+
+    private boolean isIsoCurrencyCode(String currencyCode) {
+        if (currencyCode == null || !currencyCode.matches("[A-Z]{3}")) {
+            return false;
+        }
+        try {
+            Currency.getInstance(currencyCode);
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     private double roundMoney(double value) {
@@ -612,14 +677,8 @@ public class BookingService {
         if (booking.getGrossAmount() == null || booking.getGrossAmount() <= 0) {
             throw new IllegalArgumentException("PayPal-Checkout erfordert einen positiven Buchungsbetrag.");
         }
-        String currencyCode = offering.getCurrencyCode() == null || offering.getCurrencyCode().isBlank()
-                ? "EUR"
-                : offering.getCurrencyCode().trim().toUpperCase(Locale.ROOT);
-        if (!currencyCode.matches("[A-Z]{3}")) {
-            throw new IllegalArgumentException("PayPal-Checkout erfordert einen gültigen ISO-Währungscode.");
-        }
         booking.setPaypalExpectedAmount(BigDecimal.valueOf(booking.getGrossAmount()).setScale(2, RoundingMode.HALF_UP));
-        booking.setPaypalCurrencyCode(currencyCode);
+        booking.setPaypalCurrencyCode(booking.getBookingCurrencyCode());
         booking.setPaypalPayeeMerchantId(merchantId.trim());
     }
 

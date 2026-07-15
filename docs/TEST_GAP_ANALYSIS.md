@@ -30,10 +30,10 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | JWT-Signatur/Rolle/Rotation | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Service CRUD und Ownership | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Suche/Filter/Pagination | Ja/Teil | Nein | Teil/Mock | Nein | k6 ohne Freigabereport | P2-Lücke |
-| Buchung erstellen | Teil | Nein | Nein | Teil | Nein | **P0** |
+| Buchung erstellen | Teil inkl. Unit-Price-/Währungssnapshot und Quellwertgrenzen | Nein | Nein | Teil | Nein | **P0** |
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
-| Stripe Checkout/Webhook | Ja/Teil inkl. Payment-/Application-Fee-Minor-Unit-, Währungs-/Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
+| Stripe Checkout/Webhook | Ja/Teil inkl. gebuchtem Unit Price, Buchungswährung, Payment-/Application-Fee-Minor-Unit-, Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
 | PayPal Checkout/Onboarding | Ja/Teil inkl. Order-Snapshot und Capture-Betrag/Währung/Payee | Nein | Nein | Teil inkl. Capture-Provider- und Finanzbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
 | Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Provider-Key-Retry plus Teil/H2 | **P0** |
 | Refund/Chargeback/Payout/Reconciliation | Nein | Nein | Nein | Nein | Nein | P1-Lücke |
@@ -81,7 +81,7 @@ Die Tests müssen UUID-Austausch in Pfad, Query und Body kombinieren. Ein bloße
 - Timeout/Prozessabsturz vor und nach DB-Commit simulieren: keine verlorene oder doppelte Buchung.
 - 100 parallele Checkout-/Capture-/Webhook-Requests auf dieselbe Buchung.
 - Rundung und Minor Units für 0, 1, Maximalbetrag, Dezimalgrenzen, Gebühren und Steuern.
-- Preisänderung nach Buchung: Checkout und Rechnung müssen den unveränderlichen Snapshot verwenden.
+- Preis-/Währungsänderung nach Buchung: Checkout verwendet nachweislich den unveränderlichen Unit-Price-/Währungssnapshot; Rechnung, Steuer- und Gebührenversion sowie historische Migration bleiben offen.
 - Merchant-Onboarding: gefälschte Flags, fremde Merchant-ID, State-Replay, Callback-CSRF, Berechtigungsentzug.
 - Sandbox-End-to-End für Full/Partial Refund, Chargeback, Payout und Reconciliation.
 

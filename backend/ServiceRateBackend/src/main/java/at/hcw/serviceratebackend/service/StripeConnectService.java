@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.Currency;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -52,9 +53,6 @@ public class StripeConnectService {
 
     @Value("${stripe.webhook-secret:}")
     private String webhookSecret;
-
-    @Value("${stripe.currency:eur}")
-    private String currency;
 
     @Value("${stripe.connect.country:AT}")
     private String connectCountry;
@@ -437,8 +435,10 @@ public class StripeConnectService {
                     "Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag."
             );
         }
-        String currencyCode = currency == null ? "" : currency.trim().toUpperCase(Locale.ROOT);
-        if (!currencyCode.matches("[A-Z]{3}")) {
+        String currencyCode = booking.getBookingCurrencyCode();
+        try {
+            Currency.getInstance(currencyCode);
+        } catch (RuntimeException ex) {
             throw new IllegalArgumentException("Stripe Checkout erfordert einen gueltigen ISO-Waehrungscode.");
         }
         booking.setStripeExpectedAmountMinor(expectedAmountMinor);

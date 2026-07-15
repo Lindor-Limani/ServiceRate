@@ -86,6 +86,7 @@ class BookingServiceTest {
     void createBooking_createsPendingBookingForVerifiedCustomerAndSendsMail() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         ServiceOffering offering = offering(user("provider@example.com", "PROVIDER", true), 120.0);
+        offering.setCurrencyCode("eur");
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -103,10 +104,46 @@ class BookingServiceTest {
         assertThat(saved.getId()).isNotNull();
         assertThat(saved.getCustomer()).isSameAs(customer);
         assertThat(saved.getServiceOffering()).isSameAs(offering);
+        assertThat(saved.getBookedUnitPrice()).isEqualByComparingTo("120.00");
+        assertThat(saved.getBookingCurrencyCode()).isEqualTo("EUR");
         assertThat(saved.getStatus()).isEqualTo(BookingStatus.PENDING.name());
         assertThat(saved.getBookingDate()).isEqualTo(LocalDate.of(2026, 8, 1));
         assertThat(response.status()).isEqualTo(BookingStatus.PENDING.name());
         verify(mailService).sendBookingCreatedMail(saved);
+    }
+
+    @Test
+    void createBooking_rejectsInvalidPriceOrCurrencyBeforePersistingSnapshot() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        ServiceOffering offering = offering(user("provider@example.com", "PROVIDER", true), 100.0);
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+        CreateBookingRequest request = new CreateBookingRequest(
+                customer.getId(), offering.getId(), LocalDate.now().plusDays(1)
+        );
+
+        for (Double invalidPrice : new Double[]{null, 0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY}) {
+            offering.setPrice(invalidPrice);
+            assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Buchungen erfordern einen positiven endlichen Angebotspreis.");
+        }
+
+        offering.setPrice(12.345);
+        assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Angebotspreise dürfen höchstens zwei Nachkommastellen besitzen.");
+
+        offering.setPrice(100.0);
+        for (String invalidCurrency : new String[]{null, "", "EURO", "AAA"}) {
+            offering.setCurrencyCode(invalidCurrency);
+            assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Buchungen erfordern einen gültigen ISO-Währungscode.");
+        }
+
+        verify(bookingRepository, never()).save(any());
+        verify(mailService, never()).sendBookingCreatedMail(any());
     }
 
     @Test
@@ -279,7 +316,10 @@ class BookingServiceTest {
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
         booking.setActualHours(2.5);
-        booking.getServiceOffering().setPrice(80.0);
+        booking.setBookedUnitPrice(new BigDecimal("80.00"));
+        booking.setBookingCurrencyCode("EUR");
+        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setCurrencyCode("USD");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -297,7 +337,29 @@ class BookingServiceTest {
         assertThat(response.grossAmount()).isEqualTo(200.0);
         assertThat(response.platformFeeAmount()).isEqualTo(21.0);
         assertThat(response.providerReceivableAmount()).isEqualTo(179.0);
+        assertThat(response.servicePrice()).isEqualTo(80.0);
         assertThat(response.settlementStatus()).isEqualTo("NOT_READY");
+    }
+
+    @Test
+    void createCheckoutRejectsNonFiniteHoursBeforeFinancialMutation() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        booking.setActualHours(Double.NaN);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("BANK_TRANSFER", false), customer.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Checkout erfordert eine endliche Stundenanzahl.");
+
+        assertThat(booking.getGrossAmount()).isNull();
+        assertThat(booking.getPlatformFeeAmount()).isNull();
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test
@@ -409,6 +471,8 @@ class BookingServiceTest {
         Booking booking = booking(provider);
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
+        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setCurrencyCode("USD");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
@@ -510,7 +574,7 @@ class BookingServiceTest {
     }
 
     @Test
-    void createCheckoutForPayPal_rejectsInvalidFinancialSnapshotBeforeCreatingOrder() {
+    void createCheckoutForPayPal_rejectsMissingOrInvalidBookingSnapshotBeforeCreatingOrder() {
         User customer = user("customer@example.com", "CUSTOMER", true);
         User provider = user("provider@example.com", "PROVIDER", true);
         provider.setPaypalMerchantId("verified-merchant");
@@ -519,22 +583,21 @@ class BookingServiceTest {
         booking.setCustomer(customer);
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
-        when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
 
-        booking.getServiceOffering().setPrice(0.0);
+        booking.setBookedUnitPrice(null);
         assertThatThrownBy(() -> bookingService.createCheckout(
                 booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
         ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("PayPal-Checkout erfordert einen positiven Buchungsbetrag.");
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Die Buchung enthält keinen vollständigen unveränderlichen Preis- und Währungssnapshot.");
 
-        booking.getServiceOffering().setPrice(100.0);
-        booking.getServiceOffering().setCurrencyCode("EURO");
+        booking.setBookedUnitPrice(new BigDecimal("100.00"));
+        booking.setBookingCurrencyCode("EURO");
         assertThatThrownBy(() -> bookingService.createCheckout(
                 booking.getId(), new CreateCheckoutRequest("PAYPAL", false), customer.getEmail()
         ))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("PayPal-Checkout erfordert einen gültigen ISO-Währungscode.");
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Die Buchung enthält keinen vollständigen unveränderlichen Preis- und Währungssnapshot.");
 
         assertThat(booking.getPaypalExpectedAmount()).isNull();
         assertThat(booking.getPaypalCurrencyCode()).isNull();
@@ -930,6 +993,8 @@ class BookingServiceTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(customer);
         booking.setServiceOffering(offering(provider, 100.0));
+        booking.setBookedUnitPrice(new BigDecimal("100.00"));
+        booking.setBookingCurrencyCode("EUR");
         booking.setServiceDate(OffsetDateTime.now().plusDays(3));
         booking.setBookingDate(LocalDate.now().plusDays(5));
         booking.setStatus(BookingStatus.PENDING.name());
