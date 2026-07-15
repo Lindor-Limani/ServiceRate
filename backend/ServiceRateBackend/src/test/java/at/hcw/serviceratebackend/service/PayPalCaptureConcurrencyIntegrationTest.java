@@ -82,7 +82,7 @@ class PayPalCaptureConcurrencyIntegrationTest {
         CountDownLatch firstCaptureEntered = new CountDownLatch(1);
         CountDownLatch releaseCapture = new CountDownLatch(1);
         AtomicInteger captureInvocations = new AtomicInteger();
-        when(payPalService.captureOrder("ORDER-RACE")).thenAnswer(invocation -> {
+        when(payPalService.captureOrder(booking.getId(), "ORDER-RACE")).thenAnswer(invocation -> {
             captureInvocations.incrementAndGet();
             firstCaptureEntered.countDown();
             if (!releaseCapture.await(10, TimeUnit.SECONDS)) {
@@ -126,7 +126,7 @@ class PayPalCaptureConcurrencyIntegrationTest {
         assertThat(persisted.getPaymentStatus()).isEqualTo("PAID");
         assertThat(persisted.getPaypalCaptureId()).isEqualTo("CAPTURE-RACE");
         assertThat(persisted.getPaidAt()).isNotNull();
-        verify(payPalService, times(1)).captureOrder("ORDER-RACE");
+        verify(payPalService, times(1)).captureOrder(booking.getId(), "ORDER-RACE");
         verify(mailService, times(1)).sendPaymentRecordedMail(argThat(changed ->
                 booking.getId().equals(changed.getId())
                         && "PAID".equals(changed.getPaymentStatus())

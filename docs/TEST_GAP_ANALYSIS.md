@@ -34,8 +34,8 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
 | Stripe Checkout/Webhook | Teil | Nein | Nein | Teil Signatur | Nein | **P0** |
-| PayPal Checkout/Onboarding | Ja/Teil | Nein | Nein | Teil | H2-Zehnfach-Races für Order/Capture | **P0** |
-| Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Teil/H2 | **P0** |
+| PayPal Checkout/Onboarding | Ja/Teil | Nein | Nein | Teil | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
+| Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Provider-Key-Retry plus Teil/H2 | **P0** |
 | Refund/Chargeback/Payout/Reconciliation | Nein | Nein | Nein | Nein | Nein | P1-Lücke |
 | Delivery nach Zahlung | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Chat/SSE und Bildnachrichten | Teil | Nein | Nein | Nein | Nein | P1-Lücke |

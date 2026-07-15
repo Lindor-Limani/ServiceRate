@@ -542,7 +542,7 @@ class BookingServiceTest {
         booking.setPaypalOrderId("ORDER-1");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
-        when(payPalService.captureOrder("ORDER-1"))
+        when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-1"));
         when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
@@ -556,7 +556,7 @@ class BookingServiceTest {
         assertThat(first.paidAt()).isNotNull();
         assertThat(replay.paymentStatus()).isEqualTo("PAID");
         assertThat(replay.paypalCaptureId()).isEqualTo("CAPTURE-1");
-        verify(payPalService, times(1)).captureOrder("ORDER-1");
+        verify(payPalService, times(1)).captureOrder(booking.getId(), "ORDER-1");
         verify(bookingRepository, times(1)).saveAndFlush(booking);
         verify(mailService, times(1)).sendPaymentRecordedMail(booking);
     }
@@ -583,7 +583,7 @@ class BookingServiceTest {
             assertThat(booking.getPaidAt()).isNull();
         }
 
-        verify(payPalService, never()).captureOrder(any());
+        verify(payPalService, never()).captureOrder(any(), any());
         verify(bookingRepository, never()).saveAndFlush(any());
         verify(mailService, never()).sendPaymentRecordedMail(any());
     }
@@ -598,7 +598,7 @@ class BookingServiceTest {
         booking.setPaypalOrderId("ORDER-1");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
-        when(payPalService.captureOrder("ORDER-1"))
+        when(payPalService.captureOrder(booking.getId(), "ORDER-1"))
                 .thenReturn(null)
                 .thenReturn(new PayPalService.PayPalCapture("PENDING", "CAPTURE-PENDING"))
                 .thenReturn(new PayPalService.PayPalCapture("COMPLETED", null))

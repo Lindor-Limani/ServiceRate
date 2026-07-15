@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class PayPalService {
@@ -121,12 +122,21 @@ public class PayPalService {
         return new PayPalOrder(orderId, approveUrl);
     }
 
-    public PayPalCapture captureOrder(String orderId) {
+    public PayPalCapture captureOrder(UUID bookingId, String orderId) {
+        if (bookingId == null) {
+            throw new IllegalArgumentException("Für den PayPal-Capture ist eine persistierte Buchung erforderlich.");
+        }
+        if (orderId == null || orderId.isBlank()) {
+            throw new IllegalArgumentException("Für den PayPal-Capture ist eine Order-ID erforderlich.");
+        }
         requireConfigured();
 
         Map<String, Object> response = restClient.post()
                 .uri(baseUrl + "/v2/checkout/orders/{orderId}/capture", orderId)
-                .headers(headers -> headers.setBearerAuth(accessToken()))
+                .headers(headers -> {
+                    headers.setBearerAuth(accessToken());
+                    headers.set("PayPal-Request-Id", "servicerate-capture-" + bookingId);
+                })
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of())
                 .retrieve()

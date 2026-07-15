@@ -162,6 +162,61 @@ class PayPalServiceTest {
         server.verify();
     }
 
+    @Test
+    void captureOrder_reusesBookingBoundRequestIdAcrossRetries() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PayPalService service = payPalService(builder);
+        UUID bookingId = UUID.fromString("11111111-1111-4111-8111-111111111111");
+
+        server.expect(requestTo("https://api-m.sandbox.paypal.com/v1/oauth2/token"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {"access_token":"access-token","expires_in":300}
+                        """, MediaType.APPLICATION_JSON));
+        for (int request = 0; request < 2; request++) {
+            server.expect(requestTo("https://api-m.sandbox.paypal.com/v2/checkout/orders/ORDER-1/capture"))
+                    .andExpect(method(HttpMethod.POST))
+                    .andExpect(header("PayPal-Request-Id", "servicerate-capture-" + bookingId))
+                    .andRespond(withSuccess("""
+                            {
+                              "status":"COMPLETED",
+                              "purchase_units":[{
+                                "payments":{"captures":[{"id":"CAPTURE-1"}]}
+                              }]
+                            }
+                            """, MediaType.APPLICATION_JSON));
+        }
+
+        PayPalService.PayPalCapture first = service.captureOrder(bookingId, "ORDER-1");
+        PayPalService.PayPalCapture retry = service.captureOrder(bookingId, "ORDER-1");
+
+        assertThat(first.status()).isEqualTo("COMPLETED");
+        assertThat(first.captureId()).isEqualTo("CAPTURE-1");
+        assertThat(retry).isEqualTo(first);
+        server.verify();
+    }
+
+    @Test
+    void captureOrder_rejectsMissingIdentifiersBeforePayPalCall() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PayPalService service = payPalService(builder);
+        UUID bookingId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.captureOrder(null, "ORDER-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Für den PayPal-Capture ist eine persistierte Buchung erforderlich.");
+        assertThatThrownBy(() -> service.captureOrder(bookingId, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Für den PayPal-Capture ist eine Order-ID erforderlich.");
+        assertThatThrownBy(() -> service.captureOrder(bookingId, " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Für den PayPal-Capture ist eine Order-ID erforderlich.");
+
+        server.verify();
+    }
+
     private PayPalService payPalService(RestClient.Builder builder) {
         return new PayPalService(
                 builder,

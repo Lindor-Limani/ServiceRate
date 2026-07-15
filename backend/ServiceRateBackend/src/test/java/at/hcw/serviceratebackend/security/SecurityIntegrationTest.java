@@ -257,7 +257,7 @@ class SecurityIntegrationTest {
 
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking = bookingRepository.saveAndFlush(booking);
-        when(payPalService.captureOrder("ORDER-HTTP"))
+        when(payPalService.captureOrder(booking.getId(), "ORDER-HTTP"))
                 .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-HTTP"));
         for (int request = 0; request < 2; request++) {
             mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
@@ -269,7 +269,7 @@ class SecurityIntegrationTest {
                     .andExpect(jsonPath("$.paypalCaptureId").value("CAPTURE-HTTP"));
         }
 
-        verify(payPalService, times(1)).captureOrder("ORDER-HTTP");
+        verify(payPalService, times(1)).captureOrder(booking.getId(), "ORDER-HTTP");
         Booking persisted = bookingRepository.findById(booking.getId()).orElseThrow();
         assertThat(persisted.getPaymentStatus()).isEqualTo("PAID");
         assertThat(persisted.getPaypalCaptureId()).isEqualTo("CAPTURE-HTTP");

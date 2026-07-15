@@ -271,7 +271,7 @@ public class BookingService {
             throw new ConflictException("PayPal-Capture ist nur für einen gestarteten Checkout möglich.");
         }
 
-        PayPalService.PayPalCapture capture = payPalService.captureOrder(orderId);
+        PayPalService.PayPalCapture capture = payPalService.captureOrder(booking.getId(), orderId);
         if (capture == null) {
             throw new IllegalStateException("PayPal Capture lieferte keine gültige Antwort.");
         }
