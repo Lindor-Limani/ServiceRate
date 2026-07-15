@@ -191,6 +191,31 @@ class PayPalServiceTest {
     }
 
     @Test
+    void createOrder_rejectsInvalidDecimalPlatformFeeBeforePayPalCall() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        PayPalService service = payPalService(builder);
+        Booking booking = booking(verifiedProvider());
+
+        booking.setPlatformFeeAmount(new BigDecimal("-0.01"));
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout erfordert eine Plattformgebühr zwischen null und dem Buchungsbetrag.");
+
+        booking.setPlatformFeeAmount(new BigDecimal("100.01"));
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout erfordert eine Plattformgebühr zwischen null und dem Buchungsbetrag.");
+
+        booking.setPlatformFeeAmount(new BigDecimal("10.001"));
+        assertThatThrownBy(() -> service.createOrder(booking))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("PayPal-Checkout erfordert Geldbeträge mit höchstens zwei Nachkommastellen im unterstützten Wertebereich.");
+
+        server.verify();
+    }
+
+    @Test
     void captureOrder_reusesBookingBoundRequestIdAcrossRetries() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

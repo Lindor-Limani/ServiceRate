@@ -342,6 +342,7 @@ public class PayPalService {
         if (booking.getPaypalExpectedAmount() == null
                 || booking.getPaypalExpectedAmount().signum() <= 0
                 || booking.getPaypalExpectedAmount().scale() > 2
+                || booking.getPaypalExpectedAmount().precision() > 19
                 || booking.getPaypalCurrencyCode() == null
                 || !booking.getPaypalCurrencyCode().matches("[A-Z]{3}")
                 || booking.getPaypalPayeeMerchantId() == null
@@ -351,6 +352,20 @@ public class PayPalService {
         if (!verifiedMerchantId.equals(booking.getPaypalPayeeMerchantId())) {
             throw new IllegalArgumentException("Der PayPal-Zahlungsempfänger entspricht nicht dem verifizierten Anbieter.");
         }
+        requireValidPayPalPlatformFee(booking);
+    }
+
+    private void requireValidPayPalPlatformFee(Booking booking) {
+        BigDecimal platformFee = booking.getPlatformFeeAmount();
+        if (platformFee == null) {
+            return;
+        }
+        if (platformFee.signum() < 0 || platformFee.compareTo(booking.getPaypalExpectedAmount()) > 0) {
+            throw new IllegalArgumentException(
+                    "PayPal-Checkout erfordert eine Plattformgebühr zwischen null und dem Buchungsbetrag."
+            );
+        }
+        paypalMoney(platformFee);
     }
 
     private Map<String, Object> customerData(User provider) {
@@ -395,18 +410,33 @@ public class PayPalService {
 
         unit.put("payee", Map.of("merchant_id", providerMerchantId));
 
-        if (booking.getPlatformFeeAmount() != null && booking.getPlatformFeeAmount() > 0) {
+        BigDecimal platformFee = booking.getPlatformFeeAmount();
+        if (platformFee != null && platformFee.signum() > 0) {
             unit.put("payment_instruction", Map.of(
                     "platform_fees", List.of(Map.of(
                             "amount", Map.of(
                                     "currency_code", currency,
-                                    "value", BigDecimal.valueOf(booking.getPlatformFeeAmount()).setScale(2, RoundingMode.HALF_UP).toPlainString()
+                                    "value", paypalMoney(platformFee)
                             )
                     ))
             ));
         }
 
         return unit;
+    }
+
+    private String paypalMoney(BigDecimal amount) {
+        try {
+            BigDecimal normalized = amount.setScale(2, RoundingMode.UNNECESSARY);
+            if (normalized.precision() > 19) {
+                throw new ArithmeticException("amount exceeds NUMERIC(19,2)");
+            }
+            return normalized.toPlainString();
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException(
+                    "PayPal-Checkout erfordert Geldbeträge mit höchstens zwei Nachkommastellen im unterstützten Wertebereich."
+            );
+        }
     }
 
     private String requireVerifiedProviderMerchantId(ServiceOffering offering) {

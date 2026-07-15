@@ -77,8 +77,8 @@ class BookingServiceTest {
                 payPalService,
                 stripeConnectService
         );
-        ReflectionTestUtils.setField(bookingService, "platformFeePercent", 10.0);
-        ReflectionTestUtils.setField(bookingService, "platformFeeFixed", 1.0);
+        ReflectionTestUtils.setField(bookingService, "platformFeePercent", new BigDecimal("10"));
+        ReflectionTestUtils.setField(bookingService, "platformFeeFixed", new BigDecimal("1.00"));
         ReflectionTestUtils.setField(bookingService, "backendBaseUrl", "http://localhost:8081");
     }
 
@@ -334,11 +334,93 @@ class BookingServiceTest {
 
         assertThat(response.paymentProvider()).isEqualTo("BANK_TRANSFER");
         assertThat(response.paymentStatus()).isEqualTo("AWAITING_OFFLINE_PAYMENT");
-        assertThat(response.grossAmount()).isEqualTo(200.0);
-        assertThat(response.platformFeeAmount()).isEqualTo(21.0);
-        assertThat(response.providerReceivableAmount()).isEqualTo(179.0);
+        assertThat(response.grossAmount()).isEqualByComparingTo("200.00");
+        assertThat(response.platformFeeAmount()).isEqualByComparingTo("21.00");
+        assertThat(response.providerReceivableAmount()).isEqualByComparingTo("179.00");
+        assertThat(response.platformFeeAmount().add(response.providerReceivableAmount()))
+                .isEqualByComparingTo(response.grossAmount());
         assertThat(response.servicePrice()).isEqualTo(80.0);
         assertThat(response.settlementStatus()).isEqualTo("NOT_READY");
+    }
+
+    @Test
+    void createCheckoutRoundsMarketplaceAmountsWithHalfUpAndPreservesInvariant() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        booking.setActualHours(0.34);
+        booking.setBookedUnitPrice(new BigDecimal("10.00"));
+        booking.setBookingCurrencyCode("EUR");
+        ReflectionTestUtils.setField(bookingService, "platformFeePercent", new BigDecimal("7.5"));
+        ReflectionTestUtils.setField(bookingService, "platformFeeFixed", BigDecimal.ZERO);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
+
+        BookingResponse response = bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("BANK_TRANSFER", false), customer.getEmail()
+        );
+
+        assertThat(response.grossAmount()).isEqualByComparingTo("3.40");
+        assertThat(response.platformFeeAmount()).isEqualByComparingTo("0.26");
+        assertThat(response.providerReceivableAmount()).isEqualByComparingTo("3.14");
+        assertThat(response.platformFeeAmount().add(response.providerReceivableAmount()))
+                .isEqualByComparingTo(response.grossAmount());
+    }
+
+    @Test
+    void createCheckoutCapsFeeAtGrossAmount() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        ReflectionTestUtils.setField(bookingService, "platformFeePercent", new BigDecimal("100"));
+        ReflectionTestUtils.setField(bookingService, "platformFeeFixed", new BigDecimal("0.01"));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
+
+        BookingResponse response = bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("BANK_TRANSFER", false), customer.getEmail()
+        );
+
+        assertThat(response.platformFeeAmount()).isEqualByComparingTo(response.grossAmount());
+        assertThat(response.providerReceivableAmount()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void createCheckoutRejectsNegativeFeeConfigurationBeforeFinancialMutation() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setCustomer(customer);
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        ReflectionTestUtils.setField(bookingService, "platformFeePercent", new BigDecimal("-0.01"));
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("BANK_TRANSFER", false), customer.getEmail()
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Die Plattformgebühr muss nichtnegative Prozent- und Festwerte besitzen.");
+
+        ReflectionTestUtils.setField(bookingService, "platformFeePercent", BigDecimal.TEN);
+        ReflectionTestUtils.setField(bookingService, "platformFeeFixed", new BigDecimal("-0.01"));
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("BANK_TRANSFER", false), customer.getEmail()
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Die Plattformgebühr muss nichtnegative Prozent- und Festwerte besitzen.");
+
+        assertThat(booking.getGrossAmount()).isNull();
+        assertThat(booking.getPlatformFeeAmount()).isNull();
+        assertThat(booking.getProviderReceivableAmount()).isNull();
+        verify(bookingRepository, never()).save(any());
     }
 
     @Test

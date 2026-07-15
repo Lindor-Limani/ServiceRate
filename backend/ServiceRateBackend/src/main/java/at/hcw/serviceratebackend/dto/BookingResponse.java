@@ -1,5 +1,6 @@
 package at.hcw.serviceratebackend.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,9 +36,9 @@ public record BookingResponse(
         String paypalCaptureId,
         String stripeCheckoutSessionId,
         String stripePaymentIntentId,
-        Double grossAmount,
-        Double platformFeeAmount,
-        Double providerReceivableAmount,
+        BigDecimal grossAmount,
+        BigDecimal platformFeeAmount,
+        BigDecimal providerReceivableAmount,
         String settlementStatus,
         String settlementNote,
         boolean providerPaypalAvailable,

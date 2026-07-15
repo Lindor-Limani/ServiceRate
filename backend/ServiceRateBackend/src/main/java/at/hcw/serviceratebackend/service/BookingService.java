@@ -55,10 +55,10 @@ public class BookingService {
     private final StripeConnectService stripeConnectService;
 
     @Value("${app.platform-fee-percent:10}")
-    private double platformFeePercent;
+    private BigDecimal platformFeePercent;
 
     @Value("${app.platform-fee-fixed:0}")
-    private double platformFeeFixed;
+    private BigDecimal platformFeeFixed;
 
     @Value("${app.backend-base-url:http://localhost:8081}")
     private String backendBaseUrl;
@@ -524,17 +524,24 @@ public class BookingService {
     }
 
     private void applyMarketplaceAmounts(Booking booking) {
-        double gross = calculateGrossAmount(booking);
-        double fee = roundMoney(gross * (platformFeePercent / 100.0) + platformFeeFixed);
-        if (fee > gross) {
+        requireValidFeeConfiguration();
+        BigDecimal gross = calculateGrossAmount(booking);
+        BigDecimal fee = roundMoney(
+                gross.multiply(platformFeePercent).movePointLeft(2).add(platformFeeFixed),
+                "Die Plattformgebühr"
+        );
+        if (fee.compareTo(gross) > 0) {
             fee = gross;
         }
         booking.setGrossAmount(gross);
         booking.setPlatformFeeAmount(fee);
-        booking.setProviderReceivableAmount(roundMoney(gross - fee));
+        booking.setProviderReceivableAmount(roundMoney(
+                gross.subtract(fee),
+                "Die Providerforderung"
+        ));
     }
 
-    private double calculateGrossAmount(Booking booking) {
+    private BigDecimal calculateGrossAmount(Booking booking) {
         requireCompleteBookingFinancialSnapshot(booking);
         Double actualHours = booking.getActualHours();
         if (actualHours != null && !Double.isFinite(actualHours)) {
@@ -543,10 +550,10 @@ public class BookingService {
         BigDecimal hours = actualHours != null && actualHours > 0
                 ? BigDecimal.valueOf(actualHours)
                 : BigDecimal.ONE;
-        return booking.getBookedUnitPrice()
-                .multiply(hours)
-                .setScale(2, RoundingMode.HALF_UP)
-                .doubleValue();
+        return roundMoney(
+                booking.getBookedUnitPrice().multiply(hours),
+                "Der Buchungsbetrag"
+        );
     }
 
     private void applyBookingFinancialSnapshot(Booking booking, ServiceOffering service) {
@@ -602,8 +609,19 @@ public class BookingService {
         }
     }
 
-    private double roundMoney(double value) {
-        return BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    private void requireValidFeeConfiguration() {
+        if (platformFeePercent == null || platformFeePercent.signum() < 0
+                || platformFeeFixed == null || platformFeeFixed.signum() < 0) {
+            throw new IllegalStateException("Die Plattformgebühr muss nichtnegative Prozent- und Festwerte besitzen.");
+        }
+    }
+
+    private BigDecimal roundMoney(BigDecimal value, String label) {
+        BigDecimal rounded = value.setScale(2, RoundingMode.HALF_UP);
+        if (rounded.precision() > 19) {
+            throw new IllegalArgumentException(label + " überschreitet den unterstützten Wertebereich.");
+        }
+        return rounded;
     }
 
     private BookingStatus parseStatus(String status) {
@@ -674,10 +692,10 @@ public class BookingService {
         if (merchantId == null || merchantId.isBlank()) {
             throw new IllegalArgumentException("PayPal-Checkout ist für diesen Anbieter nicht vollständig verifiziert.");
         }
-        if (booking.getGrossAmount() == null || booking.getGrossAmount() <= 0) {
+        if (booking.getGrossAmount() == null || booking.getGrossAmount().signum() <= 0) {
             throw new IllegalArgumentException("PayPal-Checkout erfordert einen positiven Buchungsbetrag.");
         }
-        booking.setPaypalExpectedAmount(BigDecimal.valueOf(booking.getGrossAmount()).setScale(2, RoundingMode.HALF_UP));
+        booking.setPaypalExpectedAmount(booking.getGrossAmount().setScale(2, RoundingMode.UNNECESSARY));
         booking.setPaypalCurrencyCode(booking.getBookingCurrencyCode());
         booking.setPaypalPayeeMerchantId(merchantId.trim());
     }

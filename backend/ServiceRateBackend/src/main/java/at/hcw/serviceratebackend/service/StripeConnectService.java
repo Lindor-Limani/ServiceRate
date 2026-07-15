@@ -506,11 +506,17 @@ public class StripeConnectService {
         }
     }
 
-    private long cents(Double value) {
-        BigDecimal amount = BigDecimal.valueOf(value == null ? 0.0 : value)
-                .multiply(BigDecimal.valueOf(100))
-                .setScale(0, RoundingMode.HALF_UP);
-        return amount.longValueExact();
+    private long cents(BigDecimal value) {
+        if (value == null) {
+            return 0;
+        }
+        try {
+            return value.setScale(2, RoundingMode.UNNECESSARY)
+                    .movePointRight(2)
+                    .longValueExact();
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException("Stripe Checkout erfordert Geldbeträge mit höchstens zwei Nachkommastellen im unterstützten Wertebereich.");
+        }
     }
 
     private String serviceTitle(ServiceOffering offering) {

@@ -110,14 +110,14 @@ public class Booking extends AuditableEntity {
     @Column(name = "stripe_currency_code", length = 3)
     private String stripeCurrencyCode;
 
-    @Column(name = "gross_amount")
-    private Double grossAmount;
+    @Column(name = "gross_amount", precision = 19, scale = 2)
+    private BigDecimal grossAmount;
 
-    @Column(name = "platform_fee_amount")
-    private Double platformFeeAmount;
+    @Column(name = "platform_fee_amount", precision = 19, scale = 2)
+    private BigDecimal platformFeeAmount;
 
-    @Column(name = "provider_receivable_amount")
-    private Double providerReceivableAmount;
+    @Column(name = "provider_receivable_amount", precision = 19, scale = 2)
+    private BigDecimal providerReceivableAmount;
 
     @Column(name = "settlement_status")
     private String settlementStatus = "NOT_READY";

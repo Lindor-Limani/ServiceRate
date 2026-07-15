@@ -119,8 +119,8 @@ class StripeCheckoutRequestTest {
         booking.setStripeExpectedApplicationFeeMinor(2345L);
         booking.setStripeCurrencyCode("USD");
         booking.setStripeConnectedAccountId("acct_snapshot");
-        booking.setGrossAmount(999.0);
-        booking.setPlatformFeeAmount(99.0);
+        booking.setGrossAmount(new BigDecimal("999.00"));
+        booking.setPlatformFeeAmount(new BigDecimal("99.00"));
         booking.getServiceOffering().getProvider().setStripeConnectedAccountId("acct_snapshot");
 
         stripeConnectService.createCheckoutSession(booking, false);
@@ -158,13 +158,13 @@ class StripeCheckoutRequestTest {
     @Test
     void checkoutRejectsApplicationFeeOutsideSnapshotBoundsBeforeProviderCall() {
         Booking booking = checkoutBooking(UUID.randomUUID());
-        booking.setPlatformFeeAmount(-1.0);
+        booking.setPlatformFeeAmount(new BigDecimal("-1.00"));
 
         assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag.");
 
-        booking.setPlatformFeeAmount(100.01);
+        booking.setPlatformFeeAmount(new BigDecimal("100.01"));
         assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag.");
@@ -175,14 +175,19 @@ class StripeCheckoutRequestTest {
     @Test
     void checkoutRejectsInvalidAmountAndCurrencyBeforeProviderCall() {
         Booking booking = checkoutBooking(UUID.randomUUID());
-        for (Double invalidAmount : new Double[]{null, 0.0, -1.0}) {
+        for (BigDecimal invalidAmount : new BigDecimal[]{null, BigDecimal.ZERO, new BigDecimal("-1.00")}) {
             booking.setGrossAmount(invalidAmount);
             assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessage("Stripe Checkout erfordert einen positiven Buchungsbetrag.");
         }
 
-        booking.setGrossAmount(100.0);
+        booking.setGrossAmount(new BigDecimal("100.001"));
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stripe Checkout erfordert Geldbeträge mit höchstens zwei Nachkommastellen im unterstützten Wertebereich.");
+
+        booking.setGrossAmount(new BigDecimal("100.00"));
         booking.setBookingCurrencyCode("EURO");
         assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -225,8 +230,8 @@ class StripeCheckoutRequestTest {
         booking.setServiceOffering(offering);
         booking.setBookedUnitPrice(new BigDecimal("100.00"));
         booking.setBookingCurrencyCode("EUR");
-        booking.setGrossAmount(100.0);
-        booking.setPlatformFeeAmount(11.0);
+        booking.setGrossAmount(new BigDecimal("100.00"));
+        booking.setPlatformFeeAmount(new BigDecimal("11.00"));
         return booking;
     }
 

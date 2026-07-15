@@ -1,5 +1,6 @@
 package at.hcw.serviceratebackend.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -12,9 +13,9 @@ public record AdminBookingResponse(
         String status,
         String paymentStatus,
         String paymentProvider,
-        Double grossAmount,
-        Double platformFeeAmount,
-        Double providerReceivableAmount,
+        BigDecimal grossAmount,
+        BigDecimal platformFeeAmount,
+        BigDecimal providerReceivableAmount,
         String settlementStatus,
         String settlementNote,
         LocalDate bookingDate,

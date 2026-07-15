@@ -19,7 +19,7 @@ Die vorhandenen Tests sind als Entwicklungsbasis brauchbar, aber kein Release-Na
 | Gradle Runtime + OSV | 115 Komponenten, 34 Meldungen | SCA-Hinweis | Anwendbarkeit und finales Artefakt separat verifizieren |
 | k6-Skripte | vorhanden | Ausgangspunkt für Suche/Smoke | kein aktueller signierter Ergebnisreport, kein Soak/Payment-Race |
 
-Aktueller Regressionstand für die Preis-Datentypumstellung am 2026-07-15: `gradlew.bat clean build --no-daemon` mit 173/173 Backendtests, SBOM- und Runtime-Patch-Gates sowie `npm run test:e2e` mit 14/14 Browserfällen erfolgreich. Der Lauf nutzt weiterhin überwiegend H2 beziehungsweise ein gemocktes Browser-Backend und schließt die unten dokumentierten PostgreSQL-, PSP-Sandbox- und Finance-Gates nicht.
+Aktueller Regressionstand für die Preis- und Checkout-Geldwertumstellung am 2026-07-15: `gradlew.bat clean build --no-daemon` mit 178/178 Backendtests, SBOM- und Runtime-Patch-Gates sowie `npm run test:e2e` mit 14/14 Browserfällen erfolgreich. Der Lauf nutzt weiterhin überwiegend H2 beziehungsweise ein gemocktes Browser-Backend und schließt die unten dokumentierten PostgreSQL-, PSP-Sandbox- und Finance-Gates nicht.
 
 ## Coverage-Matrix der kritischen Geschäftsprozesse
 
@@ -35,8 +35,8 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | Buchung erstellen | Teil inkl. dezimalem Angebotspreis, zentralen Create-/Update-Grenzen und Unit-Price-/Währungssnapshot | Nein | Nein | Teil inkl. Service-HTTP-Preisgrenzen | Nein | **P0** |
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
-| Stripe Checkout/Webhook | Ja/Teil inkl. gebuchtem Unit Price, Buchungswährung, Payment-/Application-Fee-Minor-Unit-, Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
-| PayPal Checkout/Onboarding | Ja/Teil inkl. Order-Snapshot und Capture-Betrag/Währung/Payee | Nein | Nein | Teil inkl. Capture-Provider- und Finanzbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
+| Stripe Checkout/Webhook | Ja/Teil inkl. dezimaler Checkoutbeträge, gebuchtem Unit Price, Buchungswährung, Payment-/Application-Fee-Minor-Unit-, Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Geldwertgrenzen und Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
+| PayPal Checkout/Onboarding | Ja/Teil inkl. dezimaler Checkoutbeträge, Order-Snapshot und Capture-Betrag/Währung/Payee | Nein | Nein | Teil inkl. Geldwertgrenzen sowie Capture-Provider- und Finanzbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
 | Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Provider-Key-Retry plus Teil/H2 | **P0** |
 | Refund/Chargeback/Payout/Reconciliation | Nein | Nein | Nein | Nein | Nein | P1-Lücke |
 | Delivery nach Zahlung | Teil | Nein | Nein | Nein | Nein | **P0** |
@@ -84,6 +84,7 @@ Die Tests müssen UUID-Austausch in Pfad, Query und Body kombinieren. Ein bloße
 - 100 parallele Checkout-/Capture-/Webhook-Requests auf dieselbe Buchung.
 - Rundung und Minor Units für 0, 1, Maximalbetrag, Dezimalgrenzen, Gebühren und Steuern.
 - Service Create/Update: null-, nichtpositive, übergenaue und außerhalb `NUMERIC(19,2)` liegende Preise werden vor Persistenz/Mutation abgewiesen; gültige Dezimalwerte bleiben in API, Datenbank, Suche und Buchungssnapshot exakt.
+- Checkout-Abrechnung: Brutto, Plattformgebühr und Providerforderung bleiben über Rundungsgrenzen, Prozent-/Festgebühr und Gebühren-Cap als `NUMERIC(19,2)` exakt; negative Konfiguration und korrupte PayPal-/Stripe-Sollwerte müssen vor Finanzmutation beziehungsweise Providerkommunikation scheitern.
 - Preis-/Währungsänderung nach Buchung: Checkout verwendet nachweislich den unveränderlichen Unit-Price-/Währungssnapshot; Rechnung, Steuer- und Gebührenversion sowie historische/versionierte Migration bleiben offen.
 - Merchant-Onboarding: gefälschte Flags, fremde Merchant-ID, State-Replay, Callback-CSRF, Berechtigungsentzug.
 - Sandbox-End-to-End für Full/Partial Refund, Chargeback, Payout und Reconciliation.

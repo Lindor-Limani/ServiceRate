@@ -69,9 +69,15 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_expected_amount_minor BIGINT");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_expected_application_fee_minor BIGINT");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_currency_code VARCHAR(3)");
-        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gross_amount DOUBLE PRECISION");
-        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_amount DOUBLE PRECISION");
-        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_receivable_amount DOUBLE PRECISION");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gross_amount NUMERIC(19,2)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_amount NUMERIC(19,2)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_receivable_amount NUMERIC(19,2)");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN gross_amount TYPE NUMERIC(19,2) USING CAST(gross_amount AS NUMERIC(19,2))");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN gross_amount SET DATA TYPE NUMERIC(19,2)");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN platform_fee_amount TYPE NUMERIC(19,2) USING CAST(platform_fee_amount AS NUMERIC(19,2))");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN platform_fee_amount SET DATA TYPE NUMERIC(19,2)");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN provider_receivable_amount TYPE NUMERIC(19,2) USING CAST(provider_receivable_amount AS NUMERIC(19,2))");
+        tryExecute("ALTER TABLE bookings ALTER COLUMN provider_receivable_amount SET DATA TYPE NUMERIC(19,2)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS settlement_status VARCHAR(255) DEFAULT 'NOT_READY'");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS settlement_note TEXT");
         jdbcTemplate.execute("UPDATE bookings SET payment_status = 'UNPAID' WHERE payment_status IS NULL");
