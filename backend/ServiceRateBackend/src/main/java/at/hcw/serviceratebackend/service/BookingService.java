@@ -520,7 +520,7 @@ public class BookingService {
             return booking.getBookedUnitPrice().doubleValue();
         }
         ServiceOffering offering = booking.getServiceOffering();
-        return offering == null ? 0.0 : offering.getPrice();
+        return offering == null || offering.getPrice() == null ? 0.0 : offering.getPrice().doubleValue();
     }
 
     private void applyMarketplaceAmounts(Booking booking) {
@@ -550,13 +550,13 @@ public class BookingService {
     }
 
     private void applyBookingFinancialSnapshot(Booking booking, ServiceOffering service) {
-        Double price = service == null ? null : service.getPrice();
-        if (price == null || !Double.isFinite(price) || price <= 0) {
-            throw new IllegalArgumentException("Buchungen erfordern einen positiven endlichen Angebotspreis.");
+        BigDecimal price = service == null ? null : service.getPrice();
+        if (price == null || price.signum() <= 0) {
+            throw new IllegalArgumentException("Buchungen erfordern einen positiven Angebotspreis.");
         }
         BigDecimal bookedUnitPrice;
         try {
-            bookedUnitPrice = BigDecimal.valueOf(price).setScale(2, RoundingMode.UNNECESSARY);
+            bookedUnitPrice = price.setScale(2, RoundingMode.UNNECESSARY);
         } catch (ArithmeticException ex) {
             throw new IllegalArgumentException("Angebotspreise dürfen höchstens zwei Nachkommastellen besitzen.");
         }

@@ -11,6 +11,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -33,10 +34,10 @@ class ServiceOfferingRepositoryTest {
     void searchActive_filtersByTextCategoryLocationPriceAndMinimumRating() {
         User provider = saveUser("provider@example.com", "PROVIDER", "Ada", "Builder");
         User customer = saveUser("customer@example.com", "CUSTOMER", "Grace", "Customer");
-        ServiceOffering matching = saveOffering(provider, "Rohr reparieren", "Bad und Kueche", "REPAIR", "Wien", 80.0, "ACTIVE");
-        ServiceOffering tooExpensive = saveOffering(provider, "Rohr reparieren teuer", "Bad", "REPAIR", "Wien", 180.0, "ACTIVE");
-        ServiceOffering inactive = saveOffering(provider, "Rohr reparieren inaktiv", "Bad", "REPAIR", "Wien", 50.0, "INACTIVE");
-        ServiceOffering otherCategory = saveOffering(provider, "Rohr reinigen", "Bad", "CLEANING", "Wien", 70.0, "ACTIVE");
+        ServiceOffering matching = saveOffering(provider, "Rohr reparieren", "Bad und Kueche", "REPAIR", "Wien", new BigDecimal("80.00"), "ACTIVE");
+        ServiceOffering tooExpensive = saveOffering(provider, "Rohr reparieren teuer", "Bad", "REPAIR", "Wien", new BigDecimal("180.00"), "ACTIVE");
+        ServiceOffering inactive = saveOffering(provider, "Rohr reparieren inaktiv", "Bad", "REPAIR", "Wien", new BigDecimal("50.00"), "INACTIVE");
+        ServiceOffering otherCategory = saveOffering(provider, "Rohr reinigen", "Bad", "CLEANING", "Wien", new BigDecimal("70.00"), "ACTIVE");
         addReview(customer, matching, 5);
         addReview(customer, tooExpensive, 5);
         addReview(customer, inactive, 5);
@@ -46,7 +47,7 @@ class ServiceOfferingRepositoryTest {
                 "rohr",
                 "REPAIR",
                 "wien",
-                100.0,
+                new BigDecimal("100.00"),
                 4.5,
                 PageRequest.of(0, 10, Sort.by("title"))
         );
@@ -54,12 +55,14 @@ class ServiceOfferingRepositoryTest {
         assertThat(page.getContent())
                 .extracting(ServiceOffering::getId)
                 .containsExactly(matching.getId());
+        assertThat(serviceOfferingRepository.findById(matching.getId()).orElseThrow().getPrice())
+                .isEqualByComparingTo("80.00");
     }
 
     @Test
     void searchActive_treatsMissingReviewsAsZeroRatingForMinRatingFilter() {
         User provider = saveUser("provider@example.com", "PROVIDER", "Ada", "Builder");
-        ServiceOffering unrated = saveOffering(provider, "Fenster montieren", "Montage", "REPAIR", "Graz", 90.0, "ACTIVE");
+        ServiceOffering unrated = saveOffering(provider, "Fenster montieren", "Montage", "REPAIR", "Graz", new BigDecimal("90.00"), "ACTIVE");
 
         var visibleWithoutMinimum = serviceOfferingRepository.searchActive(
                 "",
@@ -90,7 +93,7 @@ class ServiceOfferingRepositoryTest {
     void reviewRepository_returnsAverageCountAndReviewsForService() {
         User provider = saveUser("provider@example.com", "PROVIDER", "Ada", "Builder");
         User customer = saveUser("customer@example.com", "CUSTOMER", "Grace", "Customer");
-        ServiceOffering service = saveOffering(provider, "Bad sanieren", "Komplett", "REPAIR", "Linz", 120.0, "ACTIVE");
+        ServiceOffering service = saveOffering(provider, "Bad sanieren", "Komplett", "REPAIR", "Linz", new BigDecimal("120.00"), "ACTIVE");
         addReview(customer, service, 4);
         addReview(customer, service, 5);
 
@@ -118,7 +121,7 @@ class ServiceOfferingRepositoryTest {
             String description,
             String category,
             String location,
-            Double price,
+            BigDecimal price,
             String status
     ) {
         ServiceOffering service = new ServiceOffering();

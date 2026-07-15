@@ -19,6 +19,8 @@ Die vorhandenen Tests sind als Entwicklungsbasis brauchbar, aber kein Release-Na
 | Gradle Runtime + OSV | 115 Komponenten, 34 Meldungen | SCA-Hinweis | Anwendbarkeit und finales Artefakt separat verifizieren |
 | k6-Skripte | vorhanden | Ausgangspunkt für Suche/Smoke | kein aktueller signierter Ergebnisreport, kein Soak/Payment-Race |
 
+Aktueller Regressionstand für die Preis-Datentypumstellung am 2026-07-15: `gradlew.bat clean build --no-daemon` mit 173/173 Backendtests, SBOM- und Runtime-Patch-Gates sowie `npm run test:e2e` mit 14/14 Browserfällen erfolgreich. Der Lauf nutzt weiterhin überwiegend H2 beziehungsweise ein gemocktes Browser-Backend und schließt die unten dokumentierten PostgreSQL-, PSP-Sandbox- und Finance-Gates nicht.
+
 ## Coverage-Matrix der kritischen Geschäftsprozesse
 
 Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** = kein belastbarer Nachweis.
@@ -30,7 +32,7 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | JWT-Signatur/Rolle/Rotation | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Service CRUD und Ownership | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Suche/Filter/Pagination | Ja/Teil | Nein | Teil/Mock | Nein | k6 ohne Freigabereport | P2-Lücke |
-| Buchung erstellen | Teil inkl. Unit-Price-/Währungssnapshot und Quellwertgrenzen | Nein | Nein | Teil | Nein | **P0** |
+| Buchung erstellen | Teil inkl. dezimalem Angebotspreis, zentralen Create-/Update-Grenzen und Unit-Price-/Währungssnapshot | Nein | Nein | Teil inkl. Service-HTTP-Preisgrenzen | Nein | **P0** |
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
 | Stripe Checkout/Webhook | Ja/Teil inkl. gebuchtem Unit Price, Buchungswährung, Payment-/Application-Fee-Minor-Unit-, Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
@@ -81,7 +83,8 @@ Die Tests müssen UUID-Austausch in Pfad, Query und Body kombinieren. Ein bloße
 - Timeout/Prozessabsturz vor und nach DB-Commit simulieren: keine verlorene oder doppelte Buchung.
 - 100 parallele Checkout-/Capture-/Webhook-Requests auf dieselbe Buchung.
 - Rundung und Minor Units für 0, 1, Maximalbetrag, Dezimalgrenzen, Gebühren und Steuern.
-- Preis-/Währungsänderung nach Buchung: Checkout verwendet nachweislich den unveränderlichen Unit-Price-/Währungssnapshot; Rechnung, Steuer- und Gebührenversion sowie historische Migration bleiben offen.
+- Service Create/Update: null-, nichtpositive, übergenaue und außerhalb `NUMERIC(19,2)` liegende Preise werden vor Persistenz/Mutation abgewiesen; gültige Dezimalwerte bleiben in API, Datenbank, Suche und Buchungssnapshot exakt.
+- Preis-/Währungsänderung nach Buchung: Checkout verwendet nachweislich den unveränderlichen Unit-Price-/Währungssnapshot; Rechnung, Steuer- und Gebührenversion sowie historische/versionierte Migration bleiben offen.
 - Merchant-Onboarding: gefälschte Flags, fremde Merchant-ID, State-Replay, Callback-CSRF, Berechtigungsentzug.
 - Sandbox-End-to-End für Full/Partial Refund, Chargeback, Payout und Reconciliation.
 

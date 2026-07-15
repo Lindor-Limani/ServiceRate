@@ -117,7 +117,6 @@ Die wichtigsten Umgebungsvariablen:
 | `PAYPAL_PARTNER_MERCHANT_ID` | PayPal Merchant ID des Plattform-/Partnerkontos fuer Seller-Status-Abfragen | leer |
 | `STRIPE_SECRET_KEY` | Stripe Secret Key der Plattform | leer |
 | `STRIPE_WEBHOOK_SECRET` | Signatur-Secret fuer `/api/stripe/webhook` | leer |
-| `STRIPE_CURRENCY` | Checkout-Waehrung | `eur` |
 | `STRIPE_CONNECT_COUNTRY` | Land fuer neue Express Connected Accounts | `AT` |
 | `STRIPE_REFRESH_URL` | Ruecksprung bei erneutem Stripe-Onboarding | `APP_FRONTEND_BASE_URL/provider-dashboard.html?stripe=refresh` |
 | `STRIPE_RETURN_URL` | Ruecksprung nach Stripe-Onboarding | `APP_FRONTEND_BASE_URL/provider-dashboard.html?stripe=return` |

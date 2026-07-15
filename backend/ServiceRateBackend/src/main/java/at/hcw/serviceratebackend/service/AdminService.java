@@ -49,7 +49,10 @@ public class AdminService {
         long cancelledBookings = bookings.stream().filter(b -> "REJECTED".equals(b.getStatus()) || "CANCELLED".equals(b.getStatus())).count();
         double paidRevenue = bookings.stream()
                 .filter(b -> "PAID".equals(b.getPaymentStatus()))
-                .mapToDouble(b -> (b.getActualHours() == null ? 1.0 : b.getActualHours()) * (b.getServiceOffering() == null ? 0.0 : b.getServiceOffering().getPrice()))
+                .mapToDouble(b -> (b.getActualHours() == null ? 1.0 : b.getActualHours())
+                        * (b.getServiceOffering() == null || b.getServiceOffering().getPrice() == null
+                        ? 0.0
+                        : b.getServiceOffering().getPrice().doubleValue()))
                 .sum();
 
         return new AdminStatsResponse(

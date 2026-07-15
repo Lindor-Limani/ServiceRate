@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,7 +58,7 @@ public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering
             @Param("q") String q,
             @Param("category") String category,
             @Param("location") String location,
-            @Param("maxPrice") Double maxPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
             @Param("minRating") Double minRating,
             Pageable pageable
     );
@@ -109,7 +110,7 @@ public interface ServiceOfferingRepository extends JpaRepository<ServiceOffering
             @Param("q") String q,
             @Param("category") String category,
             @Param("location") String location,
-            @Param("maxPrice") Double maxPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
             @Param("minRating") Double minRating,
             Pageable pageable
     );

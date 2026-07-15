@@ -26,6 +26,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -81,6 +83,7 @@ public class ServiceOfferingService {
         }
 
         String category = normalizeCategory(request.category());
+        BigDecimal price = normalizePrice(request.price());
 
         // PLZ über die externe Zippopotam.us-API in einen Ortsnamen auflösen (400, falls ungültig)
         String location = locationValidationService.resolveCityName(request.zipCode());
@@ -91,7 +94,7 @@ public class ServiceOfferingService {
         service.setTitle(request.title());
         service.setDescription(request.description());
         service.setCategory(category);
-        service.setPrice(request.price());
+        service.setPrice(price);
         service.setEstimatedHours(request.estimatedHours());
         List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
         service.setImageUrl(imageUrls.isEmpty() ? null : imageUrls.get(0));
@@ -116,7 +119,7 @@ public class ServiceOfferingService {
             String q,
             String category,
             String location,
-            Double maxPrice,
+            BigDecimal maxPrice,
             Double minRating,
             String sort
     ) {
@@ -187,11 +190,12 @@ public class ServiceOfferingService {
         User provider = requireActiveProvider(providerEmail);
         ServiceOffering service = requireOwnedService(id, provider);
         String category = normalizeCategory(request.category());
+        BigDecimal price = normalizePrice(request.price());
 
         service.setTitle(request.title());
         service.setDescription(request.description());
         service.setCategory(category);
-        service.setPrice(request.price());
+        service.setPrice(price);
         service.setEstimatedHours(request.estimatedHours());
         List<String> imageUrls = normalizeImageUrls(request.imageUrls(), request.imageUrl());
         service.setImageUrl(imageUrls.isEmpty() ? null : imageUrls.get(0));
@@ -311,6 +315,22 @@ public class ServiceOfferingService {
         String normalized = category.trim().toUpperCase(Locale.ROOT);
         if (!ALLOWED_CATEGORIES.contains(normalized)) {
             throw new IllegalArgumentException("Ungültige Service-Kategorie.");
+        }
+        return normalized;
+    }
+
+    private BigDecimal normalizePrice(BigDecimal price) {
+        if (price == null || price.signum() <= 0) {
+            throw new IllegalArgumentException("Servicepreise müssen größer als 0 sein.");
+        }
+        BigDecimal normalized;
+        try {
+            normalized = price.setScale(2, RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException ex) {
+            throw new IllegalArgumentException("Servicepreise dürfen höchstens zwei Nachkommastellen besitzen.");
+        }
+        if (normalized.precision() > 19) {
+            throw new IllegalArgumentException("Der Servicepreis überschreitet den unterstützten Wertebereich.");
         }
         return normalized;
     }

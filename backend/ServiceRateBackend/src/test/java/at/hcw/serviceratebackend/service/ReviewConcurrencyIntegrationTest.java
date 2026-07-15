@@ -18,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -151,7 +152,7 @@ class ReviewConcurrencyIntegrationTest {
         offering.setTitle("Review Service");
         offering.setDescription("Beschreibung");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setStatus("ACTIVE");
         return serviceOfferingRepository.saveAndFlush(offering);
     }

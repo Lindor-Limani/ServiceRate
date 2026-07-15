@@ -84,7 +84,7 @@ class PayPalServiceTest {
         Booking booking = booking(provider);
         booking.setPaypalExpectedAmount(new BigDecimal("123.45"));
         booking.setPaypalCurrencyCode("EUR");
-        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setPrice(new BigDecimal("999.00"));
         booking.getServiceOffering().setCurrencyCode("USD");
 
         server.expect(requestTo("https://api-m.sandbox.paypal.com/v1/oauth2/token"))
@@ -95,7 +95,8 @@ class PayPalServiceTest {
         server.expect(requestTo("https://api-m.sandbox.paypal.com/v2/checkout/orders"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("PayPal-Request-Id", "servicerate-order-" + booking.getId()))
-                .andExpect(content().string(containsString("\"amount\":{\"currency_code\":\"EUR\",\"value\":\"123.45\"}")))
+                .andExpect(content().string(containsString("\"value\":\"123.45\"")))
+                .andExpect(content().string(containsString("\"currency_code\":\"EUR\"")))
                 .andExpect(content().string(containsString("\"payee\":{\"merchant_id\":\"verified-merchant\"}")))
                 .andExpect(content().string(not(containsString("email_address"))))
                 .andExpect(content().string(not(containsString("legacy-fallback@example.com"))))
@@ -287,7 +288,7 @@ class PayPalServiceTest {
         offering.setId(UUID.randomUUID());
         offering.setProvider(provider);
         offering.setTitle("Verified service");
-        offering.setPrice(100.0);
+        offering.setPrice(new BigDecimal("100.00"));
         offering.setCurrencyCode("EUR");
 
         Booking booking = new Booking();

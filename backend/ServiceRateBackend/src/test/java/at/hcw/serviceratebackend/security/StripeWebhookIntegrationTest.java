@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -468,7 +469,7 @@ class StripeWebhookIntegrationTest {
         offering.setTitle("Stripe Webhook Service");
         offering.setDescription("Beschreibung");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setStatus("ACTIVE");
         offering = serviceOfferingRepository.saveAndFlush(offering);
 

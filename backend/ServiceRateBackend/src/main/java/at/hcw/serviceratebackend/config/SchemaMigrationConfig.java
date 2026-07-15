@@ -34,6 +34,8 @@ public class SchemaMigrationConfig {
         tryExecute("ALTER TABLE users ALTER COLUMN profile_image_url SET DATA TYPE TEXT");
 
         jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS estimated_hours DOUBLE PRECISION");
+        tryExecute("ALTER TABLE service_offerings ALTER COLUMN price TYPE NUMERIC(19,2) USING CAST(price AS NUMERIC(19,2))");
+        tryExecute("ALTER TABLE service_offerings ALTER COLUMN price SET DATA TYPE NUMERIC(19,2)");
         jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS image_url TEXT");
         jdbcTemplate.execute("ALTER TABLE service_offerings ADD COLUMN IF NOT EXISTS image_urls TEXT");
         tryExecute("ALTER TABLE service_offerings ALTER COLUMN image_url TYPE TEXT");

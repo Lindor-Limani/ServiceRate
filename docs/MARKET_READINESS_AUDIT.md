@@ -61,7 +61,7 @@ Die Gesamtzahl ist die normalisierte Summe: `22 / 85 * 100 = 26`.
 | Zahlungssicherheit | 1 | Stripe-Signatur und serverseitiger Checkout-Betrag vorhanden; kritische Bypass- und Lifecycle-Lücken. |
 | Datenschutz | 0 | Kein Export-, Retention-, Consent-, Backup-Lösch- oder Privacy-Audit-Konzept. |
 | Marktplatz-Compliance | 1 | Report-/Admin-Grundgerüst; Anbieterklassifizierung, Rechtstexte, Appeals und Audit-Trail fehlen. |
-| Datenbank | 1 | UUID/FKs/Auditzeiten teilweise vorhanden; `Double`, DDL-Auto, kaum Constraints/Indizes/Migrationen. |
+| Datenbank | 1 | UUID/FKs/Auditzeiten teilweise vorhanden; Angebotspreis/Booking-Unit-Price sind dezimal, übrige Geldwerte teils `Double`; DDL-Auto, kaum Constraints/Indizes/Migrationen. |
 | Performance | 1 | Pagination und k6-Skripte vorhanden; N+1, unbeschränkte Admin-Listen und keine Messergebnisse. |
 | Stabilität | 1 | Transaktionen teilweise vorhanden; externe Calls darin, keine Timeouts/Retry/Outbox/Recovery. |
 | Tests | 3 | 58 Backend- und 8 UI-Tests bestehen; kritische Negative-, Concurrent-, Payment- und E2E-Tests fehlen. |
@@ -100,7 +100,7 @@ Legende: **vollständig**, **teilweise**, **fehlerhaft**, **nur Frontend**, **nu
 | Anbieterprofil | teilweise | Öffentliche Summary/Avatar; keine Identitäts-/Gewerbe-/Kontaktfelder oder Statusfilterung. |
 | Unternehmensprofil/Organisation | nicht vorhanden | `ORGANIZATION_USER` existiert nur in einem ungenutzten Enum; keine Organisation, Mitgliedschaft oder Mandantentrennung. |
 | Rollen/Berechtigungen | fehlerhaft | Customer/Provider/Admin-Strings; mehrere BOLA-Pfade, kein Organization User. |
-| Service erstellen | teilweise | Provider und verifizierte E-Mail werden geprüft; kaum Feld-/Preis-/Kategorie-/Uploadvalidierung. |
+| Service erstellen | teilweise | Provider, verifizierte E-Mail, Kategorie und Preisgrenzen werden geprüft; übrige Feld-/Uploadvalidierung bleibt lückenhaft. |
 | Service bearbeiten | fehlerhaft | Beliebiger authentifizierter Nutzer kann jede UUID ändern. |
 | Service deaktivieren/löschen | fehlerhaft | Admin kann Status setzen; Provider hat kein sicheres Deaktivieren; Delete ohne Ownership und mit FK-Risiko. |
 | Kategorien | teilweise | Frontend-Liste; Backend akzeptiert beliebigen String, keine verbotenen Kategorien/Taxonomie. |
@@ -136,7 +136,7 @@ Legende: **vollständig**, **teilweise**, **fehlerhaft**, **nur Frontend**, **nu
 - Neue Buchungen speichern den bei Abschluss geltenden Unit Price als `NUMERIC(19,2)` und die normalisierte ISO-Währung. Checkout und Buchungsanzeige verwenden diesen Snapshot statt des später veränderbaren Angebots; die Bruttosumme wird mit den fachlich erst später bekannten Iststunden gebildet. Ein vollständiger Vertrags-/Steuer-/Gebührenversionssnapshot fehlt weiterhin.
 - Clientfelder `customerId` und `providerId` werden im geschützten Create-Pfad ignoriert bzw. durch den JWT-Nutzer ersetzt. Positiv: `createBooking` lädt den Customer per E-Mail (`BookingService.java:63-84`), `createForProviderEmail` den Provider per E-Mail (`ServiceOfferingService.java:55-59`).
 - Clientmanipulation bleibt bei Paymentstatus (`mark-paid`), PayPal-Empfänger, Arbeitsstunden, Servicepreis und Statusübergängen möglich.
-- Geld und Stunden werden außerhalb des neuen Unit-Price-Snapshots weiterhin überwiegend als `Double` gespeichert. Neue Bookings besitzen eine eigene Währung; Stripe und PayPal übernehmen sie in ihre providergebundenen Checkout-Sollwerte. Legacy-Buchungen ohne Snapshot werden beim Checkout fail-closed blockiert.
+- Angebotspreise und gebuchte Unit Prices werden als `BigDecimal`/`NUMERIC(19,2)` gespeichert; Create/Update weisen null-, nichtpositive, übergenaue und zu große Preise vor Persistenz ab. Brutto, Provision, Providerforderung und Stunden bleiben teilweise `Double`. Neue Bookings besitzen eine eigene Währung; Stripe und PayPal übernehmen sie in ihre providergebundenen Checkout-Sollwerte. Legacy-Buchungen ohne Snapshot werden beim Checkout fail-closed blockiert.
 - Es existieren weder `@Version`, pessimistische Locks, Unique-/Exclusion-Constraints für Termine noch Idempotency Keys. Transaktionen allein verhindern Lost Updates nicht.
 - Payment-/Booking-Status sind freie Strings, ohne Check Constraints und ohne gekoppelte Invarianten. Abgelehnte oder Pending-Buchungen können bezahlt werden.
 - `@Transactional` umschließt externe Stripe-/PayPal-/Mail-Aufrufe, wodurch lange DB-Transaktionen und unklare Teilfehler entstehen (`BookingService.java:41`, `198-271`).
@@ -567,9 +567,9 @@ Die Detailfindings werden zusätzlich in `docs/SECURITY_FINDINGS.md` gespiegelt.
 * betroffene Rollen: Customer, Provider, Admin
 * betroffene Dateien: `model/entity/ServiceOffering.java:28-44`; `model/entity/Booking.java:88-95`; `service/BookingService.java:514-536`; `service/PayPalService.java:367-376`; `service/StripeConnectService.java:53-54,149-152`
 * betroffene Endpunkte: Service Create/Update, Booking Checkout, Settlement
-* Beschreibung: Neue Buchungen besitzen einen währungsgebundenen `BigDecimal`-Unit-Price-Snapshot; Brutto, Provision, Providerforderung, Iststunden und Servicepreise sind jedoch weiterhin teilweise `Double`, und Steuer-/Gebührenversion sowie vollständiger Vertragssnapshot fehlen.
-* konkreter Nachweis: `createBooking` validiert und speichert `bookedUnitPrice`/`bookingCurrencyCode`; Checkout multipliziert ausschließlich den gebuchten Unit Price mit den Iststunden und reicht dieselbe Währung an PayPal/Stripe weiter. Preis-/Währungsänderungs-, Legacy-, Grenzwert-, Adapter- und Parallelitätsregressionen sind grün. Die Gebührenberechnung liest weiterhin eine unversionierte Laufzeitkonfiguration.
-* realistisches Angriffs- oder Fehlerszenario: Eine Gebührenkonfiguration wird zwischen Buchung und Checkout geändert; extreme oder parallele Stundenwerte erzeugen abweichende Provisionen; Rundung/Infinity kann außerhalb des abgesicherten Checkoutpfads weiterhin Daten korrumpieren.
+* Beschreibung: Angebotspreise und neue Buchungs-Unit-Price-Snapshots sind währungsgebundene Dezimalwerte; Brutto, Provision, Providerforderung und Iststunden sind jedoch weiterhin teilweise `Double`, und Steuer-/Gebührenversion sowie vollständiger Vertragssnapshot fehlen.
+* konkreter Nachweis: Service Create/Update validieren zentral positiv, Skala höchstens zwei und `NUMERIC(19,2)`-Wertebereich; Entity, DTOs und Suche verwenden `BigDecimal`. `createBooking` übernimmt diesen Wert ohne binären Zwischenschritt in `bookedUnitPrice`/`bookingCurrencyCode`; Checkout multipliziert ausschließlich den gebuchten Unit Price mit den Iststunden und reicht dieselbe Währung an PayPal/Stripe weiter. Service-/HTTP-Grenzwert-, Persistenz-/Such-, Preis-/Währungsänderungs-, Legacy-, Adapter- und Parallelitätsregressionen sind grün. Die Gebührenberechnung liest weiterhin eine unversionierte Laufzeitkonfiguration.
+* realistisches Angriffs- oder Fehlerszenario: Eine Gebührenkonfiguration wird zwischen Buchung und Checkout geändert; extreme oder parallele Stundenwerte erzeugen abweichende Provisionen; Rundung/Infinity kann in den verbliebenen `Double`-Feldern außerhalb des abgesicherten Angebotspreispfads weiterhin Daten korrumpieren.
 * Auswirkung: Falsche Charges, Provision, Rechnung und Providerforderung.
 * empfohlene Lösung: `BigDecimal`/DECIMAL und ISO-Währung; unveränderlicher Booking-/Quote-Snapshot; Preisart/Einheit/Steuer/Gebührenversion; Wertebereiche/Checks.
 * empfohlene Tests: Rundungsgrenzen, Währungsmismatch, Preisänderung, Null/negativ/extrem, Snapshot-Replay.

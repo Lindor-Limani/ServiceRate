@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @Entity
@@ -25,8 +27,8 @@ public class ServiceOffering extends AuditableEntity {
     @Column(nullable = false)
     private String category; // z.B. "CLEANING", "REPAIR" (als einfacher String statt Tabelle)
 
-    @Column(nullable = false)
-    private Double price; // Simpler Fest- oder Stundenpreis
+    @Column(nullable = false, precision = 19, scale = 2)
+    private BigDecimal price; // Simpler Fest- oder Stundenpreis
 
     @Column(name = "estimated_hours")
     private Double estimatedHours;

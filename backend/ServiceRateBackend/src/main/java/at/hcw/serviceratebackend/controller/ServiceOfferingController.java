@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import at.hcw.serviceratebackend.dto.UpdateServiceRequest;
 
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.UUID;
@@ -40,7 +41,7 @@ public class ServiceOfferingController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String location,
-            @RequestParam(required = false) Double maxPrice,
+            @RequestParam(required = false) BigDecimal maxPrice,
             @RequestParam(defaultValue = "0") Double minRating,
             @RequestParam(defaultValue = "recommended") String sort) {
         return ResponseEntity.ok(service.search(page, size, q, category, location, maxPrice, minRating, sort));

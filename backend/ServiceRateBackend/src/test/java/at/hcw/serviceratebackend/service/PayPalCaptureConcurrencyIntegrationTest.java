@@ -159,7 +159,7 @@ class PayPalCaptureConcurrencyIntegrationTest {
         offering.setTitle("Capture Service");
         offering.setDescription("Beschreibung");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setStatus("ACTIVE");
         return serviceOfferingRepository.saveAndFlush(offering);
     }

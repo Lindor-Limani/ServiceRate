@@ -122,19 +122,19 @@ class BookingServiceTest {
                 customer.getId(), offering.getId(), LocalDate.now().plusDays(1)
         );
 
-        for (Double invalidPrice : new Double[]{null, 0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY}) {
+        for (BigDecimal invalidPrice : new BigDecimal[]{null, BigDecimal.ZERO, BigDecimal.valueOf(-1)}) {
             offering.setPrice(invalidPrice);
             assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("Buchungen erfordern einen positiven endlichen Angebotspreis.");
+                    .hasMessage("Buchungen erfordern einen positiven Angebotspreis.");
         }
 
-        offering.setPrice(12.345);
+        offering.setPrice(new BigDecimal("12.345"));
         assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Angebotspreise dürfen höchstens zwei Nachkommastellen besitzen.");
 
-        offering.setPrice(100.0);
+        offering.setPrice(new BigDecimal("100.00"));
         for (String invalidCurrency : new String[]{null, "", "EURO", "AAA"}) {
             offering.setCurrencyCode(invalidCurrency);
             assertThatThrownBy(() -> bookingService.createBooking(request, customer.getEmail()))
@@ -318,7 +318,7 @@ class BookingServiceTest {
         booking.setActualHours(2.5);
         booking.setBookedUnitPrice(new BigDecimal("80.00"));
         booking.setBookingCurrencyCode("EUR");
-        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setPrice(new BigDecimal("999.00"));
         booking.getServiceOffering().setCurrencyCode("USD");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
@@ -471,7 +471,7 @@ class BookingServiceTest {
         Booking booking = booking(provider);
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
-        booking.getServiceOffering().setPrice(999.0);
+        booking.getServiceOffering().setPrice(new BigDecimal("999.00"));
         booking.getServiceOffering().setCurrencyCode("USD");
         when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
@@ -1002,13 +1002,13 @@ class BookingServiceTest {
         return booking;
     }
 
-    private ServiceOffering offering(User provider, Double price) {
+    private ServiceOffering offering(User provider, double price) {
         ServiceOffering offering = new ServiceOffering();
         offering.setId(UUID.randomUUID());
         offering.setProvider(provider);
         offering.setTitle("Service");
         offering.setCategory("REPAIR");
-        offering.setPrice(price);
+        offering.setPrice(BigDecimal.valueOf(price));
         offering.setStatus("ACTIVE");
         offering.setDeliverableType("ON_SITE");
         return offering;

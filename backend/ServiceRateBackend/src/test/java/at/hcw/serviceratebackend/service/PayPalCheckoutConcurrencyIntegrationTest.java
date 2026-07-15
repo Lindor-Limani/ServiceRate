@@ -165,7 +165,7 @@ class PayPalCheckoutConcurrencyIntegrationTest {
         offering.setTitle("PayPal Checkout Service");
         offering.setDescription("Beschreibung");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setCurrencyCode("EUR");
         offering.setStatus("ACTIVE");
         return serviceOfferingRepository.saveAndFlush(offering);
@@ -176,7 +176,7 @@ class PayPalCheckoutConcurrencyIntegrationTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(customer);
         booking.setServiceOffering(offering);
-        booking.setBookedUnitPrice(BigDecimal.valueOf(offering.getPrice()).setScale(2));
+        booking.setBookedUnitPrice(offering.getPrice().setScale(2));
         booking.setBookingCurrencyCode(offering.getCurrencyCode());
         booking.setServiceDate(OffsetDateTime.now().plusDays(1));
         booking.setBookingDate(LocalDate.now().plusDays(1));

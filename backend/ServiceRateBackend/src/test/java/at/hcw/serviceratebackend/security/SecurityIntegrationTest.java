@@ -841,6 +841,31 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void serviceCreateAndUpdateRejectInvalidMoneyValuesOverHttpWithoutPersistence() throws Exception {
+        mockMvc.perform(post("/api/services")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createServiceJson("12.345")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(
+                        "Servicepreise dürfen höchstens zwei Nachkommastellen besitzen."
+                ));
+        assertThat(serviceOfferingRepository.count()).isZero();
+
+        ServiceOffering offering = saveService(provider, "Original");
+        mockMvc.perform(put("/api/services/{id}", offering.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson("Manipuliert").replace("90.0", "0")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Servicepreise müssen größer als 0 sein."));
+
+        ServiceOffering unchanged = serviceOfferingRepository.findById(offering.getId()).orElseThrow();
+        assertThat(unchanged.getTitle()).isEqualTo("Original");
+        assertThat(unchanged.getPrice()).isEqualByComparingTo("80.00");
+    }
+
+    @Test
     void foreignProviderCannotUpdateOrDeleteService() throws Exception {
         User otherProvider = saveUser("other-provider@example.com", "PROVIDER", "ACTIVE");
         ServiceOffering offering = saveService(provider, "Original");
@@ -951,7 +976,7 @@ class SecurityIntegrationTest {
         offering.setTitle(title);
         offering.setDescription("Beschreibung");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setEstimatedHours(2.0);
         offering.setDeliverableType("ON_SITE");
         offering.setStatus("ACTIVE");
@@ -963,7 +988,7 @@ class SecurityIntegrationTest {
         booking.setId(UUID.randomUUID());
         booking.setCustomer(bookingCustomer);
         booking.setServiceOffering(offering);
-        booking.setBookedUnitPrice(BigDecimal.valueOf(offering.getPrice()).setScale(2));
+        booking.setBookedUnitPrice(offering.getPrice().setScale(2));
         booking.setBookingCurrencyCode(offering.getCurrencyCode());
         booking.setServiceDate(OffsetDateTime.now().plusDays(1));
         booking.setBookingDate(LocalDate.now().plusDays(1));
@@ -975,6 +1000,21 @@ class SecurityIntegrationTest {
 
     private String updateJson(String title) {
         return updateJson(title, "REPAIR");
+    }
+
+    private String createServiceJson(String price) {
+        return """
+                {
+                  "title": "Neuer Service",
+                  "description": "Beschreibung",
+                  "category": "REPAIR",
+                  "price": %s,
+                  "estimatedHours": 2.0,
+                  "imageUrls": [],
+                  "deliverableType": "ON_SITE",
+                  "zipCode": "1010"
+                }
+                """.formatted(price);
     }
 
     private String updateJson(String title, String category) {

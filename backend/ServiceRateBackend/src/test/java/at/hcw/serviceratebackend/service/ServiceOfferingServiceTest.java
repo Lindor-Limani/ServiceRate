@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -78,7 +79,7 @@ class ServiceOfferingServiceTest {
                 "Bad sanieren",
                 "Komplettservice",
                 " plumbing ",
-                80.0,
+                new BigDecimal("80.00"),
                 2.5,
                 " https://fallback.example/image.jpg ",
                 List.of(" https://example.com/one.jpg ", " ", "https://example.com/two.jpg"),
@@ -92,6 +93,7 @@ class ServiceOfferingServiceTest {
 
         assertThat(saved.getProvider()).isSameAs(provider);
         assertThat(saved.getCategory()).isEqualTo("PLUMBING");
+        assertThat(saved.getPrice()).isEqualByComparingTo("80.00");
         assertThat(saved.getLocation()).isEqualTo("Wien, Innere Stadt");
         assertThat(saved.getStatus()).isEqualTo("ACTIVE");
         assertThat(saved.getDeliverableType()).isEqualTo("DIGITAL");
@@ -199,7 +201,7 @@ class ServiceOfferingServiceTest {
                     "Service",
                     "Beschreibung",
                     category,
-                    50.0,
+                    new BigDecimal("50.00"),
                     1.0,
                     null,
                     List.of(),
@@ -217,6 +219,37 @@ class ServiceOfferingServiceTest {
     }
 
     @Test
+    void createForProviderEmail_rejectsInvalidMoneyValuesBeforeExternalZipLookup() {
+        when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
+
+        for (BigDecimal invalidPrice : new BigDecimal[]{null, BigDecimal.ZERO, new BigDecimal("-0.01")}) {
+            assertThatThrownBy(() -> service.createForProviderEmail(
+                    createRequestWithPrice(invalidPrice),
+                    "provider@example.com"
+            ))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Servicepreise müssen größer als 0 sein.");
+        }
+
+        assertThatThrownBy(() -> service.createForProviderEmail(
+                createRequestWithPrice(new BigDecimal("12.345")),
+                "provider@example.com"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Servicepreise dürfen höchstens zwei Nachkommastellen besitzen.");
+
+        assertThatThrownBy(() -> service.createForProviderEmail(
+                createRequestWithPrice(new BigDecimal("100000000000000000.00")),
+                "provider@example.com"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Der Servicepreis überschreitet den unterstützten Wertebereich.");
+
+        verify(locationValidationService, never()).resolveCityName(any());
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
     void createForProviderEmail_rejectsInvalidDeliverableType() {
         when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider(true)));
         when(locationValidationService.resolveCityName("1010")).thenReturn("Wien");
@@ -226,7 +259,7 @@ class ServiceOfferingServiceTest {
                 "Service",
                 "Beschreibung",
                 "REPAIR",
-                50.0,
+                new BigDecimal("50.00"),
                 1.0,
                 null,
                 List.of(),
@@ -249,7 +282,7 @@ class ServiceOfferingServiceTest {
                 "Service",
                 "Beschreibung",
                 "REPAIR",
-                50.0,
+                new BigDecimal("50.00"),
                 1.0,
                 null,
                 List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"),
@@ -327,6 +360,37 @@ class ServiceOfferingServiceTest {
     }
 
     @Test
+    void updateServiceForProviderEmail_rejectsInvalidPriceWithoutMutatingService() {
+        User provider = provider(true);
+        ServiceOffering offering = offering(provider);
+        when(userRepository.findByEmail(provider.getEmail())).thenReturn(Optional.of(provider));
+        when(serviceRepository.findById(offering.getId())).thenReturn(Optional.of(offering));
+
+        UpdateServiceRequest request = new UpdateServiceRequest(
+                "Manipulierter Titel",
+                "Aktualisierte Beschreibung",
+                "REPAIR",
+                new BigDecimal("90.001"),
+                3.0,
+                null,
+                List.of(),
+                "ON_SITE"
+        );
+
+        assertThatThrownBy(() -> service.updateServiceForProviderEmail(
+                offering.getId(),
+                request,
+                provider.getEmail()
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Servicepreise dürfen höchstens zwei Nachkommastellen besitzen.");
+
+        assertThat(offering.getTitle()).isEqualTo("Bad sanieren");
+        assertThat(offering.getPrice()).isEqualByComparingTo("80.00");
+        verify(serviceRepository, never()).save(any());
+    }
+
+    @Test
     void deleteForProviderEmail_deletesOwnedService() {
         User provider = provider(true);
         ServiceOffering offering = offering(provider);
@@ -388,12 +452,16 @@ class ServiceOfferingServiceTest {
     }
 
     private CreateServiceRequest validRequest() {
+        return createRequestWithPrice(new BigDecimal("50.00"));
+    }
+
+    private CreateServiceRequest createRequestWithPrice(BigDecimal price) {
         return new CreateServiceRequest(
                 null,
                 "Service",
                 "Beschreibung",
                 "REPAIR",
-                50.0,
+                price,
                 1.0,
                 null,
                 List.of("https://example.com/image.jpg"),
@@ -411,7 +479,7 @@ class ServiceOfferingServiceTest {
                 title,
                 "Aktualisierte Beschreibung",
                 category,
-                90.0,
+                new BigDecimal("90.00"),
                 3.0,
                 null,
                 List.of("https://example.com/updated.jpg"),
@@ -439,7 +507,7 @@ class ServiceOfferingServiceTest {
         offering.setTitle("Bad sanieren");
         offering.setDescription("Komplettservice");
         offering.setCategory("REPAIR");
-        offering.setPrice(80.0);
+        offering.setPrice(new BigDecimal("80.00"));
         offering.setEstimatedHours(2.5);
         offering.setDeliverableType("ON_SITE");
         offering.setStatus("ACTIVE");
