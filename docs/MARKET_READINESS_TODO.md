@@ -168,6 +168,11 @@ In jedem Eintrag benennt das Feld „Aufwand/Risiko“ zuerst den geschätzten A
 
 ### MR-PAY-003 – Unveränderliches Ledger, Idempotenz und Webhook-State-Machine
 
+- **Status:** PARTIALLY COMPLETED
+- **Abschlussdatum:** 2026-07-15 (atomarer und idempotenter synchroner PayPal-Capture-Pfad)
+- **Geänderte Komponenten:** `BookingService.capturePayPalPayment`, bestehende pessimistische Zustandsabfrage im `BookingRepository`, zentrale 409-Fehlerabbildung sowie Booking-Service-, HTTP-Security- und Parallelitätstests.
+- **Hinzugefügte Tests:** Erfolgreicher PayPal-Capture mit persistierter Capture-ID und `paidAt`; sequentieller Replay mit genau einem PSP-, Persistenz- und Mail-Effekt; Negativmatrix für fehlende/falsche Order, falschen Paymentprovider, `UNPAID`, `AWAITING_OFFLINE_PAYMENT`, `REFUNDED`, null, leer und unbekannt; leere Providerantwort, nicht abgeschlossener Status und fehlende Capture-ID jeweils ohne Mutation; HTTP-Matrix für anonym, falsche Rollen, fremden Customer, fehlende Buchung, Eingaben, Ausgangszustand und Replay; zehn parallele Capture-Requests mit genau einem PayPal-Aufruf und einer Benachrichtigung.
+- **Verbleibende Einschränkungen:** Der synchrone PayPal-Capture lädt die Buchung nun pessimistisch gesperrt, erlaubt den PSP-Aufruf ausschließlich für `PAYPAL`, die exakt gespeicherte Order und `CHECKOUT_CREATED`, akzeptiert nur `COMPLETED` mit nichtleerer Capture-ID und behandelt einen committed `PAID`-Replay nebenwirkungsfrei. Das Gesamtticket bleibt offen: Die PayPal-Antwort enthält im aktuellen Adapter keinen Betrag, keine Währung, Booking-ID oder Payee zum serverseitigen Abgleich. Ein Prozess-/DB-Fehler nach erfolgreichem PSP-Aufruf, aber vor Commit ist ohne Provider-Idempotency-Key, Inbox/Outbox und Recovery weiterhin nicht atomar beherrscht. Stripe/Webhooks, Checkout-Replay, out-of-order Events, Ledger, Reconciliation, DB-Migration und PostgreSQL-Verifikation fehlen ebenfalls.
 - **Priorität/Kategorie:** P0 / Financial Integrity
 - **Beschreibung:** Paymentstatus ist ein veränderbares Feld; Webhook-Deduplizierung, Ereignisreihenfolge und belastbare Abgleiche fehlen.
 - **Technische Lösung:** Double-Entry- oder gleichwertiges append-only Ledger, unique Provider-Event-IDs, Idempotency Keys, erlaubte Übergänge, atomare Verarbeitung und Inbox/Outbox implementieren; Betrag, Währung, Booking-ID und Payee prüfen.

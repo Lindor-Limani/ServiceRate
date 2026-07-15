@@ -237,7 +237,7 @@ public class BookingService {
     }
 
     public BookingResponse capturePayPalPayment(UUID bookingId, String orderId, String customerEmail) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForStateTransition(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
         User customer = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));
@@ -254,10 +254,19 @@ public class BookingService {
         if ("PAID".equals(booking.getPaymentStatus())) {
             return toResponse(booking, null, findReviewResponse(booking));
         }
+        if (!"CHECKOUT_CREATED".equals(booking.getPaymentStatus())) {
+            throw new ConflictException("PayPal-Capture ist nur für einen gestarteten Checkout möglich.");
+        }
 
         PayPalService.PayPalCapture capture = payPalService.captureOrder(orderId);
+        if (capture == null) {
+            throw new IllegalStateException("PayPal Capture lieferte keine gültige Antwort.");
+        }
         if (!"COMPLETED".equalsIgnoreCase(capture.status())) {
             throw new IllegalStateException("PayPal Zahlung wurde nicht abgeschlossen. Status: " + capture.status());
+        }
+        if (capture.captureId() == null || capture.captureId().isBlank()) {
+            throw new IllegalStateException("PayPal Capture lieferte keine Capture-ID.");
         }
 
         booking.setPaymentStatus("PAID");
@@ -266,7 +275,7 @@ public class BookingService {
         booking.setSettlementStatus("PAYPAL_SPLIT_COMPLETED");
         booking.setSettlementNote("PayPal hat die Zahlung beim Provider gecaptured; Plattformgebühr wurde im PayPal-Order-Request angegeben.");
         booking.setPaidAt(OffsetDateTime.now());
-        Booking saved = bookingRepository.save(booking);
+        Booking saved = bookingRepository.saveAndFlush(booking);
         mailService.sendPaymentRecordedMail(saved);
         return toResponse(saved, null, findReviewResponse(saved));
     }

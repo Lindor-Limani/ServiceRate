@@ -29,7 +29,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -183,6 +185,95 @@ class SecurityIntegrationTest {
         }
 
         verify(payPalService, never()).createOrder(any());
+    }
+
+    @Test
+    void payPalCaptureEnforcesRolesOwnershipInputsStateAndReplay() throws Exception {
+        User otherCustomer = saveUser("other-capture-customer@example.com", "CUSTOMER", "ACTIVE");
+        ServiceOffering offering = saveService(provider, "PayPal Capture Service");
+        Booking booking = saveUnpaidBooking(customer, offering);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-HTTP");
+        booking = bookingRepository.saveAndFlush(booking);
+        String payload = "{\"orderId\":\"ORDER-HTTP\"}";
+
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(provider))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherCustomer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Diese Buchung gehört nicht zu diesem Kunden."));
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Buchung nicht gefunden"));
+
+        for (String invalidPayload : new String[]{"{}", "{\"orderId\":\"\"}", "{\"orderId\":\"OTHER\"}"}) {
+            mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                            .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalidPayload))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("PayPal Order passt nicht zu dieser Buchung."));
+        }
+
+        booking.setPaymentProvider("CARD");
+        booking = bookingRepository.saveAndFlush(booking);
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Diese Buchung wurde nicht mit PayPal gestartet."));
+
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("UNPAID");
+        booking = bookingRepository.saveAndFlush(booking);
+        mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value(
+                        "PayPal-Capture ist nur für einen gestarteten Checkout möglich."
+                ));
+
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking = bookingRepository.saveAndFlush(booking);
+        when(payPalService.captureOrder("ORDER-HTTP"))
+                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-HTTP"));
+        for (int request = 0; request < 2; request++) {
+            mockMvc.perform(post("/api/bookings/{id}/paypal/capture", booking.getId())
+                            .header(HttpHeaders.AUTHORIZATION, bearer(customer))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.paymentStatus").value("PAID"))
+                    .andExpect(jsonPath("$.paypalCaptureId").value("CAPTURE-HTTP"));
+        }
+
+        verify(payPalService, times(1)).captureOrder("ORDER-HTTP");
+        Booking persisted = bookingRepository.findById(booking.getId()).orElseThrow();
+        assertThat(persisted.getPaymentStatus()).isEqualTo("PAID");
+        assertThat(persisted.getPaypalCaptureId()).isEqualTo("CAPTURE-HTTP");
+        assertThat(persisted.getPaidAt()).isNotNull();
     }
 
     @Test

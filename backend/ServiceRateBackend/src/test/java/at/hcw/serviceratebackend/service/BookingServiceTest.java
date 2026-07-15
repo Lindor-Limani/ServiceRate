@@ -399,6 +399,98 @@ class BookingServiceTest {
     }
 
     @Test
+    void capturePayPalPayment_isIdempotentAfterSuccessfulCapture() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setStatus(BookingStatus.ACCEPTED.name());
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-1");
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(payPalService.captureOrder("ORDER-1"))
+                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", "CAPTURE-1"));
+        when(bookingRepository.saveAndFlush(booking)).thenReturn(booking);
+        when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
+        when(timeEntryRepository.findByBookingIdOrderByWorkDateDescCreatedAtDesc(booking.getId())).thenReturn(List.of());
+
+        var first = bookingService.capturePayPalPayment(booking.getId(), "ORDER-1", customer.getEmail());
+        var replay = bookingService.capturePayPalPayment(booking.getId(), "ORDER-1", customer.getEmail());
+
+        assertThat(first.paymentStatus()).isEqualTo("PAID");
+        assertThat(first.paypalCaptureId()).isEqualTo("CAPTURE-1");
+        assertThat(first.paidAt()).isNotNull();
+        assertThat(replay.paymentStatus()).isEqualTo("PAID");
+        assertThat(replay.paypalCaptureId()).isEqualTo("CAPTURE-1");
+        verify(payPalService, times(1)).captureOrder("ORDER-1");
+        verify(bookingRepository, times(1)).saveAndFlush(booking);
+        verify(mailService, times(1)).sendPaymentRecordedMail(booking);
+    }
+
+    @Test
+    void capturePayPalPayment_rejectsInvalidPaymentSourceBeforeExternalCall() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaypalOrderId("ORDER-1");
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+
+        for (String invalidStatus : new String[]{"UNPAID", "AWAITING_OFFLINE_PAYMENT", "REFUNDED", null, "", "UNKNOWN"}) {
+            booking.setPaymentStatus(invalidStatus);
+            assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                    booking.getId(), "ORDER-1", customer.getEmail()
+            ))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("PayPal-Capture ist nur für einen gestarteten Checkout möglich.");
+            assertThat(booking.getPaymentStatus()).isEqualTo(invalidStatus);
+            assertThat(booking.getPaypalCaptureId()).isNull();
+            assertThat(booking.getPaidAt()).isNull();
+        }
+
+        verify(payPalService, never()).captureOrder(any());
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendPaymentRecordedMail(any());
+    }
+
+    @Test
+    void capturePayPalPayment_rejectsIncompleteProviderResponsesWithoutMutation() {
+        User customer = user("customer@example.com", "CUSTOMER", true);
+        Booking booking = booking(user("provider@example.com", "PROVIDER", true));
+        booking.setCustomer(customer);
+        booking.setPaymentProvider("PAYPAL");
+        booking.setPaymentStatus("CHECKOUT_CREATED");
+        booking.setPaypalOrderId("ORDER-1");
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
+        when(userRepository.findByEmail(customer.getEmail())).thenReturn(Optional.of(customer));
+        when(payPalService.captureOrder("ORDER-1"))
+                .thenReturn(null)
+                .thenReturn(new PayPalService.PayPalCapture("PENDING", "CAPTURE-PENDING"))
+                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", null))
+                .thenReturn(new PayPalService.PayPalCapture("COMPLETED", " "));
+
+        assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                booking.getId(), "ORDER-1", customer.getEmail()
+        )).hasMessage("PayPal Capture lieferte keine gültige Antwort.");
+        assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                booking.getId(), "ORDER-1", customer.getEmail()
+        )).hasMessage("PayPal Zahlung wurde nicht abgeschlossen. Status: PENDING");
+        for (int i = 0; i < 2; i++) {
+            assertThatThrownBy(() -> bookingService.capturePayPalPayment(
+                    booking.getId(), "ORDER-1", customer.getEmail()
+            )).hasMessage("PayPal Capture lieferte keine Capture-ID.");
+        }
+
+        assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(booking.getPaypalCaptureId()).isNull();
+        assertThat(booking.getPaidAt()).isNull();
+        verify(bookingRepository, never()).saveAndFlush(any());
+        verify(mailService, never()).sendPaymentRecordedMail(any());
+    }
+
+    @Test
     void resolveDeliveryUrl_allowsProviderBeforePaymentButCustomerOnlyAfterPayment() {
         User provider = user("provider@example.com", "PROVIDER", true);
         User customer = user("customer@example.com", "CUSTOMER", true);
