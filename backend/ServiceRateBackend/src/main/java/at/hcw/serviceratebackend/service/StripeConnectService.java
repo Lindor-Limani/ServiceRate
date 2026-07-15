@@ -129,7 +129,7 @@ public class StripeConnectService {
         try {
             String customerId = ensureCustomer(customer);
             long amount = booking.getStripeExpectedAmountMinor();
-            long fee = cents(booking.getPlatformFeeAmount());
+            long fee = booking.getStripeExpectedApplicationFeeMinor();
             String description = serviceTitle(booking.getServiceOffering());
 
             SessionCreateParams.PaymentIntentData.Builder paymentIntent = SessionCreateParams.PaymentIntentData.builder()
@@ -264,6 +264,9 @@ public class StripeConnectService {
         );
         requireMatchingStripeAmount(
                 booking.getStripeExpectedAmountMinor(), intent.getAmountReceived(), "empfangenen PaymentIntent-Betrag"
+        );
+        requireMatchingStripeApplicationFee(
+                booking.getStripeExpectedApplicationFeeMinor(), intent.getApplicationFeeAmount()
         );
         requireMatchingStripeCurrency(
                 booking.getStripeCurrencyCode(), intent.getCurrency(), "PaymentIntent-Waehrung"
@@ -411,6 +414,7 @@ public class StripeConnectService {
 
     private void applyStripeCheckoutSnapshot(Booking booking, User provider) {
         boolean snapshotStarted = booking.getStripeExpectedAmountMinor() != null
+                || booking.getStripeExpectedApplicationFeeMinor() != null
                 || booking.getStripeCurrencyCode() != null
                 || booking.getStripeConnectedAccountId() != null;
         if (snapshotStarted) {
@@ -427,11 +431,18 @@ public class StripeConnectService {
         if (expectedAmountMinor <= 0) {
             throw new IllegalArgumentException("Stripe Checkout erfordert einen positiven Buchungsbetrag.");
         }
+        long expectedApplicationFeeMinor = cents(booking.getPlatformFeeAmount());
+        if (expectedApplicationFeeMinor < 0 || expectedApplicationFeeMinor > expectedAmountMinor) {
+            throw new IllegalArgumentException(
+                    "Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag."
+            );
+        }
         String currencyCode = currency == null ? "" : currency.trim().toUpperCase(Locale.ROOT);
         if (!currencyCode.matches("[A-Z]{3}")) {
             throw new IllegalArgumentException("Stripe Checkout erfordert einen gueltigen ISO-Waehrungscode.");
         }
         booking.setStripeExpectedAmountMinor(expectedAmountMinor);
+        booking.setStripeExpectedApplicationFeeMinor(expectedApplicationFeeMinor);
         booking.setStripeCurrencyCode(currencyCode);
         booking.setStripeConnectedAccountId(provider.getStripeConnectedAccountId().trim());
     }
@@ -439,6 +450,9 @@ public class StripeConnectService {
     private void requireCompleteStripeCheckoutSnapshot(Booking booking) {
         if (booking.getStripeExpectedAmountMinor() == null
                 || booking.getStripeExpectedAmountMinor() <= 0
+                || booking.getStripeExpectedApplicationFeeMinor() == null
+                || booking.getStripeExpectedApplicationFeeMinor() < 0
+                || booking.getStripeExpectedApplicationFeeMinor() > booking.getStripeExpectedAmountMinor()
                 || booking.getStripeCurrencyCode() == null
                 || !booking.getStripeCurrencyCode().matches("[A-Z]{3}")
                 || booking.getStripeConnectedAccountId() == null
@@ -473,6 +487,15 @@ public class StripeConnectService {
     private void requireMatchingStripeAmount(Long expected, Long actual, String label) {
         if (expected == null || actual == null || !expected.equals(actual)) {
             throw new IllegalArgumentException("Stripe Event stimmt nicht mit dem erwarteten " + label + " ueberein.");
+        }
+    }
+
+    private void requireMatchingStripeApplicationFee(Long expected, Long actual) {
+        long actualFee = actual == null ? 0L : actual;
+        if (expected == null || expected != actualFee) {
+            throw new IllegalArgumentException(
+                    "Stripe Event stimmt nicht mit der erwarteten PaymentIntent-Plattformgebuehr ueberein."
+            );
         }
     }
 

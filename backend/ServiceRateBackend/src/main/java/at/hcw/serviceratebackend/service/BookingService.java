@@ -659,6 +659,9 @@ public class BookingService {
     private boolean hasCompleteStripeCheckoutSnapshot(Booking booking) {
         return booking.getStripeExpectedAmountMinor() != null
                 && booking.getStripeExpectedAmountMinor() > 0
+                && booking.getStripeExpectedApplicationFeeMinor() != null
+                && booking.getStripeExpectedApplicationFeeMinor() >= 0
+                && booking.getStripeExpectedApplicationFeeMinor() <= booking.getStripeExpectedAmountMinor()
                 && booking.getStripeCurrencyCode() != null
                 && booking.getStripeCurrencyCode().matches("[A-Z]{3}")
                 && booking.getStripeConnectedAccountId() != null
@@ -686,6 +689,7 @@ public class BookingService {
         if ((booking.getStripeCheckoutSessionId() != null && !booking.getStripeCheckoutSessionId().isBlank())
                 || (booking.getStripePaymentIntentId() != null && !booking.getStripePaymentIntentId().isBlank())
                 || booking.getStripeExpectedAmountMinor() != null
+                || booking.getStripeExpectedApplicationFeeMinor() != null
                 || booking.getStripeCurrencyCode() != null
                 || booking.getStripeConnectedAccountId() != null
                 || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {

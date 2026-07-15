@@ -33,7 +33,7 @@ Legende: **Ja** = sinnvoll abgedeckt, **Teil** = Happy Path oder Mock, **Nein** 
 | Buchung erstellen | Teil | Nein | Nein | Teil | Nein | **P0** |
 | Buchungsstatusmatrix | Teil | Nein | Nein | Nein | Nein | **P0** |
 | Slot/Kapazität/Überbuchung | Nein | Nein | Nein | Nein | Nein | **P0** |
-| Stripe Checkout/Webhook | Ja/Teil inkl. Minor-Unit-/Währungs-/Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
+| Stripe Checkout/Webhook | Ja/Teil inkl. Payment-/Application-Fee-Minor-Unit-, Währungs-/Destination-Snapshot und Completed-Abgleich | Nein | Nein | Signatur plus Session-/Intent-/Finanz-/Fee-/Destination-Bindung | Inbox-/Checkout-H2-Races und Reihenfolgetests | **P0** |
 | PayPal Checkout/Onboarding | Ja/Teil inkl. Order-Snapshot und Capture-Betrag/Währung/Payee | Nein | Nein | Teil inkl. Capture-Provider- und Finanzbindung | Adapter-Retry plus H2-Zehnfach-Races für Order/Capture | **P0** |
 | Ledger/Idempotenz/Event-Reihenfolge | Teil | Nein | Nein | Teil | Provider-Key-Retry plus Teil/H2 | **P0** |
 | Refund/Chargeback/Payout/Reconciliation | Nein | Nein | Nein | Nein | Nein | P1-Lücke |
@@ -75,7 +75,7 @@ Die Tests müssen UUID-Austausch in Pfad, Query und Body kombinieren. Ein bloße
 ### 3. Payment und Ledger
 
 - `mark-paid` direkt als Customer, Provider und anonym aufrufen: kein Client darf einen bezahlten Zustand erzeugen.
-- Gültige/ungültige Stripe- und PayPal-Signatur sowie falscher Provider, Payee, Betrag, Währung, Booking-ID und Payment-ID. PayPal deckt Order-/Booking-ID, Betrag, Währung und Payee ab. Stripe deckt für `checkout.session.completed` Session-/Intent-ID, `paid`/`succeeded`, Soll-/Istbetrag, `amount_received`, Währung und Connected Account einschließlich fehlender/leerer/fremder Werte ab. Weitere Stripe-Eventtypen und echte PSP-Sandbox-Abnahmen bleiben offen.
+- Gültige/ungültige Stripe- und PayPal-Signatur sowie falscher Provider, Payee, Betrag, Gebühr, Währung, Booking-ID und Payment-ID. PayPal deckt Order-/Booking-ID, Betrag, Währung und Payee ab. Stripe deckt für `checkout.session.completed` Session-/Intent-ID, `paid`/`succeeded`, Soll-/Istbetrag, `amount_received`, `application_fee_amount`, Währung und Connected Account einschließlich fehlender/leerer/fremder Werte ab. Weitere Stripe-Eventtypen und echte PSP-Sandbox-Abnahmen bleiben offen.
 - Dasselbe Ereignis 1, 2 und 100 Mal senden: exakt ein Ledger-Effekt.
 - Ereignisse `completed`, `failed`, `refunded`, `disputed` in jeder Reihenfolge senden: deterministischer Endzustand.
 - Timeout/Prozessabsturz vor und nach DB-Commit simulieren: keine verlorene oder doppelte Buchung.

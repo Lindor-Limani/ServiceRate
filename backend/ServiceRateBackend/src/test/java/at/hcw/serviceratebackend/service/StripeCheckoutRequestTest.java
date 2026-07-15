@@ -99,11 +99,13 @@ class StripeCheckoutRequestTest {
         assertThat(booking.getStripePaymentIntentId()).isEqualTo("pi_local_once");
         assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(booking.getStripeExpectedAmountMinor()).isEqualTo(10000L);
+        assertThat(booking.getStripeExpectedApplicationFeeMinor()).isEqualTo(1100L);
         assertThat(booking.getStripeCurrencyCode()).isEqualTo("EUR");
         assertThat(booking.getStripeConnectedAccountId()).isEqualTo("acct_local");
         assertThat(requestBody.get()).contains(
                 "line_items[0][price_data][unit_amount]=10000",
                 "line_items[0][price_data][currency]=eur",
+                "payment_intent_data[application_fee_amount]=1100",
                 "payment_intent_data[transfer_data][destination]=acct_local"
         );
         verify(bookingRepository).save(booking);
@@ -113,9 +115,11 @@ class StripeCheckoutRequestTest {
     void checkoutRequestReusesCompleteSnapshotInsteadOfChangedSourceValues() {
         Booking booking = checkoutBooking(UUID.randomUUID());
         booking.setStripeExpectedAmountMinor(12345L);
+        booking.setStripeExpectedApplicationFeeMinor(2345L);
         booking.setStripeCurrencyCode("USD");
         booking.setStripeConnectedAccountId("acct_snapshot");
         booking.setGrossAmount(999.0);
+        booking.setPlatformFeeAmount(99.0);
         booking.getServiceOffering().getProvider().setStripeConnectedAccountId("acct_snapshot");
 
         stripeConnectService.createCheckoutSession(booking, false);
@@ -123,9 +127,12 @@ class StripeCheckoutRequestTest {
         assertThat(requestBody.get()).contains(
                 "line_items[0][price_data][unit_amount]=12345",
                 "line_items[0][price_data][currency]=usd",
+                "payment_intent_data[application_fee_amount]=2345",
                 "payment_intent_data[transfer_data][destination]=acct_snapshot"
         );
-        assertThat(requestBody.get()).doesNotContain("unit_amount]=99900", "currency]=eur");
+        assertThat(requestBody.get()).doesNotContain(
+                "unit_amount]=99900", "application_fee_amount]=9900", "currency]=eur"
+        );
     }
 
     @Test
@@ -138,10 +145,28 @@ class StripeCheckoutRequestTest {
                 .hasMessage("Der Stripe-Checkout enthaelt keine vollstaendigen unveraenderlichen Zahlungs-Sollwerte.");
 
         booking.setStripeCurrencyCode("EUR");
+        booking.setStripeExpectedApplicationFeeMinor(1000L);
         booking.setStripeConnectedAccountId("acct_foreign");
         assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Der gespeicherte Stripe Connected Account entspricht nicht dem verifizierten Anbieter.");
+
+        assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void checkoutRejectsApplicationFeeOutsideSnapshotBoundsBeforeProviderCall() {
+        Booking booking = checkoutBooking(UUID.randomUUID());
+        booking.setPlatformFeeAmount(-1.0);
+
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag.");
+
+        booking.setPlatformFeeAmount(100.01);
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stripe Checkout erfordert eine Plattformgebuehr zwischen null und dem Buchungsbetrag.");
 
         assertThat(requestCount).hasValue(0);
     }

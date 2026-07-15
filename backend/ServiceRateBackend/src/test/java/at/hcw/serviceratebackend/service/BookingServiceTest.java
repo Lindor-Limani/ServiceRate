@@ -314,6 +314,7 @@ class BookingServiceTest {
                     changed.setStripeCheckoutSessionId("cs_booking_once");
                     changed.setStripePaymentIntentId("pi_booking_once");
                     changed.setStripeExpectedAmountMinor(10000L);
+                    changed.setStripeExpectedApplicationFeeMinor(1100L);
                     changed.setStripeCurrencyCode("EUR");
                     changed.setStripeConnectedAccountId("acct_booking_once");
                     changed.setCheckoutUrl("https://checkout.stripe.test/once");
@@ -346,6 +347,7 @@ class BookingServiceTest {
         assertThat(failedRetry.stripeCheckoutSessionId()).isEqualTo(first.stripeCheckoutSessionId());
         assertThat(booking.getStripePaymentIntentId()).isEqualTo("pi_booking_once");
         assertThat(booking.getStripeExpectedAmountMinor()).isEqualTo(10000L);
+        assertThat(booking.getStripeExpectedApplicationFeeMinor()).isEqualTo(1100L);
         assertThat(booking.getStripeCurrencyCode()).isEqualTo("EUR");
         assertThat(booking.getStripeConnectedAccountId()).isEqualTo("acct_booking_once");
         verify(stripeConnectService, times(1)).createCheckoutSession(booking, false);
@@ -381,6 +383,14 @@ class BookingServiceTest {
         booking.setPaymentProvider("MANUAL");
         booking.setPaymentStatus("UNPAID");
         booking.setStripeCheckoutSessionId("cs_stale");
+        assertThatThrownBy(() -> bookingService.createCheckout(
+                booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
+        ))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Die Buchung enthält bereits Stripe-Checkout-Daten.");
+
+        booking.setStripeCheckoutSessionId(null);
+        booking.setStripeExpectedApplicationFeeMinor(1100L);
         assertThatThrownBy(() -> bookingService.createCheckout(
                 booking.getId(), new CreateCheckoutRequest("CARD", false), customer.getEmail()
         ))

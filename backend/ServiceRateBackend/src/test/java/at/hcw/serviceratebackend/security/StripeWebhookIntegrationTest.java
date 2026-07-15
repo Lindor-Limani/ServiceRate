@@ -227,6 +227,9 @@ class StripeWebhookIntegrationTest {
                 {"\"amount\":8000", "\"amount\":7999"},
                 {"\"amount_received\":8000,", ""},
                 {"\"amount_received\":8000", "\"amount_received\":7999"},
+                {"\"application_fee_amount\":800,", ""},
+                {"\"application_fee_amount\":800", "\"application_fee_amount\":0"},
+                {"\"application_fee_amount\":800", "\"application_fee_amount\":799"},
                 {"\"currency\":\"eur\",\n      \"status\"", "\"status\""},
                 {"\"currency\":\"eur\",\n      \"status\"", "\"currency\":\"\",\n      \"status\""},
                 {"\"currency\":\"eur\",\n      \"status\"", "\"currency\":\"usd\",\n      \"status\""},
@@ -260,7 +263,7 @@ class StripeWebhookIntegrationTest {
     @Test
     void completedWebhookRejectsIncompleteCheckoutSnapshotWithoutConsumingEvent() throws Exception {
         Booking booking = saveCheckoutBooking(UUID.randomUUID());
-        booking.setStripeExpectedAmountMinor(null);
+        booking.setStripeExpectedApplicationFeeMinor(null);
         bookingRepository.saveAndFlush(booking);
         String payload = checkoutCompletedPayload("evt_missing_snapshot", booking);
 
@@ -481,6 +484,7 @@ class StripeWebhookIntegrationTest {
         booking.setStripeCheckoutSessionId(sessionId);
         booking.setStripePaymentIntentId(paymentIntentId);
         booking.setStripeExpectedAmountMinor(8000L);
+        booking.setStripeExpectedApplicationFeeMinor(800L);
         booking.setStripeCurrencyCode("EUR");
         booking.setStripeConnectedAccountId("acct_verified");
         booking.setSettlementStatus("STRIPE_DESTINATION_CHARGE_PENDING");
@@ -535,6 +539,7 @@ class StripeWebhookIntegrationTest {
                       "metadata":{"booking_id":"%s"},
                       "amount":8000,
                       "amount_received":8000,
+                      "application_fee_amount":800,
                       "currency":"eur",
                       "status":"succeeded",
                       "transfer_data":{"destination":"acct_verified"},
