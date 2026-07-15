@@ -175,7 +175,7 @@ class BookingServiceTest {
     void updateBookingStatus_enforcesCompleteProviderTransitionMatrix() {
         User provider = user("provider@example.com", "PROVIDER", true);
         Booking booking = booking(provider);
-        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
@@ -212,7 +212,7 @@ class BookingServiceTest {
     void updateBookingStatus_rejectsInvalidTargetAndInvalidPersistedSourceWithoutSideEffect() {
         User provider = user("provider@example.com", "PROVIDER", true);
         Booking booking = booking(provider);
-        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("provider@example.com")).thenReturn(Optional.of(provider));
 
         for (String invalidTarget : new String[]{null, "", "UNKNOWN"}) {
@@ -242,7 +242,7 @@ class BookingServiceTest {
         User owner = user("owner@example.com", "PROVIDER", true);
         User otherProvider = user("other@example.com", "PROVIDER", true);
         Booking booking = booking(owner);
-        when(bookingRepository.findByIdForStatusUpdate(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("other@example.com")).thenReturn(Optional.of(otherProvider));
 
         assertThatThrownBy(() -> bookingService.updateBookingStatus(booking.getId(), "ACCEPTED", "other@example.com"))
@@ -278,7 +278,7 @@ class BookingServiceTest {
         booking.setCustomer(customer);
         booking.setActualHours(2.5);
         booking.getServiceOffering().setPrice(80.0);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(reviewRepository.findByBookingId(booking.getId())).thenReturn(List.of());
@@ -305,7 +305,7 @@ class BookingServiceTest {
         Booking booking = booking(provider);
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(true);
         when(payPalService.createOrder(booking))
@@ -339,7 +339,7 @@ class BookingServiceTest {
         Booking booking = booking(provider);
         booking.setStatus(BookingStatus.ACCEPTED.name());
         booking.setCustomer(customer);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
         when(payPalService.isProviderCheckoutEligible(provider)).thenReturn(false);
 
@@ -360,7 +360,7 @@ class BookingServiceTest {
         User customer = user("customer@example.com", "CUSTOMER", true);
         Booking booking = booking(user("provider@example.com", "PROVIDER", true));
         booking.setCustomer(customer);
-        when(bookingRepository.findById(booking.getId())).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForStateTransition(booking.getId())).thenReturn(Optional.of(booking));
         when(userRepository.findByEmail("customer@example.com")).thenReturn(Optional.of(customer));
 
         String[] rejectedStatuses = {

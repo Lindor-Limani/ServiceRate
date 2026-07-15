@@ -25,6 +25,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select b from Booking b where b.id = :id")
-    Optional<Booking> findByIdForStatusUpdate(@Param("id") UUID id);
+    Optional<Booking> findByIdForStateTransition(@Param("id") UUID id);
 
 }

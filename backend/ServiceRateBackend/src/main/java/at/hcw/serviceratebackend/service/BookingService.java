@@ -106,7 +106,7 @@ public class BookingService {
 
     // Ändert den Status einer Buchung
     public BookingResponse updateBookingStatus(UUID bookingId, String newStatus, String providerEmail) {
-        Booking booking = bookingRepository.findByIdForStatusUpdate(bookingId)
+        Booking booking = bookingRepository.findByIdForStateTransition(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
 
         User provider = userRepository.findByEmail(providerEmail)
@@ -195,7 +195,7 @@ public class BookingService {
     }
 
     public BookingResponse createCheckout(UUID bookingId, CreateCheckoutRequest request, String customerEmail) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForStateTransition(bookingId)
                 .orElseThrow(() -> new RuntimeException("Buchung nicht gefunden"));
         User customer = userRepository.findByEmail(customerEmail)
                 .orElseThrow(() -> new RuntimeException("Kunde nicht gefunden"));

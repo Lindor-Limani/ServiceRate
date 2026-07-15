@@ -1,5 +1,7 @@
 package at.hcw.serviceratebackend.service;
 
+import at.hcw.serviceratebackend.dto.BookingResponse;
+import at.hcw.serviceratebackend.dto.CreateCheckoutRequest;
 import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
@@ -24,11 +26,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 class BookingStatusConcurrencyIntegrationTest {
@@ -49,6 +55,9 @@ class BookingStatusConcurrencyIntegrationTest {
 
     @MockitoBean
     private MailService mailService;
+
+    @MockitoBean
+    private PayPalService payPalService;
 
     private ExecutorService executor;
 
@@ -109,6 +118,63 @@ class BookingStatusConcurrencyIntegrationTest {
         verify(mailService, times(1)).sendBookingStatusMail(argThat(changed ->
                 booking.getId().equals(changed.getId())
                         && ("ACCEPTED".equals(changed.getStatus()) || "REJECTED".equals(changed.getStatus()))
+        ));
+    }
+
+    @Test
+    void checkoutAndCompletionAreSerializedWithoutLosingEitherChange() throws Exception {
+        User customer = saveUser("checkout-race-customer@example.com", "CUSTOMER");
+        User provider = saveUser("checkout-race-provider@example.com", "PROVIDER");
+        Booking booking = savePendingBooking(customer, saveService(provider));
+        booking.setStatus("ACCEPTED");
+        booking = bookingRepository.saveAndFlush(booking);
+
+        CountDownLatch checkoutReachedProvider = new CountDownLatch(1);
+        CountDownLatch releaseCheckout = new CountDownLatch(1);
+        CountDownLatch completionAttempted = new CountDownLatch(1);
+        when(payPalService.isProviderCheckoutEligible(any(User.class))).thenReturn(true);
+        when(payPalService.createOrder(any(Booking.class))).thenAnswer(invocation -> {
+            checkoutReachedProvider.countDown();
+            if (!releaseCheckout.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Checkout-Testfreigabe fehlgeschlagen");
+            }
+            return new PayPalService.PayPalOrder("RACE-ORDER", "https://paypal.example/race");
+        });
+
+        UUID bookingId = booking.getId();
+        Future<BookingResponse> checkout = executor.submit(() -> bookingService.createCheckout(
+                bookingId,
+                new CreateCheckoutRequest("PAYPAL", false),
+                customer.getEmail()
+        ));
+        assertThat(checkoutReachedProvider.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<BookingResponse> completion = executor.submit(() -> {
+            completionAttempted.countDown();
+            return bookingService.updateBookingStatus(bookingId, "COMPLETED", provider.getEmail());
+        });
+        assertThat(completionAttempted.await(10, TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThatThrownBy(() -> completion.get(300, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+        } finally {
+            releaseCheckout.countDown();
+        }
+
+        BookingResponse checkoutResponse = checkout.get(10, TimeUnit.SECONDS);
+        BookingResponse completionResponse = completion.get(10, TimeUnit.SECONDS);
+        Booking persisted = bookingRepository.findById(bookingId).orElseThrow();
+
+        assertThat(checkoutResponse.status()).isEqualTo("ACCEPTED");
+        assertThat(completionResponse.status()).isEqualTo("COMPLETED");
+        assertThat(persisted.getStatus()).isEqualTo("COMPLETED");
+        assertThat(persisted.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(persisted.getPaymentProvider()).isEqualTo("PAYPAL");
+        assertThat(persisted.getPaypalOrderId()).isEqualTo("RACE-ORDER");
+        assertThat(persisted.getCheckoutUrl()).isEqualTo("https://paypal.example/race");
+        verify(payPalService, times(1)).createOrder(any(Booking.class));
+        verify(mailService, times(1)).sendBookingStatusMail(argThat(changed ->
+                bookingId.equals(changed.getId()) && "COMPLETED".equals(changed.getStatus())
         ));
     }
 
