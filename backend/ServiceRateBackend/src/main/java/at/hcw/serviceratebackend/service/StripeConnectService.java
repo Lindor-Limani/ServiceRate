@@ -2,6 +2,7 @@ package at.hcw.serviceratebackend.service;
 
 import at.hcw.serviceratebackend.dto.StripeOnboardingLinkResponse;
 import at.hcw.serviceratebackend.dto.UserResponse;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
@@ -228,42 +229,74 @@ public class StripeConnectService {
 
     private void markCheckoutCompleted(Session session) {
         UUID bookingId = bookingIdFrom(session.getMetadata());
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForStateTransition(bookingId)
                 .orElseThrow(() -> new IllegalArgumentException("Buchung aus Stripe Webhook nicht gefunden."));
-        booking.setStripeCheckoutSessionId(session.getId());
-        booking.setStripePaymentIntentId(session.getPaymentIntent());
+        requireCardPayment(booking);
+        requireMatchingStripeId(
+                booking.getStripeCheckoutSessionId(), session.getId(), "Checkout-Session-ID"
+        );
+        String paymentIntentId = requireStripeId(session.getPaymentIntent(), "Payment-Intent-ID");
+        if (booking.getStripePaymentIntentId() != null && !booking.getStripePaymentIntentId().isBlank()) {
+            requireMatchingStripeId(
+                    booking.getStripePaymentIntentId(), paymentIntentId, "Payment-Intent-ID"
+            );
+        }
+
+        if ("PAID".equals(booking.getPaymentStatus())) {
+            return;
+        }
+        if (!"CHECKOUT_CREATED".equals(booking.getPaymentStatus())
+                && !"FAILED".equals(booking.getPaymentStatus())) {
+            throw new ConflictException("Stripe Checkout kann aus diesem Zahlungsstatus nicht abgeschlossen werden.");
+        }
+
+        booking.setStripePaymentIntentId(paymentIntentId);
         booking.setPaymentStatus("PAID");
-        booking.setPaymentProvider("CARD");
         booking.setSettlementStatus("STRIPE_DESTINATION_CHARGE_COMPLETED");
         booking.setPaymentNote("Kartenzahlung erfolgreich ueber Stripe abgeschlossen.");
         booking.setSettlementNote("Stripe hat die Plattformgebuehr einbehalten und den Provider-Anteil an den Connected Account transferiert.");
         booking.setPaidAt(OffsetDateTime.now());
 
-        if (session.getPaymentIntent() != null && !session.getPaymentIntent().isBlank()) {
+        PaymentIntent intent = session.getPaymentIntentObject();
+        if (intent == null) {
             try {
-                PaymentIntent intent = PaymentIntent.retrieve(session.getPaymentIntent(),
+                intent = PaymentIntent.retrieve(paymentIntentId,
                         PaymentIntentRetrieveParams.builder().addExpand("payment_method").build(),
                         null);
-                booking.setStripePaymentMethodId(intent.getPaymentMethod());
-                if (booking.getCustomer() != null && booking.getCustomer().getStripeDefaultPaymentMethodId() == null) {
-                    booking.getCustomer().setStripeDefaultPaymentMethodId(intent.getPaymentMethod());
-                }
             } catch (StripeException ignored) {
                 // Payment is already confirmed by the webhook; missing method ID should not undo fulfilment.
             }
         }
+        if (intent != null) {
+            booking.setStripePaymentMethodId(intent.getPaymentMethod());
+            if (booking.getCustomer() != null && booking.getCustomer().getStripeDefaultPaymentMethodId() == null) {
+                booking.getCustomer().setStripeDefaultPaymentMethodId(intent.getPaymentMethod());
+            }
+        }
 
-        Booking saved = bookingRepository.save(booking);
+        Booking saved = bookingRepository.saveAndFlush(booking);
         mailService.sendPaymentRecordedMail(saved);
     }
 
     private void markPaymentFailed(PaymentIntent intent) {
         UUID bookingId = bookingIdFrom(intent.getMetadata());
-        bookingRepository.findById(bookingId).ifPresent(booking -> {
-            booking.setPaymentStatus("FAILED");
-            booking.setPaymentNote("Stripe-Kartenzahlung ist fehlgeschlagen.");
-            bookingRepository.save(booking);
-        });
+        Booking booking = bookingRepository.findByIdForStateTransition(bookingId)
+                .orElseThrow(() -> new IllegalArgumentException("Buchung aus Stripe Webhook nicht gefunden."));
+        requireCardPayment(booking);
+        requireMatchingStripeId(
+                booking.getStripePaymentIntentId(), intent.getId(), "Payment-Intent-ID"
+        );
+
+        if ("PAID".equals(booking.getPaymentStatus()) || "FAILED".equals(booking.getPaymentStatus())) {
+            return;
+        }
+        if (!"CHECKOUT_CREATED".equals(booking.getPaymentStatus())) {
+            throw new ConflictException("Stripe-Zahlung kann aus diesem Zahlungsstatus nicht fehlschlagen.");
+        }
+
+        booking.setPaymentStatus("FAILED");
+        booking.setPaymentNote("Stripe-Kartenzahlung ist fehlgeschlagen.");
+        bookingRepository.saveAndFlush(booking);
     }
 
     private void updateAccountStatus(Account account) {
@@ -329,6 +362,27 @@ public class StripeConnectService {
             throw new IllegalArgumentException("Stripe Event enthaelt keine booking_id.");
         }
         return UUID.fromString(metadata.get("booking_id"));
+    }
+
+    private void requireCardPayment(Booking booking) {
+        if (!"CARD".equals(booking.getPaymentProvider())) {
+            throw new IllegalArgumentException("Stripe Event gehoert nicht zu einer Kartenzahlung.");
+        }
+    }
+
+    private void requireMatchingStripeId(String storedId, String eventId, String label) {
+        String validatedStoredId = requireStripeId(storedId, "gespeicherte " + label);
+        String validatedEventId = requireStripeId(eventId, label);
+        if (!validatedStoredId.equals(validatedEventId)) {
+            throw new IllegalArgumentException("Stripe Event stimmt nicht mit der gespeicherten " + label + " ueberein.");
+        }
+    }
+
+    private String requireStripeId(String value, String label) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("Stripe Event enthaelt keine gueltige " + label + ".");
+        }
+        return value;
     }
 
     private long cents(Double value) {
