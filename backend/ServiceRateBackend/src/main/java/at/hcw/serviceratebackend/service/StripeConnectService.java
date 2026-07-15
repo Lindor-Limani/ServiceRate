@@ -43,6 +43,7 @@ public class StripeConnectService {
     private final BookingRepository bookingRepository;
     private final MailService mailService;
     private final UserService userService;
+    private final StripeWebhookEventService stripeWebhookEventService;
 
     @Value("${stripe.secret-key:}")
     private String secretKey;
@@ -174,7 +175,6 @@ public class StripeConnectService {
         }
     }
 
-    @Transactional
     public void handleWebhook(String payload, String signatureHeader) {
         configure();
         Event event;
@@ -184,14 +184,38 @@ public class StripeConnectService {
             throw new IllegalArgumentException("Ungueltige Stripe Webhook-Signatur.");
         }
 
+        try {
+            stripeWebhookEventService.processOnce(event.getId(), event.getType(), () -> processWebhookEvent(event));
+        } catch (DuplicateStripeWebhookEventException ignored) {
+            // Stripe erwartet auch für ein bereits erfolgreich verarbeitetes Event HTTP 2xx.
+        }
+    }
+
+    private void processWebhookEvent(Event event) {
         EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
         Object stripeObject = deserializer.getObject().orElse(null);
-        if ("checkout.session.completed".equals(event.getType()) && stripeObject instanceof Session session) {
-            markCheckoutCompleted(session);
-        } else if ("payment_intent.payment_failed".equals(event.getType()) && stripeObject instanceof PaymentIntent intent) {
-            markPaymentFailed(intent);
-        } else if ("account.updated".equals(event.getType()) && stripeObject instanceof Account account) {
-            updateAccountStatus(account);
+        switch (event.getType()) {
+            case "checkout.session.completed" -> {
+                if (!(stripeObject instanceof Session session)) {
+                    throw new IllegalArgumentException("Stripe Checkout Event enthaelt keine verwertbaren Daten.");
+                }
+                markCheckoutCompleted(session);
+            }
+            case "payment_intent.payment_failed" -> {
+                if (!(stripeObject instanceof PaymentIntent intent)) {
+                    throw new IllegalArgumentException("Stripe Payment Event enthaelt keine verwertbaren Daten.");
+                }
+                markPaymentFailed(intent);
+            }
+            case "account.updated" -> {
+                if (!(stripeObject instanceof Account account)) {
+                    throw new IllegalArgumentException("Stripe Account Event enthaelt keine verwertbaren Daten.");
+                }
+                updateAccountStatus(account);
+            }
+            default -> {
+                // Signierte, aber von dieser Anwendung nicht verwendete Eventtypen werden quittiert.
+            }
         }
     }
 

@@ -99,6 +99,16 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_name VARCHAR(255)");
         tryExecute("ALTER TABLE chat_messages ALTER COLUMN content DROP NOT NULL");
 
+        jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS stripe_webhook_events (
+                    id UUID PRIMARY KEY,
+                    event_id VARCHAR(255) NOT NULL,
+                    event_type VARCHAR(255) NOT NULL,
+                    processed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    CONSTRAINT ux_stripe_webhook_events_event_id UNIQUE (event_id)
+                )
+                """);
+
         // Exactly-once-Garantie für Bewertungen; vorhandene Duplikate stoppen den Start fail-closed.
         jdbcTemplate.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_reviews_booking_id ON reviews (booking_id)");
     }
