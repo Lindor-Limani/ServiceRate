@@ -94,6 +94,9 @@ class StripeCheckoutConcurrencyIntegrationTest {
                     Booking changed = invocation.getArgument(0);
                     changed.setStripeCheckoutSessionId("cs_parallel_once");
                     changed.setStripePaymentIntentId("pi_parallel_once");
+                    changed.setStripeExpectedAmountMinor(8000L);
+                    changed.setStripeCurrencyCode("EUR");
+                    changed.setStripeConnectedAccountId("acct_parallel_once");
                     changed.setCheckoutUrl("https://checkout.stripe.test/parallel");
                     changed.setPaymentProvider("CARD");
                     changed.setPaymentStatus("CHECKOUT_CREATED");
@@ -139,6 +142,9 @@ class StripeCheckoutConcurrencyIntegrationTest {
         assertThat(persisted.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
         assertThat(persisted.getStripeCheckoutSessionId()).isEqualTo("cs_parallel_once");
         assertThat(persisted.getStripePaymentIntentId()).isEqualTo("pi_parallel_once");
+        assertThat(persisted.getStripeExpectedAmountMinor()).isEqualTo(8000L);
+        assertThat(persisted.getStripeCurrencyCode()).isEqualTo("EUR");
+        assertThat(persisted.getStripeConnectedAccountId()).isEqualTo("acct_parallel_once");
         verify(stripeConnectService, times(1)).createCheckoutSession(any(Booking.class), anyBoolean());
     }
 

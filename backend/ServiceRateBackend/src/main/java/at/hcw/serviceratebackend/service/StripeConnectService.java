@@ -124,17 +124,18 @@ public class StripeConnectService {
         if (!isProviderStripeAvailable(provider)) {
             throw new IllegalArgumentException("Dieser Anbieter hat Stripe Connect noch nicht fertig eingerichtet.");
         }
+        applyStripeCheckoutSnapshot(booking, provider);
 
         try {
             String customerId = ensureCustomer(customer);
-            long amount = cents(booking.getGrossAmount());
+            long amount = booking.getStripeExpectedAmountMinor();
             long fee = cents(booking.getPlatformFeeAmount());
             String description = serviceTitle(booking.getServiceOffering());
 
             SessionCreateParams.PaymentIntentData.Builder paymentIntent = SessionCreateParams.PaymentIntentData.builder()
                     .setApplicationFeeAmount(fee)
                     .setTransferData(SessionCreateParams.PaymentIntentData.TransferData.builder()
-                            .setDestination(provider.getStripeConnectedAccountId())
+                            .setDestination(booking.getStripeConnectedAccountId())
                             .build())
                     .putMetadata("booking_id", booking.getId().toString())
                     .putMetadata("provider_id", provider.getId().toString());
@@ -153,7 +154,7 @@ public class StripeConnectService {
                     .addLineItem(SessionCreateParams.LineItem.builder()
                             .setQuantity(1L)
                             .setPriceData(SessionCreateParams.LineItem.PriceData.builder()
-                                    .setCurrency(currency.toLowerCase(Locale.ROOT))
+                                    .setCurrency(booking.getStripeCurrencyCode().toLowerCase(Locale.ROOT))
                                     .setUnitAmount(amount)
                                     .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
                                             .setName(description)
@@ -167,7 +168,6 @@ public class StripeConnectService {
             Session session = Session.create(params, requestOptions);
 
             booking.setStripeCustomerId(customerId);
-            booking.setStripeConnectedAccountId(provider.getStripeConnectedAccountId());
             booking.setStripeCheckoutSessionId(session.getId());
             booking.setStripePaymentIntentId(session.getPaymentIntent());
             booking.setCheckoutUrl(session.getUrl());
@@ -249,6 +249,34 @@ public class StripeConnectService {
                     booking.getStripePaymentIntentId(), paymentIntentId, "Payment-Intent-ID"
             );
         }
+        requireCompleteStripeCheckoutSnapshot(booking);
+        requireMatchingStripeAmount(
+                booking.getStripeExpectedAmountMinor(), session.getAmountTotal(), "Checkout-Gesamtbetrag"
+        );
+        requireMatchingStripeCurrency(booking.getStripeCurrencyCode(), session.getCurrency(), "Checkout-Waehrung");
+        if (!"paid".equals(session.getPaymentStatus())) {
+            throw new IllegalArgumentException("Stripe Checkout Event bestaetigt keine bezahlte Session.");
+        }
+
+        PaymentIntent intent = requireVerifiedPaymentIntent(session, paymentIntentId);
+        requireMatchingStripeAmount(
+                booking.getStripeExpectedAmountMinor(), intent.getAmount(), "PaymentIntent-Betrag"
+        );
+        requireMatchingStripeAmount(
+                booking.getStripeExpectedAmountMinor(), intent.getAmountReceived(), "empfangenen PaymentIntent-Betrag"
+        );
+        requireMatchingStripeCurrency(
+                booking.getStripeCurrencyCode(), intent.getCurrency(), "PaymentIntent-Waehrung"
+        );
+        if (!"succeeded".equals(intent.getStatus())) {
+            throw new IllegalArgumentException("Stripe PaymentIntent ist nicht erfolgreich abgeschlossen.");
+        }
+        String destination = intent.getTransferData() == null
+                ? null
+                : intent.getTransferData().getDestination();
+        requireMatchingStripeId(
+                booking.getStripeConnectedAccountId(), destination, "Connected-Account-ID"
+        );
 
         if ("PAID".equals(booking.getPaymentStatus())) {
             return;
@@ -265,21 +293,9 @@ public class StripeConnectService {
         booking.setSettlementNote("Stripe hat die Plattformgebuehr einbehalten und den Provider-Anteil an den Connected Account transferiert.");
         booking.setPaidAt(OffsetDateTime.now());
 
-        PaymentIntent intent = session.getPaymentIntentObject();
-        if (intent == null) {
-            try {
-                intent = PaymentIntent.retrieve(paymentIntentId,
-                        PaymentIntentRetrieveParams.builder().addExpand("payment_method").build(),
-                        null);
-            } catch (StripeException ignored) {
-                // Payment is already confirmed by the webhook; missing method ID should not undo fulfilment.
-            }
-        }
-        if (intent != null) {
-            booking.setStripePaymentMethodId(intent.getPaymentMethod());
-            if (booking.getCustomer() != null && booking.getCustomer().getStripeDefaultPaymentMethodId() == null) {
-                booking.getCustomer().setStripeDefaultPaymentMethodId(intent.getPaymentMethod());
-            }
+        booking.setStripePaymentMethodId(intent.getPaymentMethod());
+        if (booking.getCustomer() != null && booking.getCustomer().getStripeDefaultPaymentMethodId() == null) {
+            booking.getCustomer().setStripeDefaultPaymentMethodId(intent.getPaymentMethod());
         }
 
         Booking saved = bookingRepository.saveAndFlush(booking);
@@ -391,6 +407,80 @@ public class StripeConnectService {
             throw new IllegalArgumentException("Stripe Event enthaelt keine gueltige " + label + ".");
         }
         return value;
+    }
+
+    private void applyStripeCheckoutSnapshot(Booking booking, User provider) {
+        boolean snapshotStarted = booking.getStripeExpectedAmountMinor() != null
+                || booking.getStripeCurrencyCode() != null
+                || booking.getStripeConnectedAccountId() != null;
+        if (snapshotStarted) {
+            requireCompleteStripeCheckoutSnapshot(booking);
+            if (!booking.getStripeConnectedAccountId().equals(provider.getStripeConnectedAccountId().trim())) {
+                throw new IllegalArgumentException(
+                        "Der gespeicherte Stripe Connected Account entspricht nicht dem verifizierten Anbieter."
+                );
+            }
+            return;
+        }
+
+        long expectedAmountMinor = cents(booking.getGrossAmount());
+        if (expectedAmountMinor <= 0) {
+            throw new IllegalArgumentException("Stripe Checkout erfordert einen positiven Buchungsbetrag.");
+        }
+        String currencyCode = currency == null ? "" : currency.trim().toUpperCase(Locale.ROOT);
+        if (!currencyCode.matches("[A-Z]{3}")) {
+            throw new IllegalArgumentException("Stripe Checkout erfordert einen gueltigen ISO-Waehrungscode.");
+        }
+        booking.setStripeExpectedAmountMinor(expectedAmountMinor);
+        booking.setStripeCurrencyCode(currencyCode);
+        booking.setStripeConnectedAccountId(provider.getStripeConnectedAccountId().trim());
+    }
+
+    private void requireCompleteStripeCheckoutSnapshot(Booking booking) {
+        if (booking.getStripeExpectedAmountMinor() == null
+                || booking.getStripeExpectedAmountMinor() <= 0
+                || booking.getStripeCurrencyCode() == null
+                || !booking.getStripeCurrencyCode().matches("[A-Z]{3}")
+                || booking.getStripeConnectedAccountId() == null
+                || booking.getStripeConnectedAccountId().isBlank()
+                || !booking.getStripeConnectedAccountId().equals(booking.getStripeConnectedAccountId().trim())) {
+            throw new ConflictException(
+                    "Der Stripe-Checkout enthaelt keine vollstaendigen unveraenderlichen Zahlungs-Sollwerte."
+            );
+        }
+    }
+
+    private PaymentIntent requireVerifiedPaymentIntent(Session session, String paymentIntentId) {
+        PaymentIntent intent = session.getPaymentIntentObject();
+        if (intent == null) {
+            try {
+                intent = PaymentIntent.retrieve(
+                        paymentIntentId,
+                        PaymentIntentRetrieveParams.builder().addExpand("payment_method").build(),
+                        null
+                );
+            } catch (StripeException e) {
+                throw new IllegalStateException("Stripe PaymentIntent konnte nicht verifiziert werden.", e);
+            }
+        }
+        if (intent == null) {
+            throw new IllegalStateException("Stripe PaymentIntent konnte nicht verifiziert werden.");
+        }
+        requireMatchingStripeId(paymentIntentId, intent.getId(), "Payment-Intent-ID");
+        return intent;
+    }
+
+    private void requireMatchingStripeAmount(Long expected, Long actual, String label) {
+        if (expected == null || actual == null || !expected.equals(actual)) {
+            throw new IllegalArgumentException("Stripe Event stimmt nicht mit dem erwarteten " + label + " ueberein.");
+        }
+    }
+
+    private void requireMatchingStripeCurrency(String expected, String actual, String label) {
+        String normalizedActual = actual == null ? null : actual.toUpperCase(Locale.ROOT);
+        if (expected == null || !expected.equals(normalizedActual)) {
+            throw new IllegalArgumentException("Stripe Event stimmt nicht mit der erwarteten " + label + " ueberein.");
+        }
     }
 
     private long cents(Double value) {

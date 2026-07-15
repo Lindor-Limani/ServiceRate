@@ -313,6 +313,9 @@ class BookingServiceTest {
                     Booking changed = invocation.getArgument(0);
                     changed.setStripeCheckoutSessionId("cs_booking_once");
                     changed.setStripePaymentIntentId("pi_booking_once");
+                    changed.setStripeExpectedAmountMinor(10000L);
+                    changed.setStripeCurrencyCode("EUR");
+                    changed.setStripeConnectedAccountId("acct_booking_once");
                     changed.setCheckoutUrl("https://checkout.stripe.test/once");
                     changed.setPaymentProvider("CARD");
                     changed.setPaymentStatus("CHECKOUT_CREATED");
@@ -342,6 +345,9 @@ class BookingServiceTest {
         assertThat(replay.checkoutUrl()).isEqualTo(first.checkoutUrl());
         assertThat(failedRetry.stripeCheckoutSessionId()).isEqualTo(first.stripeCheckoutSessionId());
         assertThat(booking.getStripePaymentIntentId()).isEqualTo("pi_booking_once");
+        assertThat(booking.getStripeExpectedAmountMinor()).isEqualTo(10000L);
+        assertThat(booking.getStripeCurrencyCode()).isEqualTo("EUR");
+        assertThat(booking.getStripeConnectedAccountId()).isEqualTo("acct_booking_once");
         verify(stripeConnectService, times(1)).createCheckoutSession(booking, false);
         verify(bookingRepository, times(1)).save(booking);
     }

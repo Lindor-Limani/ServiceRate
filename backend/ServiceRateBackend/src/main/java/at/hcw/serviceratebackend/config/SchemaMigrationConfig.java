@@ -62,6 +62,8 @@ public class SchemaMigrationConfig {
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_method_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_connected_account_id VARCHAR(255)");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_expected_amount_minor BIGINT");
+        jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_currency_code VARCHAR(3)");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gross_amount DOUBLE PRECISION");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee_amount DOUBLE PRECISION");
         jdbcTemplate.execute("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS provider_receivable_amount DOUBLE PRECISION");

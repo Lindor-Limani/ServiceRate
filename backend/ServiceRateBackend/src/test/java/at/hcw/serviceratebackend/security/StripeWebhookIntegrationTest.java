@@ -214,6 +214,68 @@ class StripeWebhookIntegrationTest {
     }
 
     @Test
+    void completedWebhookRejectsMissingOrMismatchedFinancialAndDestinationValues() throws Exception {
+        String[][] mutations = {
+                {"\"amount_total\":8000,", ""},
+                {"\"amount_total\":8000", "\"amount_total\":7999"},
+                {"\"currency\":\"eur\",\n    \"payment_status\"", "\"payment_status\""},
+                {"\"currency\":\"eur\",\n    \"payment_status\"", "\"currency\":\"\",\n    \"payment_status\""},
+                {"\"currency\":\"eur\",\n    \"payment_status\"", "\"currency\":\"usd\",\n    \"payment_status\""},
+                {"\"payment_status\":\"paid\",", ""},
+                {"\"payment_status\":\"paid\"", "\"payment_status\":\"unpaid\""},
+                {"\"amount\":8000,", ""},
+                {"\"amount\":8000", "\"amount\":7999"},
+                {"\"amount_received\":8000,", ""},
+                {"\"amount_received\":8000", "\"amount_received\":7999"},
+                {"\"currency\":\"eur\",\n      \"status\"", "\"status\""},
+                {"\"currency\":\"eur\",\n      \"status\"", "\"currency\":\"\",\n      \"status\""},
+                {"\"currency\":\"eur\",\n      \"status\"", "\"currency\":\"usd\",\n      \"status\""},
+                {"\"status\":\"succeeded\",", ""},
+                {"\"status\":\"succeeded\"", "\"status\":\"processing\""},
+                {"\"transfer_data\":{\"destination\":\"acct_verified\"},", ""},
+                {"\"transfer_data\":{\"destination\":\"acct_verified\"}", "\"transfer_data\":{\"destination\":\"\"}"},
+                {"\"transfer_data\":{\"destination\":\"acct_verified\"}", "\"transfer_data\":{\"destination\":\"acct_foreign\"}"}
+        };
+
+        for (int index = 0; index < mutations.length; index++) {
+            Booking booking = saveCheckoutBooking(UUID.randomUUID());
+            String originalPayload = checkoutCompletedPayload("evt_financial_" + index, booking);
+            String payload = originalPayload.replace(mutations[index][0], mutations[index][1]);
+            assertThat(payload).as("payload mutation %s", index).isNotEqualTo(originalPayload);
+
+            mockMvc.perform(post("/api/stripe/webhook")
+                            .header("Stripe-Signature", signature(payload))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(payload))
+                    .andExpect(status().isBadRequest());
+
+            assertCheckoutUnchanged(booking);
+            assertThat(stripeWebhookEventRepository.existsByEventId("evt_financial_" + index)).isFalse();
+        }
+
+        assertThat(stripeWebhookEventRepository.count()).isZero();
+        verify(mailService, never()).sendPaymentRecordedMail(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void completedWebhookRejectsIncompleteCheckoutSnapshotWithoutConsumingEvent() throws Exception {
+        Booking booking = saveCheckoutBooking(UUID.randomUUID());
+        booking.setStripeExpectedAmountMinor(null);
+        bookingRepository.saveAndFlush(booking);
+        String payload = checkoutCompletedPayload("evt_missing_snapshot", booking);
+
+        mockMvc.perform(post("/api/stripe/webhook")
+                        .header("Stripe-Signature", signature(payload))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isConflict());
+
+        assertCheckoutUnchanged(booking);
+        assertThat(stripeWebhookEventRepository.existsByEventId("evt_missing_snapshot")).isFalse();
+        verify(mailService, never()).sendPaymentRecordedMail(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void emptySessionAndPaymentIntentIdsAreRejected() throws Exception {
         Booking missingSession = saveCheckoutBooking(UUID.randomUUID());
         String missingSessionPayload = checkoutCompletedPayload(
@@ -418,6 +480,9 @@ class StripeWebhookIntegrationTest {
         booking.setPaymentStatus("CHECKOUT_CREATED");
         booking.setStripeCheckoutSessionId(sessionId);
         booking.setStripePaymentIntentId(paymentIntentId);
+        booking.setStripeExpectedAmountMinor(8000L);
+        booking.setStripeCurrencyCode("EUR");
+        booking.setStripeConnectedAccountId("acct_verified");
         booking.setSettlementStatus("STRIPE_DESTINATION_CHARGE_PENDING");
         return bookingRepository.saveAndFlush(booking);
     }
@@ -461,10 +526,18 @@ class StripeWebhookIntegrationTest {
                     "id":"%s",
                     "object":"checkout.session",
                     "metadata":{"booking_id":"%s"},
+                    "amount_total":8000,
+                    "currency":"eur",
+                    "payment_status":"paid",
                     "payment_intent":{
                       "id":"%s",
                       "object":"payment_intent",
                       "metadata":{"booking_id":"%s"},
+                      "amount":8000,
+                      "amount_received":8000,
+                      "currency":"eur",
+                      "status":"succeeded",
+                      "transfer_data":{"destination":"acct_verified"},
                       "payment_method":"pm_test"
                     }
                   }},

@@ -649,10 +649,21 @@ public class BookingService {
             return null;
         }
         if (booking.getStripeCheckoutSessionId() == null || booking.getStripeCheckoutSessionId().isBlank()
-                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()) {
+                || booking.getCheckoutUrl() == null || booking.getCheckoutUrl().isBlank()
+                || !hasCompleteStripeCheckoutSnapshot(booking)) {
             throw new ConflictException("Der vorhandene Stripe-Checkout ist unvollständig und kann nicht erneut verwendet werden.");
         }
         return toResponse(booking, providerName(booking.getServiceOffering()), findReviewResponse(booking));
+    }
+
+    private boolean hasCompleteStripeCheckoutSnapshot(Booking booking) {
+        return booking.getStripeExpectedAmountMinor() != null
+                && booking.getStripeExpectedAmountMinor() > 0
+                && booking.getStripeCurrencyCode() != null
+                && booking.getStripeCurrencyCode().matches("[A-Z]{3}")
+                && booking.getStripeConnectedAccountId() != null
+                && !booking.getStripeConnectedAccountId().isBlank()
+                && booking.getStripeConnectedAccountId().equals(booking.getStripeConnectedAccountId().trim());
     }
 
     private BookingResponse existingPayPalCheckout(Booking booking) {
@@ -674,6 +685,9 @@ public class BookingService {
         }
         if ((booking.getStripeCheckoutSessionId() != null && !booking.getStripeCheckoutSessionId().isBlank())
                 || (booking.getStripePaymentIntentId() != null && !booking.getStripePaymentIntentId().isBlank())
+                || booking.getStripeExpectedAmountMinor() != null
+                || booking.getStripeCurrencyCode() != null
+                || booking.getStripeConnectedAccountId() != null
                 || (booking.getCheckoutUrl() != null && !booking.getCheckoutUrl().isBlank())) {
             throw new ConflictException("Die Buchung enthält bereits Stripe-Checkout-Daten.");
         }

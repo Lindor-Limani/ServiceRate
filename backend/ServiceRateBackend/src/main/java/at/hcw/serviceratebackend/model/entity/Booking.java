@@ -95,6 +95,12 @@ public class Booking extends AuditableEntity {
     @Column(name = "stripe_connected_account_id")
     private String stripeConnectedAccountId;
 
+    @Column(name = "stripe_expected_amount_minor")
+    private Long stripeExpectedAmountMinor;
+
+    @Column(name = "stripe_currency_code", length = 3)
+    private String stripeCurrencyCode;
+
     @Column(name = "gross_amount")
     private Double grossAmount;
 

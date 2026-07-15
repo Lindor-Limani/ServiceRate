@@ -3,6 +3,7 @@ package at.hcw.serviceratebackend.service;
 import at.hcw.serviceratebackend.model.entity.Booking;
 import at.hcw.serviceratebackend.model.entity.ServiceOffering;
 import at.hcw.serviceratebackend.model.entity.User;
+import at.hcw.serviceratebackend.model.common.exception.ConflictException;
 import at.hcw.serviceratebackend.repository.BookingRepository;
 import at.hcw.serviceratebackend.repository.UserRepository;
 import com.stripe.Stripe;
@@ -18,6 +19,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -43,6 +45,7 @@ class StripeCheckoutRequestTest {
 
     private final AtomicInteger requestCount = new AtomicInteger();
     private final AtomicReference<String> idempotencyKey = new AtomicReference<>();
+    private final AtomicReference<String> requestBody = new AtomicReference<>();
 
     private HttpServer stripeServer;
     private StripeConnectService stripeConnectService;
@@ -95,7 +98,71 @@ class StripeCheckoutRequestTest {
         assertThat(checkout.url()).isEqualTo("https://checkout.stripe.test/local");
         assertThat(booking.getStripePaymentIntentId()).isEqualTo("pi_local_once");
         assertThat(booking.getPaymentStatus()).isEqualTo("CHECKOUT_CREATED");
+        assertThat(booking.getStripeExpectedAmountMinor()).isEqualTo(10000L);
+        assertThat(booking.getStripeCurrencyCode()).isEqualTo("EUR");
+        assertThat(booking.getStripeConnectedAccountId()).isEqualTo("acct_local");
+        assertThat(requestBody.get()).contains(
+                "line_items[0][price_data][unit_amount]=10000",
+                "line_items[0][price_data][currency]=eur",
+                "payment_intent_data[transfer_data][destination]=acct_local"
+        );
         verify(bookingRepository).save(booking);
+    }
+
+    @Test
+    void checkoutRequestReusesCompleteSnapshotInsteadOfChangedSourceValues() {
+        Booking booking = checkoutBooking(UUID.randomUUID());
+        booking.setStripeExpectedAmountMinor(12345L);
+        booking.setStripeCurrencyCode("USD");
+        booking.setStripeConnectedAccountId("acct_snapshot");
+        booking.setGrossAmount(999.0);
+        booking.getServiceOffering().getProvider().setStripeConnectedAccountId("acct_snapshot");
+
+        stripeConnectService.createCheckoutSession(booking, false);
+
+        assertThat(requestBody.get()).contains(
+                "line_items[0][price_data][unit_amount]=12345",
+                "line_items[0][price_data][currency]=usd",
+                "payment_intent_data[transfer_data][destination]=acct_snapshot"
+        );
+        assertThat(requestBody.get()).doesNotContain("unit_amount]=99900", "currency]=eur");
+    }
+
+    @Test
+    void checkoutRejectsIncompleteOrForeignSnapshotBeforeProviderCall() {
+        Booking booking = checkoutBooking(UUID.randomUUID());
+        booking.setStripeExpectedAmountMinor(10000L);
+
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("Der Stripe-Checkout enthaelt keine vollstaendigen unveraenderlichen Zahlungs-Sollwerte.");
+
+        booking.setStripeCurrencyCode("EUR");
+        booking.setStripeConnectedAccountId("acct_foreign");
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Der gespeicherte Stripe Connected Account entspricht nicht dem verifizierten Anbieter.");
+
+        assertThat(requestCount).hasValue(0);
+    }
+
+    @Test
+    void checkoutRejectsInvalidAmountAndCurrencyBeforeProviderCall() {
+        Booking booking = checkoutBooking(UUID.randomUUID());
+        for (Double invalidAmount : new Double[]{null, 0.0, -1.0}) {
+            booking.setGrossAmount(invalidAmount);
+            assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Stripe Checkout erfordert einen positiven Buchungsbetrag.");
+        }
+
+        booking.setGrossAmount(100.0);
+        ReflectionTestUtils.setField(stripeConnectService, "currency", "EURO");
+        assertThatThrownBy(() -> stripeConnectService.createCheckoutSession(booking, false))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stripe Checkout erfordert einen gueltigen ISO-Waehrungscode.");
+
+        assertThat(requestCount).hasValue(0);
     }
 
     @Test
@@ -138,7 +205,10 @@ class StripeCheckoutRequestTest {
     private void handleCheckoutRequest(HttpExchange exchange) throws IOException {
         requestCount.incrementAndGet();
         idempotencyKey.set(exchange.getRequestHeaders().getFirst("Idempotency-Key"));
-        exchange.getRequestBody().readAllBytes();
+        requestBody.set(URLDecoder.decode(
+                new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8),
+                StandardCharsets.UTF_8
+        ));
         byte[] response = """
                 {
                   "id":"cs_local_once",
